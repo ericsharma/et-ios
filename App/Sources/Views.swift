@@ -367,10 +367,6 @@ struct SessionView: View {
     private var terminalArea: some View {
         VStack(spacing: 6) {
             WindowPager(session: session)
-                .simultaneousGesture(MagnifyGesture().onEnded { value in
-                    // Pinch in: zoom out to the overview.
-                    if value.magnification < 0.7 { session.showOverview = true }
-                })
                 .overlay { if session.state != .connected { Color.black.opacity(0.3) } }
                 .overlay(alignment: .top) { statusBanner }
                 .allowsHitTesting(session.state == .connected)
