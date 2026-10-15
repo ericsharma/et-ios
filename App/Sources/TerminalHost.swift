@@ -34,9 +34,8 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
     private var wheelRemainder: CGFloat = 0
     /// Called when keyboard dictation starts (true) or stops (false) while
     /// this terminal has the keyboard.
-    /// iOS delivers the final dictation result after streaming it live.
-    /// `true` before that final insert, `false` after it.
-    var onDictationResult: ((Bool) -> Void)?
+    /// iOS finished a dictation; the text is the final result it inserted.
+    var onDictationResult: ((String) -> Void)?
     /// Any tap in the terminal (used to dismiss the Edit prompt).
     var onTap: (() -> Void)?
     /// Diagnostics for text input; goes to the debug log.
@@ -75,11 +74,10 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
 
     fileprivate func inputHook(_ name: String) {
         onInputDebug?(name)
-        switch name {
-        case "insertDictationResult:": onDictationResult?(true)
-        case "insertDictationResult:done": onDictationResult?(false)
-        default: break
-        }
+    }
+
+    fileprivate func dictationInserted(_ text: String) {
+        onDictationResult?(text)
     }
 
     /// Adds logging overrides to ETTerminalView for SwiftTerm's non-open
@@ -115,7 +113,11 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
         }
         hook("insertDictationResult:", Void1.self) { f, sel in
             { (obj: AnyObject, a: AnyObject?) in
-                note(obj, "insertDictationResult:"); f(obj, sel, a); note(obj, "insertDictationResult:done")
+                note(obj, "insertDictationResult:")
+                f(obj, sel, a)
+                let text = (a as? [UIDictationPhrase])?.map(\.text).joined() ?? ""
+                nonisolated(unsafe) let view = obj as? ETTerminalView
+                MainActor.assumeIsolated { view?.dictationInserted(text) }
             }
                 as @convention(block) (AnyObject, AnyObject?) -> Void
         }
@@ -197,9 +199,6 @@ final class TerminalHost: NSObject {
     var onEditDictation: ((String) -> Void)?
     private let log: DebugLog
 
-    /// Bytes of iOS's final dictation insert, which repeats text that was
-    /// already streamed live into the terminal. Swallowed, kept for Edit.
-    private var capturing: [UInt8]?
     /// The dictated text the Edit prompt offers, while it's showing.
     private var promptText: String?
 
@@ -224,24 +223,19 @@ final class TerminalHost: NSObject {
         view.smartDashesType = .no
         // E.T. draws its own key row (KeyRow) instead of SwiftTerm's.
         view.inputAccessoryView = nil
-        view.onDictationResult = { [weak self] starting in self?.dictationResult(starting) }
+        view.onDictationResult = { [weak self] text in self?.dictationFinished(text) }
         view.onTap = { [weak self] in self?.dismissDictationPrompt() }
         view.onInputDebug = { [weak self] line in self?.log.add("input: \(line)") }
     }
 
     // MARK: - Dictation choice
 
-    private func dictationResult(_ starting: Bool) {
-        if starting {
-            dismissDictationPrompt()
-            capturing = []
-        } else if let bytes = capturing {
-            capturing = nil
-            let text = Self.text(from: bytes)
-            guard !text.isEmpty else { return }
-            promptText = text
-            onDictationPrompt?(text)
-        }
+    /// Dictation went into the terminal untouched; offer to move it to the
+    /// editor.
+    private func dictationFinished(_ text: String) {
+        guard !text.isEmpty else { return }
+        promptText = text
+        onDictationPrompt?(text)
     }
 
     /// Edit tapped: erase the live copy from the input line, then edit.
@@ -258,24 +252,6 @@ final class TerminalHost: NSObject {
         guard promptText != nil else { return }
         promptText = nil
         onDictationPrompt?(nil)
-    }
-
-    /// Turns held keystrokes into text, applying the backspaces dictation
-    /// sends when it revises a word.
-    static func text(from bytes: [UInt8]) -> String {
-        var text = ""
-        var pending: [UInt8] = []
-        func flush() { text += String(decoding: pending, as: UTF8.self); pending = [] }
-        for b in bytes {
-            if b == 0x7F || b == 0x08 {
-                flush()
-                if !text.isEmpty { text.removeLast() }
-            } else {
-                pending.append(b)
-            }
-        }
-        flush()
-        return text
     }
 
     var terminal: Terminal { view.getTerminal() }
@@ -298,10 +274,6 @@ final class TerminalHost: NSObject {
 
 extension TerminalHost: @preconcurrency TerminalViewDelegate {
     func send(source: TerminalView, data: ArraySlice<UInt8>) {
-        if capturing != nil {
-            capturing! += data
-            return
-        }
         dismissDictationPrompt()
         onInput?(Array(data))
     }
