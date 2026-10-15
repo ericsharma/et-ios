@@ -22,16 +22,21 @@ extension UIColor {
     }
 }
 
-/// SwiftTerm's view with touch scrolling moved to two fingers.
+/// SwiftTerm's view with two-finger gestures.
 ///
 /// SwiftTerm uses one-finger drags for text selection and, when the program
-/// in the pane turns on mouse reporting, for mouse drags. Neither scrolls.
-/// Here a two-finger drag always scrolls: the local scrollback normally, or
-/// mouse-wheel events in a full-screen program (vim, htop), which has no
-/// scrollback of its own.
+/// in the pane turns on mouse reporting, for mouse drags. Two fingers:
+/// - up/down scrolls (local scrollback, or wheel events in a full-screen
+///   program such as vim) and closes the keyboard;
+/// - left/right switches tmux windows.
 final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
     private var wheelPan: UIPanGestureRecognizer?
     private var wheelRemainder: CGFloat = 0
+    private enum Axis { case horizontal, vertical }
+    private var gestureAxis: Axis?
+    private var lastTranslationY: CGFloat = 0
+    /// Two-finger swipe left (true = next window) or right (false = previous).
+    var onTwoFingerSwipe: ((Bool) -> Void)?
     /// Called when keyboard dictation starts (true) or stops (false) while
     /// this terminal has the keyboard.
     /// iOS finished a dictation; the text is the final result it inserted.
@@ -47,7 +52,7 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
         // UIScrollView's own pan scrolls the scrollback, with momentum.
         panGestureRecognizer.minimumNumberOfTouches = 2
         panGestureRecognizer.maximumNumberOfTouches = 2
-        let wheel = UIPanGestureRecognizer(target: self, action: #selector(wheelPanned(_:)))
+        let wheel = UIPanGestureRecognizer(target: self, action: #selector(twoFingerPanned(_:)))
         wheel.minimumNumberOfTouches = 2
         wheel.maximumNumberOfTouches = 2
         wheel.delegate = self
@@ -152,36 +157,60 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
         (g === wheelPan && other === panGestureRecognizer) || g is UITapGestureRecognizer
     }
 
-    /// In the alternate screen, turn two-finger drags into wheel events.
-    @objc private func wheelPanned(_ gesture: UIPanGestureRecognizer) {
-        let terminal = getTerminal()
-        guard terminal.isCurrentBufferAlternate else { return }
+    @objc private func twoFingerPanned(_ gesture: UIPanGestureRecognizer) {
+        let t = gesture.translation(in: self)
         switch gesture.state {
         case .began:
+            gestureAxis = nil
+            lastTranslationY = 0
             wheelRemainder = 0
         case .changed:
-            let lineHeight = max(font.lineHeight, 1)
-            wheelRemainder += gesture.translation(in: self).y
-            gesture.setTranslation(.zero, in: self)
-            let lines = Int(wheelRemainder / lineHeight)
-            guard lines != 0 else { return }
-            wheelRemainder -= CGFloat(lines) * lineHeight
-            let location = gesture.location(in: self)
-            let col = max(0, min(terminal.cols - 1, Int(location.x / max(bounds.width / CGFloat(terminal.cols), 1))))
-            let row = max(0, min(terminal.rows - 1, Int(location.y / lineHeight)))
-            // Finger down = content down = scroll up (wheel button 4).
-            let button = lines > 0 ? 4 : 5
-            for _ in 0..<abs(lines) {
-                if terminal.mouseMode != .off {
-                    let flags = terminal.encodeButton(button: button, release: false, shift: false, meta: false, control: false)
-                    terminal.sendEvent(buttonFlags: flags, x: col, y: row)
+            if gestureAxis == nil, hypot(t.x, t.y) > 12 {
+                if abs(t.x) > abs(t.y) {
+                    gestureAxis = .horizontal
+                    // Cancel the scroll view's vertical scrolling for this swipe.
+                    panGestureRecognizer.isEnabled = false
+                    panGestureRecognizer.isEnabled = true
                 } else {
-                    // No mouse support: arrow keys, as most terminals do.
-                    send(Array((button == 4 ? "\u{1b}OA" : "\u{1b}OB").utf8))
+                    gestureAxis = .vertical
+                    if isFirstResponder { _ = resignFirstResponder() }
                 }
+            }
+            if gestureAxis == .vertical {
+                wheel(by: t.y - lastTranslationY, at: gesture.location(in: self))
+                lastTranslationY = t.y
+            }
+        case .ended:
+            if gestureAxis == .horizontal, abs(t.x) > 50 {
+                onTwoFingerSwipe?(t.x < 0)
             }
         default:
             break
+        }
+    }
+
+    /// In the alternate screen (no scrollback), vertical movement becomes
+    /// mouse-wheel events. Elsewhere the scroll view itself scrolls.
+    private func wheel(by dy: CGFloat, at location: CGPoint) {
+        let terminal = getTerminal()
+        guard terminal.isCurrentBufferAlternate else { return }
+        let lineHeight = max(font.lineHeight, 1)
+        wheelRemainder += dy
+        let lines = Int(wheelRemainder / lineHeight)
+        guard lines != 0 else { return }
+        wheelRemainder -= CGFloat(lines) * lineHeight
+        let col = max(0, min(terminal.cols - 1, Int(location.x / max(bounds.width / CGFloat(terminal.cols), 1))))
+        let row = max(0, min(terminal.rows - 1, Int(location.y / lineHeight)))
+        // Fingers down = content down = scroll up (wheel button 4).
+        let button = lines > 0 ? 4 : 5
+        for _ in 0..<abs(lines) {
+            if terminal.mouseMode != .off {
+                let flags = terminal.encodeButton(button: button, release: false, shift: false, meta: false, control: false)
+                terminal.sendEvent(buttonFlags: flags, x: col, y: row)
+            } else {
+                // No mouse support: arrow keys, as most terminals do.
+                send(Array((button == 4 ? "\u{1b}OA" : "\u{1b}OB").utf8))
+            }
         }
     }
 }
@@ -195,6 +224,8 @@ final class TerminalHost: NSObject {
     var onSizeChange: ((Int, Int) -> Void)?
     /// Show (text) or hide (nil) the "Edit" prompt after dictation.
     var onDictationPrompt: ((String?) -> Void)?
+    /// Two-finger swipe: true = next window, false = previous.
+    var onSwipe: ((Bool) -> Void)?
     /// The user tapped Edit: open the editor with this text.
     var onEditDictation: ((String) -> Void)?
     private let log: DebugLog
@@ -225,6 +256,7 @@ final class TerminalHost: NSObject {
         view.inputAccessoryView = nil
         view.onDictationResult = { [weak self] text in self?.dictationFinished(text) }
         view.onTap = { [weak self] in self?.dismissDictationPrompt() }
+        view.onTwoFingerSwipe = { [weak self] next in self?.onSwipe?(next) }
         view.onInputDebug = { [weak self] line in self?.log.add("input: \(line)") }
     }
 

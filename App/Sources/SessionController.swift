@@ -57,8 +57,13 @@ final class SessionController {
     private(set) var windows: [WindowPage] = []
     var currentWindowID: WindowID? {
         didSet {
+            guard currentWindowID != oldValue else { return }
             clearBadges()
             for page in windows where page.id != currentWindowID { page.terminal.dismissDictationPrompt() }
+            // Keep the keyboard up across a switch if it was up.
+            if let old = windows.first(where: { $0.id == oldValue }), old.terminal.view.isFirstResponder {
+                _ = currentWindow?.terminal.view.becomeFirstResponder()
+            }
         }
     }
     /// Set while asking the user to trust a new host key.
@@ -399,6 +404,7 @@ final class SessionController {
                 page.terminal.onSizeChange = { [weak self] cols, rows in
                     self?.terminalResized(cols: cols, rows: rows)
                 }
+                page.terminal.onSwipe = { [weak self] next in self?.switchWindow(next: next) }
                 page.terminal.onDictationPrompt = { [weak page] text in
                     page?.dictationPrompt = text != nil
                 }
@@ -526,6 +532,17 @@ final class SessionController {
         guard let page = currentWindow else { return }
         page.hasActivity = false
         page.hasBell = false
+    }
+
+    /// Two-finger swipe: next or previous window, no wrap-around.
+    func switchWindow(next: Bool) {
+        guard let i = windows.firstIndex(where: { $0.id == currentWindowID }) else { return }
+        let j = next ? i + 1 : i - 1
+        guard windows.indices.contains(j) else {
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            return
+        }
+        currentWindowID = windows[j].id
     }
 
     // MARK: - Presets

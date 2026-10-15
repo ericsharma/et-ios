@@ -441,17 +441,22 @@ struct WindowTabs: View {
     }
 }
 
+/// Shows the current window. All terminals stay alive and laid out (so
+/// they keep receiving output and the right size); only one is visible.
+/// Switch windows with a two-finger swipe or the tabs.
 struct WindowPager: View {
     @Bindable var session: SessionController
 
     var body: some View {
-        TabView(selection: $session.currentWindowID) {
+        ZStack {
             ForEach(session.windows) { page in
+                let current = page.id == session.currentWindowID
                 TerminalPane(host: page.terminal)
-                    .tag(Optional(page.id))
+                    .opacity(current ? 1 : 0)
+                    .allowsHitTesting(current)
+                    .accessibilityHidden(!current)
             }
         }
-        .tabViewStyle(.page(indexDisplayMode: .never))
         .onChange(of: session.currentWindowID) {
             UISelectionFeedbackGenerator().selectionChanged()
         }
