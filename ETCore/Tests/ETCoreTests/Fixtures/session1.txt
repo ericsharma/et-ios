@@ -1,0 +1,84 @@
+%begin 1792028039 275 0
+%end 1792028039 275 0
+%session-changed $0 0
+%begin 1792028039 280 1
+@0_0_trigkey
+@1_1_trigkey-claude
+%end 1792028039 280 1
+%begin 1792028040 281 1
+%end 1792028040 281 1
+%output %0 echo é\134\015
+%output %0 \012
+%begin 1792028040 282 1
+%end 1792028040 282 1
+%session-window-changed $0 @2
+%window-add @2
+%output %0 \033[1m\033[7m%
+%output %0 \033[27m\033[1m
+%output %0 \033[0m     
+%output %0          
+%output %0                   
+%output %0          
+%output %0          
+%output %0          
+%output %0          
+%output %0          
+%output %0   \015 \015
+%output %0 \033k..53/sc
+%output %0 ratchpad\033
+%output %0 \134
+%output %1 \033[1m\033[7m%\033[27m\033[1m\033[0m                                                                               \015 \015
+%output %1 \033k..53/scratchpad\033\134
+%output %0 \015\033[0m\033[27m\033[24m\033[J
+%output %1 \015\033[0m\033[27m\033[24m\033[J\015\012\033[1;33mericsharma\033[0m in \033[1;2;32m🌐 m1-mini\033[0m in \033[1;36m-Users-ericsharma/ad2b598f-55a0-4bb9-9f27-58d92a372753/scratchpad\033[0m on \033[1;34m☁️  \033[0m \015\012\033[1;32m❯\033[0m \033[K
+%output %0 \015\012\033[1;33m
+%output %1 \033[?1h\033=
+%output %0 ericsharm
+%output %1 \033[?2004h
+%output %0 a\033[0m in
+%output %0  \033[1;2;3
+%output %0 2m🌐 m1-mini\033[
+%output %0 0m in \033[1;36m-Us
+%output %0 ers-eric
+%output %0 sharma/ad2b598f-
+%output %0 55a0-4bb
+%output %0 9-9f27-58d92a372
+%output %0 753/scra
+%output %0 tchpad\033[
+%output %0 0m on \033[
+%output %0 1;34m☁
+%output %0 ️  \033[0
+%output %0 m \015\012\033[1;
+%output %0 32m❯\033[
+%output %0 0m \033[K\033[
+%output %0 ?1h\033=\033[?2004h
+%output %0 e
+%output %0 \010ec
+%output %0 h
+%output %0 o
+%output %0  
+%output %0 �
+%output %0 �
+%output %0 \134\033[?1l\033>
+%output %0 \033[?2004l\015\015\012
+%output %0 \015\033[0m\033[27m\033[24m\033[J\033[90m∙\033[0m \033[K
+%output %0 \033[?1h\033=\033[?2004h
+%begin 1792028041 285 1
+%end 1792028041 285 1
+%window-renamed @2 gm2
+%begin 1792028041 287 1
+parse error: unknown command: bogus-cmd
+%error 1792028041 287 1
+%output %2 \033[1m\033[7m%\033[27m\033[1m\033[0m                                                                               \015 \015
+%output %2 \033k..53/scratchpad\033\134
+%output %2 \015\033[0m\033[27m\033[24m\033[J\015\012\033[1;33mericsharma\033[0m in \033[1;2;32m🌐 m1-mini\033[0m in \033[1;36m-Users-ericsharma/ad2b598f-55a0-4bb9-9f27-58d92a372753/scratchpad\033[0m on \033[1;34m☁️  \033[0m \015\012\033[1;32m❯\033[0m \033[K
+%output %2 \033[?1h\033=
+%output %2 \033[?2004h
+%begin 1792028041 288 1
+%fake line
+%end 1792028041 288 1
+%begin 1792028042 289 1
+%end 1792028042 289 1
+%session-window-changed $0 @1
+%unlinked-window-close @2
+%exit
