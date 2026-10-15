@@ -205,6 +205,8 @@ struct SessionView: View {
     @State private var voice = VoiceInput()
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var sidebar: NavigationSplitViewVisibility = .all
+    /// Remembered across launches.
+    @AppStorage("sidebarHidden") private var sidebarHidden = false
 
     var body: some View {
         Group {
@@ -215,14 +217,29 @@ struct SessionView: View {
                         .navigationTitle(session.server.displayName + (session.sessionName.map { " · \($0)" } ?? ""))
                         .toolbar { sidebarToolbar }
                 } detail: {
-                    content
-                        .toolbar(.hidden, for: .navigationBar)
-                        .background(Color(Theme.background))
+                    VStack(spacing: 0) {
+                        if sidebar == .detailOnly {
+                            // Sidebar hidden: the phone-style header with tabs.
+                            header(sidebarToggle: true)
+                        } else {
+                            HStack {
+                                sidebarToggleButton
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(Theme.surface)
+                        }
+                        content
+                    }
+                    .toolbar(.hidden, for: .navigationBar)
+                    .background(Color(Theme.background))
                 }
                 .navigationSplitViewStyle(.balanced)
+                .onAppear { sidebar = sidebarHidden ? .detailOnly : .all }
+                .onChange(of: sidebar) { _, value in sidebarHidden = value == .detailOnly }
             } else {
                 VStack(spacing: 0) {
-                    header
+                    header(sidebarToggle: false)
                     content
                 }
             }
@@ -250,9 +267,17 @@ struct SessionView: View {
         }
     }
 
-    private var header: some View {
+    private var sidebarToggleButton: some View {
+        Button(action: toggleSidebar) {
+            Image(systemName: "sidebar.left").font(.title3)
+        }
+        .accessibilityLabel(sidebar == .detailOnly ? "Show sidebar" : "Hide sidebar")
+    }
+
+    private func header(sidebarToggle: Bool) -> some View {
         VStack(spacing: 6) {
             HStack(spacing: 8) {
+                if sidebarToggle { sidebarToggleButton }
                 Circle().fill(statusColor).frame(width: 8, height: 8)
                 Text(session.server.displayName + (session.sessionName.map { " · \($0)" } ?? ""))
                     .font(.subheadline.weight(.semibold))
