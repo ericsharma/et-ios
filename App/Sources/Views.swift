@@ -265,11 +265,16 @@ struct SessionView: View {
                 .disabled(session.windows.isEmpty)
                 .accessibilityLabel("Overview")
                 Menu {
-                    Button("Debug log") { showLog = true }
+                    Button("Overview", systemImage: "square.grid.2x2") { session.showOverview = true }
+                        .disabled(session.windows.isEmpty)
+                    Button("New window…", systemImage: "plus") { session.showNewWindow = true }
+                        .disabled(session.state != .connected)
+                    Button("Debug log", systemImage: "doc.text") { showLog = true }
                     if session.isDisconnected {
-                        Button("Reconnect") { session.reconnect() }
+                        Button("Reconnect", systemImage: "arrow.clockwise") { session.reconnect() }
                     }
-                    Button("Servers", role: .destructive) { model.closeSession() }
+                    Button("Servers", systemImage: "server.rack", role: .destructive) { model.closeSession() }
+                    Section { Text(AppInfo.buildLabel) }
                 } label: {
                     Image(systemName: "ellipsis.circle").font(.title3)
                 }
@@ -298,9 +303,10 @@ struct SessionView: View {
             Button { session.showOverview = true } label: { Image(systemName: "square.grid.2x2") }
                 .disabled(session.windows.isEmpty)
             Menu {
-                Button("Debug log") { showLog = true }
-                if session.isDisconnected { Button("Reconnect") { session.reconnect() } }
-                Button("Servers", role: .destructive) { model.closeSession() }
+                Button("Debug log", systemImage: "doc.text") { showLog = true }
+                if session.isDisconnected { Button("Reconnect", systemImage: "arrow.clockwise") { session.reconnect() } }
+                Button("Servers", systemImage: "server.rack", role: .destructive) { model.closeSession() }
+                Section { Text(AppInfo.buildLabel) }
             } label: { Image(systemName: "ellipsis.circle") }
         }
     }
@@ -646,5 +652,15 @@ struct ShortcutKeys: View {
         .opacity(0)
         .frame(width: 0, height: 0)
         .accessibilityHidden(true)
+    }
+}
+
+enum AppInfo {
+    /// "E.T. 0.1 (202610151757)", shown in the ⋯ menu.
+    static var buildLabel: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "E.T. \(version) (\(build))"
     }
 }
