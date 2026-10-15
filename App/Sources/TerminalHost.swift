@@ -37,6 +37,14 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
     private var lastTranslationY: CGFloat = 0
     /// Two-finger swipe left (true = next window) or right (false = previous).
     var onTwoFingerSwipe: ((Bool) -> Void)?
+
+    // Selection handles: a line with a knob at each end of the selection,
+    // draggable to change it (SwiftTerm selects but draws no handles).
+    private let startHandle = SelectionHandle(atStart: true)
+    private let endHandle = SelectionHandle(atStart: false)
+    private var handleLink: CADisplayLink?
+    /// The selection end that stays put while a handle is dragged.
+    private var dragAnchor: Position?
     /// Called when keyboard dictation starts (true) or stops (false) while
     /// this terminal has the keyboard.
     /// iOS finished a dictation; the text is the final result it inserted.
@@ -58,6 +66,14 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
         wheel.delegate = self
         wheelPan = wheel
         addGestureRecognizer(wheel)
+        for handle in [startHandle, endHandle] {
+            handle.isHidden = true
+            handle.tintColor = UIColor(red: 0x89 / 255, green: 0xB4 / 255, blue: 0xFA / 255, alpha: 1)
+            handle.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(handleDragged(_:))))
+            addSubview(handle)
+        }
+        selectionHandleColor = startHandle.tintColor
+
         let tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
         tap.cancelsTouchesInView = false
         tap.delegate = self
@@ -65,6 +81,90 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
     }
 
     @objc private func tapped() { onTap?() }
+
+    // MARK: - Selection handles
+
+    /// The display link holds its target, so it only runs while on screen.
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window != nil, handleLink == nil {
+            let link = CADisplayLink(target: self, selector: #selector(updateHandles))
+            link.preferredFramesPerSecond = 30
+            link.add(to: .main, forMode: .common)
+            handleLink = link
+        } else if window == nil {
+            handleLink?.invalidate()
+            handleLink = nil
+        }
+    }
+
+    /// One character cell, in points (SwiftTerm keeps its own internal).
+    private var cell: CGSize? {
+        guard let px = cellSizeInPixels(source: getTerminal()), px.width > 0, px.height > 0 else { return nil }
+        let scale = window?.screen.scale ?? UIScreen.main.scale
+        return CGSize(width: CGFloat(px.width) / scale, height: CGFloat(px.height) / scale)
+    }
+
+    private static func ordered(_ a: Position, _ b: Position) -> (Position, Position) {
+        (a.row, a.col) <= (b.row, b.col) ? (a, b) : (b, a)
+    }
+
+    /// Keeps the handles on the selection's ends (selection changes have no
+    /// callback, so this runs on a display link; it is cheap when idle).
+    @objc private func updateHandles() {
+        guard let selection, selection.active, let cell else {
+            startHandle.isHidden = true
+            endHandle.isHidden = true
+            return
+        }
+        let (start, end) = Self.ordered(selection.start, selection.end)
+        // Selection rows are buffer rows; in this scroll view's content
+        // coordinates a buffer row sits at row * cell height.
+        startHandle.place(at: CGPoint(x: CGFloat(start.col) * cell.width, y: CGFloat(start.row) * cell.height), lineHeight: cell.height)
+        endHandle.place(at: CGPoint(x: CGFloat(end.col) * cell.width, y: CGFloat(end.row) * cell.height), lineHeight: cell.height)
+        startHandle.isHidden = false
+        endHandle.isHidden = false
+    }
+
+    @objc private func handleDragged(_ gesture: UIPanGestureRecognizer) {
+        guard let selection, let cell, let handle = gesture.view as? SelectionHandle else { return }
+        let terminal = getTerminal()
+        let (start, end) = Self.ordered(selection.start, selection.end)
+        switch gesture.state {
+        case .began:
+            dragAnchor = handle.atStart ? end : start
+            isScrollEnabled = false
+        case .changed:
+            guard let anchor = dragAnchor else { return }
+            // Aim at the line's middle, above the finger.
+            let point = gesture.location(in: self)
+            let y = handle.atStart ? point.y + cell.height / 2 : point.y - cell.height / 2
+            let lastRow = max(0, Int(contentSize.height / cell.height) - 1)
+            let moved = Position(col: max(0, min(terminal.cols, Int((point.x / cell.width).rounded()))),
+                                 row: max(0, min(lastRow, Int(y / cell.height))))
+            let (a, b) = Self.ordered(anchor, moved)
+            setSelectionRange(start: a, end: b)
+            UISelectionFeedbackGenerator().selectionChanged()
+        case .ended, .cancelled:
+            dragAnchor = nil
+            isScrollEnabled = true
+            showStandardContextMenu(at: handle.center)
+        default:
+            break
+        }
+    }
+
+    /// Touches on a handle belong to the handle, not SwiftTerm's own
+    /// selection and mouse drags.
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        if gestureRecognizer.view === self {
+            let point = gestureRecognizer.location(in: self)
+            for handle in [startHandle, endHandle] where !handle.isHidden && handle.frame.contains(point) {
+                return false
+            }
+        }
+        return super.gestureRecognizerShouldBegin(gestureRecognizer)
+    }
 
 
 
@@ -212,6 +312,44 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
                 send(Array((button == 4 ? "\u{1b}OA" : "\u{1b}OB").utf8))
             }
         }
+    }
+}
+
+/// A selection end marker: a vertical line one text line tall, with a round
+/// knob above it (start) or below it (end), like iOS text selection. The
+/// view is larger than it looks, so it is easy to grab.
+final class SelectionHandle: UIView {
+    let atStart: Bool
+    private let line = UIView()
+    private let knob = UIView()
+    private static let touchSize: CGFloat = 44
+
+    init(atStart: Bool) {
+        self.atStart = atStart
+        super.init(frame: .zero)
+        backgroundColor = .clear
+        knob.layer.cornerRadius = 6
+        addSubview(line)
+        addSubview(knob)
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override func tintColorDidChange() {
+        line.backgroundColor = tintColor
+        knob.backgroundColor = tintColor
+    }
+
+    /// `origin` is the top-left of the selection edge, in the terminal's
+    /// content coordinates.
+    func place(at origin: CGPoint, lineHeight: CGFloat) {
+        let height = lineHeight + 12 + Self.touchSize / 2
+        let y = atStart ? origin.y - 12 - Self.touchSize / 4 : origin.y
+        frame = CGRect(x: origin.x - Self.touchSize / 2, y: y, width: Self.touchSize, height: height)
+        let lineTop: CGFloat = atStart ? 12 + Self.touchSize / 4 : 0
+        line.frame = CGRect(x: Self.touchSize / 2 - 1, y: lineTop, width: 2, height: lineHeight)
+        let knobY = atStart ? lineTop - 12 : lineTop + lineHeight
+        knob.frame = CGRect(x: Self.touchSize / 2 - 6, y: knobY, width: 12, height: 12)
     }
 }
 
