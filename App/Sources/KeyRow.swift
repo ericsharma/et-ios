@@ -62,9 +62,10 @@ enum Key: Hashable {
     }
 }
 
-/// The bottom bar: editor on the left, a big mic in the middle (the main
-/// action), and ⋯ on the right, which opens a wheel of keys.
-/// Long-press ⋯ to switch between the Shell and Claude key sets.
+/// The bottom bar: editor and ⋯ (key wheel) on the left, a big mic in the
+/// middle (the main action), Send (Enter) on the right. The key wheel floats
+/// vertically over the terminal above ⋯. Long-press ⋯ to switch between the
+/// Shell and Claude key sets.
 struct KeyRow: View {
     @Bindable var session: SessionController
     let page: WindowPage
@@ -76,32 +77,45 @@ struct KeyRow: View {
 
     var body: some View {
         let preset = session.preset(for: page)
-        VStack(spacing: 8) {
-            if showKeys {
-                KeyWheel(keys: preset.keys, ctrlState: ctrlState, tap: tap, longPress: longPress)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+        HStack(spacing: 10) {
+            barButton(systemName: "square.and.pencil", active: false) {
+                session.composeRequest = ComposeRequest(page: page, text: "")
             }
-            HStack {
-                barButton(systemName: "square.and.pencil", active: false) {
-                    session.composeRequest = ComposeRequest(page: page, text: "")
-                }
-                Spacer()
-                MicButton(session: session, page: page, voice: voice)
-                Spacer()
-                barButton(systemName: showKeys ? "keyboard.chevron.compact.down" : "ellipsis",
-                          active: showKeys || ctrlState != .off) {
-                    withAnimation(.snappy) { showKeys.toggle() }
-                }
-                .contextMenu {
-                    Picker("Keys", selection: Binding(
-                        get: { session.preset(for: page) },
-                        set: { session.setPreset($0, for: page) })) {
-                        ForEach(KeyPreset.allCases) { Text($0.label).tag($0) }
-                    }
+            barButton(systemName: showKeys ? "xmark" : "ellipsis", active: showKeys || ctrlState != .off) {
+                withAnimation(.snappy) { showKeys.toggle() }
+            }
+            .contextMenu {
+                Picker("Keys", selection: Binding(
+                    get: { session.preset(for: page) },
+                    set: { session.setPreset($0, for: page) })) {
+                    ForEach(KeyPreset.allCases) { Text($0.label).tag($0) }
                 }
             }
-            .padding(.horizontal, 20)
+            .overlay(alignment: .bottom) {
+                if showKeys {
+                    KeyWheel(keys: preset.keys, ctrlState: ctrlState, tap: tap, longPress: longPress)
+                        .offset(y: -52)
+                        .transition(.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
+                }
+            }
+            .zIndex(1)
+            Spacer()
+            MicButton(session: session, page: page, voice: voice)
+            Spacer()
+            Button {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                session.send([0x0D], to: page)
+            } label: {
+                Label("Send", systemImage: "return")
+                    .labelStyle(.iconOnly)
+                    .font(.system(size: 18, weight: .semibold))
+                    .frame(width: 106, height: 40)
+                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Send (Enter)")
         }
+        .padding(.horizontal, 20)
         .onReceive(NotificationCenter.default.publisher(for: .terminalViewControlModifierReset)) { note in
             // SwiftTerm clears its sticky Ctrl after one key; mirror that,
             // unless Ctrl is locked.
@@ -152,35 +166,39 @@ struct KeyRow: View {
     }
 }
 
-/// A horizontally spinning strip of keys that snaps to each key, with the
-/// one in the middle enlarged like a picker wheel. Tap any key to send it.
+/// A vertical wheel of keys floating over the terminal. It snaps to each
+/// key, and the one in the middle is enlarged like a picker wheel. Tap any
+/// key to send it; the wheel stays open for repeated taps.
 struct KeyWheel: View {
     let keys: [Key]
     let ctrlState: KeyRow.CtrlState
     let tap: (Key) -> Void
     let longPress: (Key) -> Void
 
+    private let rowHeight: CGFloat = 46
+    private let visibleRows: CGFloat = 5
+
     var body: some View {
-        GeometryReader { geo in
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 8) {
-                    ForEach(keys, id: \.self) { key in
-                        keyCap(key)
-                            .scrollTransition(.interactive, axis: .horizontal) { content, phase in
-                                content
-                                    .scaleEffect(phase.isIdentity ? 1.12 : 0.88)
-                                    .opacity(phase.isIdentity ? 1 : 0.55)
-                            }
-                    }
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVStack(spacing: 6) {
+                ForEach(keys, id: \.self) { key in
+                    keyCap(key)
+                        .scrollTransition(.interactive, axis: .vertical) { content, phase in
+                            content
+                                .scaleEffect(phase.isIdentity ? 1.08 : 0.86)
+                                .opacity(phase.isIdentity ? 1 : 0.5)
+                        }
                 }
-                .scrollTargetLayout()
             }
-            .scrollTargetBehavior(.viewAligned)
-            .contentMargins(.horizontal, geo.size.width / 2 - 28, for: .scrollContent)
-            .defaultScrollAnchor(.leading)
+            .scrollTargetLayout()
         }
-        .frame(height: 46)
-        .mask(LinearGradient(colors: [.clear, .black, .black, .clear], startPoint: .leading, endPoint: .trailing))
+        .scrollTargetBehavior(.viewAligned)
+        .contentMargins(.vertical, (rowHeight * visibleRows) / 2 - rowHeight / 2, for: .scrollContent)
+        .defaultScrollAnchor(.bottom)
+        .frame(width: 76, height: rowHeight * visibleRows)
+        .mask(LinearGradient(colors: [.clear, .black, .black, .black, .clear], startPoint: .top, endPoint: .bottom))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.4), radius: 10)
     }
 
     private func keyCap(_ key: Key) -> some View {
@@ -188,8 +206,7 @@ struct KeyWheel: View {
         let active = isCtrl && ctrlState != .off
         return Text(key.title)
             .font(.system(size: 16, weight: .semibold, design: .monospaced))
-            .frame(minWidth: 56, minHeight: 40)
-            .padding(.horizontal, 4)
+            .frame(width: 62, height: 40)
             .background(active ? Theme.accent.opacity(ctrlState == .locked ? 0.75 : 0.4) : Color.white.opacity(0.1),
                         in: RoundedRectangle(cornerRadius: 10))
             .contentShape(Rectangle())
