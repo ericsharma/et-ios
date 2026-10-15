@@ -265,6 +265,12 @@ final class TerminalHost: NSObject {
     /// Dictation went into the terminal untouched; offer to move it to the
     /// editor.
     private func dictationFinished(_ text: String) {
+        offerEdit(text)
+    }
+
+    /// Shows the Edit button for text that was just typed into the terminal
+    /// (keyboard dictation or E.T.'s own mic).
+    func offerEdit(_ text: String) {
         guard !text.isEmpty else { return }
         promptText = text
         onDictationPrompt?(text)

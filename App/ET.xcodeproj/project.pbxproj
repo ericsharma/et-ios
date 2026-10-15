@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		176CEB6F04458465BE3439DA /* KeyRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCBF94AC41590A9B15E7FAA /* KeyRow.swift */; };
+		1CF2C07C262A0FFE2738D263 /* VoiceInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 175E8D2F9B6999615A8AAF59 /* VoiceInput.swift */; };
 		45D6BA62083244C784927078 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC2C774B86C691F339F5290 /* Views.swift */; };
 		5AF0ADD6EBFE20C5D372C10F /* Templates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E147244B49816415D5E26BA /* Templates.swift */; };
 		5DDBE00FB490CBC8C3CE2B31 /* SessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B7EB4283A5F1B4E8DAE0DCE /* SessionController.swift */; };
@@ -23,6 +24,7 @@
 		090F6A6A5A570B49BDA73AE9 /* ET.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ET.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0B7EB4283A5F1B4E8DAE0DCE /* SessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionController.swift; sourceTree = "<group>"; };
 		0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHost.swift; sourceTree = "<group>"; };
+		175E8D2F9B6999615A8AAF59 /* VoiceInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInput.swift; sourceTree = "<group>"; };
 		5E147244B49816415D5E26BA /* Templates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Templates.swift; sourceTree = "<group>"; };
 		929A6DF5668934E4FF4835DA /* ETCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ETCore; path = ../ETCore; sourceTree = SOURCE_ROOT; };
 		AAC2C774B86C691F339F5290 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
@@ -63,6 +65,7 @@
 				5E147244B49816415D5E26BA /* Templates.swift */,
 				0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */,
 				AAC2C774B86C691F339F5290 /* Views.swift */,
+				175E8D2F9B6999615A8AAF59 /* VoiceInput.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -158,6 +161,7 @@
 				5AF0ADD6EBFE20C5D372C10F /* Templates.swift in Sources */,
 				B9EF4532C1A648569D5AD074 /* TerminalHost.swift in Sources */,
 				45D6BA62083244C784927078 /* Views.swift in Sources */,
+				1CF2C07C262A0FFE2738D263 /* VoiceInput.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

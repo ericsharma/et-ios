@@ -67,6 +67,7 @@ enum Key: Hashable {
 struct KeyRow: View {
     @Bindable var session: SessionController
     let page: WindowPage
+    let voice: VoiceInput
     @State private var ctrlState: CtrlState = .off
 
     enum CtrlState { case off, once, locked }
@@ -90,6 +91,8 @@ struct KeyRow: View {
                 }
                 .padding(.horizontal, 8)
             }
+            MicButton(session: session, page: page, voice: voice)
+                .padding(.trailing, 10)
         }
         .frame(height: 38)
         .contextMenu {
@@ -233,5 +236,75 @@ struct DictationEditButton: View {
         .buttonStyle(.borderedProminent)
         .clipShape(Capsule())
         .shadow(radius: 8)
+    }
+}
+
+/// One-tap dictation with E.T.'s own recognizer. Tap to start, tap to stop;
+/// the text goes into the current window and the Edit button appears.
+struct MicButton: View {
+    let session: SessionController
+    let page: WindowPage
+    let voice: VoiceInput
+
+    var body: some View {
+        let listening = voice.state == .listening
+        Button {
+            Task { await toggle() }
+        } label: {
+            Image(systemName: listening ? "stop.fill" : "mic.fill")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(listening ? .white : Theme.accent)
+                .frame(width: 44, height: 32)
+                .background(listening ? Color.red : Theme.accent.opacity(0.25), in: RoundedRectangle(cornerRadius: 7))
+                .symbolEffect(.pulse, isActive: listening)
+        }
+        .buttonStyle(.plain)
+        .disabled(voice.state == .stopping)
+        .sensoryFeedback(.impact(weight: .light), trigger: listening)
+    }
+
+    private func toggle() async {
+        await MicButton.toggle(session: session, page: page, voice: voice)
+    }
+
+    static func toggle(session: SessionController, page: WindowPage, voice: VoiceInput) async {
+        switch voice.state {
+        case .idle:
+            await voice.start(contextualStrings: session.dictationVocabulary)
+        case .listening:
+            let text = await voice.stop()
+            session.sendDictated(text, to: page)
+        case .stopping:
+            break
+        }
+    }
+}
+
+/// Live transcription while E.T.'s mic is listening. Tap to stop.
+struct ListeningBubble: View {
+    let session: SessionController
+    let page: WindowPage
+    let voice: VoiceInput
+
+    var body: some View {
+        Button {
+            Task { await MicButton.toggle(session: session, page: page, voice: voice) }
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "waveform").foregroundStyle(.red).symbolEffect(.variableColor, isActive: true)
+                Text(voice.text.isEmpty ? "Listening…" : voice.text)
+                    .font(.callout)
+                    .foregroundStyle(voice.text.isEmpty ? .secondary : .primary)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text("Tap to stop").font(.caption2).foregroundStyle(.secondary)
+            }
+            .padding(14)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .shadow(radius: 8)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
     }
 }

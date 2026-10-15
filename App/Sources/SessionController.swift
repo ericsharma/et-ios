@@ -610,6 +610,20 @@ final class SessionController {
         Task { for c in commands { await client.post(c) } }
     }
 
+    /// E.T.'s mic finished: type the text into the window (no Enter), then
+    /// offer Edit, same as after keyboard dictation.
+    func sendDictated(_ text: String, to page: WindowPage) {
+        guard !text.isEmpty else { return }
+        send(Array(text.utf8), to: page)
+        page.terminal.offerEdit(text)
+    }
+
+    /// Hints for the speech recognizer: window names and common commands.
+    var dictationVocabulary: [String] {
+        windows.map(\.name) + [server.host, "tmux", "ssh", "sudo", "git", "grep", "claude",
+                                "systemctl", "journalctl", "nixos-rebuild", "docker", "vim", "ls", "cd"]
+    }
+
     /// Sends compose-bar text (SPEC §6.2). Multi-line text goes to Claude
     /// windows as a bracketed paste, so Claude gets one message instead of
     /// one per line; in shells each line runs.

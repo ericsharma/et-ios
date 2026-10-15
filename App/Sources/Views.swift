@@ -200,6 +200,7 @@ struct SessionView: View {
     @Bindable var session: SessionController
     @State private var showLog = false
     @State private var newSessionName = ""
+    @State private var voice = VoiceInput()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -314,18 +315,28 @@ struct SessionView: View {
                 .allowsHitTesting(session.state == .connected)
             if let page = session.currentWindow, session.state == .connected,
                !HardwareKeyboard.shared.isConnected {
-                KeyRow(session: session, page: page)
+                KeyRow(session: session, page: page, voice: voice)
                     .padding(.bottom, 6)
             }
         }
         .overlay(alignment: .bottom) {
-            if let page = session.currentWindow, page.dictationPrompt {
+            if let page = session.currentWindow, voice.state != .idle {
+                ListeningBubble(session: session, page: page, voice: voice)
+                    .padding(.bottom, 52)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if let page = session.currentWindow, page.dictationPrompt {
                 DictationEditButton(page: page)
                     .padding(.bottom, 56)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .animation(.snappy, value: session.currentWindow?.dictationPrompt)
+        .animation(.snappy, value: voice.state)
+        .alert("Dictation", isPresented: Binding(get: { voice.error != nil }, set: { if !$0 { voice.error = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(voice.error ?? "")
+        }
         .sheet(item: $session.composeRequest) { request in
             ComposeSheet(session: session, page: request.page, text: request.text)
         }
