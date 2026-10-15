@@ -52,6 +52,8 @@ struct ServerListView: View {
             Section {
                 NavigationLink("This device's key") { KeyView() }
                 NavigationLink("Debug log") { DebugLogView() }
+            } footer: {
+                Text(AppInfo.buildLabel).font(.caption.monospaced())
             }
         }
         .navigationTitle("E.T.")
@@ -259,6 +261,9 @@ struct SessionView: View {
                     Text("Restoring \(done)/\(total)").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
+                Text(AppInfo.shortBuild)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.tertiary)
                 Button { session.showOverview = true } label: {
                     Image(systemName: "square.grid.2x2").font(.title3)
                 }
@@ -631,6 +636,9 @@ struct WindowSidebar: View {
             }
         }
         .listStyle(.sidebar)
+        .safeAreaInset(edge: .bottom) {
+            Text(AppInfo.buildLabel).font(.caption2.monospaced()).foregroundStyle(.tertiary).padding(.bottom, 6)
+        }
     }
 }
 
@@ -664,6 +672,14 @@ struct ShortcutKeys: View {
 
 enum AppInfo {
     /// "E.T. 0.1 (202610151757)", shown in the ⋯ menu.
+    /// "b 10-15 18:28" from build 202610151828 (UTC), for the header.
+    static var shortBuild: String {
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
+        guard build.count == 12 else { return "b \(build)" }
+        let c = Array(build)
+        return "b \(String(c[4...5]))-\(String(c[6...7])) \(String(c[8...9])):\(String(c[10...11]))"
+    }
+
     static var buildLabel: String {
         let info = Bundle.main.infoDictionary
         let version = info?["CFBundleShortVersionString"] as? String ?? "?"
