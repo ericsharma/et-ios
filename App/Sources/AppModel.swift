@@ -53,6 +53,7 @@ final class AppModel {
            let server = servers.first(where: { $0.id == id }) {
             connect(server)
         }
+        for line in Push.traceLines.suffix(8) { log.add("push trace: \(line)") }
         // Last: a tap that launched the app is delivered now, with the key
         // loaded and the session (if any) already starting.
         Push.shared.onOpen = { [weak self] request in self?.open(request) }

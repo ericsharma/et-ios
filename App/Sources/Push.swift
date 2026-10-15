@@ -31,8 +31,17 @@ final class Push: NSObject {
     }
     private var pendingOpen: OpenRequest?
 
-    fileprivate func open(_ request: OpenRequest) {
+    func open(_ request: OpenRequest) {
+        Push.trace("open window=\(request.window ?? "nil") session=\(request.session ?? "nil") handler=\(onOpen != nil)")
         if let onOpen { onOpen(request) } else { pendingOpen = request }
+    }
+
+    /// The notification payload → what to open.
+    nonisolated static func request(from info: [AnyHashable: Any]) -> OpenRequest {
+        OpenRequest(
+            server: (info["server"] as? String).flatMap(UUID.init(uuidString:)),
+            session: info["session"] as? String,
+            window: info["window"] as? String)
     }
 
     /// Sandbox for Xcode builds, production for TestFlight / App Store.
@@ -44,8 +53,24 @@ final class Push: NSObject {
         #endif
     }
 
-    func register() {
+    /// Notification steps, kept across launches (the tap that launches the
+    /// app happens before anything else can log). Shown in the debug log.
+    static func trace(_ line: String) {
+        let stamp = Date().formatted(date: .omitted, time: .standard)
+        var lines = UserDefaults.standard.stringArray(forKey: "pushTrace") ?? []
+        lines.append("\(stamp) \(line)")
+        UserDefaults.standard.set(Array(lines.suffix(30)), forKey: "pushTrace")
+    }
+
+    static var traceLines: [String] { UserDefaults.standard.stringArray(forKey: "pushTrace") ?? [] }
+
+    /// Must run before launch finishes, or a tap that launches the app is
+    /// not delivered to us.
+    func becomeDelegate() {
         UNUserNotificationCenter.current().delegate = self
+    }
+
+    func register() {
         Task {
             let granted = (try? await UNUserNotificationCenter.current()
                 .requestAuthorization(options: [.alert, .sound, .badge])) ?? false
@@ -76,14 +101,12 @@ extension Push: UNUserNotificationCenterDelegate {
         _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        let info = response.notification.request.content.userInfo
-        let server = (info["server"] as? String).flatMap(UUID.init(uuidString:))
-        let session = info["session"] as? String
-        let window = info["window"] as? String
+        let request = Push.request(from: response.notification.request.content.userInfo)
         nonisolated(unsafe) let done = completionHandler
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
-                Push.shared.open(Push.OpenRequest(server: server, session: session, window: window))
+                Push.trace("didReceive tap")
+                Push.shared.open(request)
             }
             done()
         }
@@ -91,6 +114,17 @@ extension Push: UNUserNotificationCenterDelegate {
 }
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, willFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        let fromPush = launchOptions?[.remoteNotification] as? [AnyHashable: Any]
+        MainActor.assumeIsolated {
+            Push.trace("launch fromNotification=\(fromPush != nil)")
+            Push.shared.becomeDelegate()
+            // Backup: some launches carry the tapped push only here.
+            if let fromPush { Push.shared.open(Push.request(from: fromPush)) }
+        }
+        return true
+    }
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         MainActor.assumeIsolated { Push.shared.register() }
         return true
