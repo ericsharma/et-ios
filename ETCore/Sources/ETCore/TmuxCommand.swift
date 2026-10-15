@@ -60,6 +60,16 @@ public enum TmuxCommand {
         "refresh-client -C \(columns)x\(rows)"
     }
 
+    /// Gives a window a fixed size (window-size becomes manual for it).
+    public static func claimWindowSize(_ window: WindowID, columns: Int, rows: Int) -> String {
+        "resize-window -t \(window) -x \(columns) -y \(rows)"
+    }
+
+    /// Returns a window to the global window-size (automatic sizing).
+    public static func releaseWindowSize(_ window: WindowID) -> String {
+        "set-option -uw -t \(window) window-size"
+    }
+
     /// Creates a window without making it the server's current window.
     /// The reply is one line: `@<window> %<pane>`.
     public static func newWindow(name: String) -> String {

@@ -64,6 +64,8 @@ final class SessionController {
     var currentWindowID: WindowID? {
         didSet {
             guard currentWindowID != oldValue else { return }
+            if let old = windows.first(where: { $0.id == oldValue }) { release(old) }
+            if let page = currentWindow { claim(page) }
             clearBadges()
             if let page = currentWindow, page.needsRepaint { scheduleRepaint(page, after: 0) }
             for page in windows where page.id != currentWindowID { page.terminal.dismissDictationPrompt() }
@@ -110,6 +112,8 @@ final class SessionController {
     @ObservationIgnored private var reconnectStarted: Date?
     @ObservationIgnored private var reconnectAttempt = 0
     @ObservationIgnored private var reconnectTask: Task<Void, Never>?
+    /// Windows E.T. sized to the phone with resize-window (see claim).
+    @ObservationIgnored private var claimed: Set<WindowID> = []
 
     init(server: ServerConfig, identity: SSHIdentity, log: DebugLog,
          onServerChanged: @escaping (ServerConfig) -> Void) {
@@ -250,6 +254,8 @@ final class SessionController {
                 reconnectStarted = nil
                 reconnectAttempt = 0
                 log.add("Ready: \(windows.count) windows")
+                releaseStaleClaims()
+                if let page = currentWindow { claim(page) }
                 openPendingWindow()
                 Task { await registerPushToken() }
             }
@@ -265,12 +271,16 @@ final class SessionController {
         isReconnecting = false
         reconnectStarted = nil
         reconnectAttempt = 0
-        closeConnection()
+        // Give claimed windows back to the other clients (the laptop).
+        let release = Array(claimed)
+        claimed.removeAll()
+        saveClaims()
+        closeConnection(releasing: release)
         if !isDisconnected { state = .disconnected }
         log.add("Disconnected")
     }
 
-    private func closeConnection() {
+    private func closeConnection(releasing windows: [WindowID] = []) {
         for task in tasks { task.cancel() }
         tasks.removeAll()
         let client = client
@@ -278,6 +288,11 @@ final class SessionController {
         self.client = nil
         self.connection = nil
         Task {
+            if let client, !windows.isEmpty {
+                for id in windows { await client.post(TmuxCommand.releaseWindowSize(id)) }
+                // Let the writer send them before the channel closes.
+                try? await Task.sleep(for: .milliseconds(200))
+            }
             await client?.close()
             await connection?.close()
         }
@@ -693,6 +708,44 @@ final class SessionController {
         return nil
     }
 
+    // MARK: - Window size
+
+    // tmux's window-size "latest" sizes a window for the client that last
+    // typed in it, and E.T.'s commands don't count. A window last used on
+    // the laptop stays laptop-wide, so programs draw past the phone's edge.
+    // So E.T. claims the window it shows (resize-window = fixed size) and
+    // releases it (unset window-size = back to automatic) when it stops.
+
+    private var claimsKey: String { "claims.\(server.id.uuidString)" }
+
+    private func claim(_ page: WindowPage) {
+        guard let client, let size = terminalSize else { return }
+        claimed.insert(page.id)
+        saveClaims()
+        Task { await client.post(TmuxCommand.claimWindowSize(page.id, columns: size.cols, rows: size.rows)) }
+    }
+
+    private func release(_ page: WindowPage) {
+        guard let client, claimed.remove(page.id) != nil else { return }
+        saveClaims()
+        Task { await client.post(TmuxCommand.releaseWindowSize(page.id)) }
+    }
+
+    /// Claims left over from a connection that ended without releasing.
+    private func releaseStaleClaims() {
+        guard let client else { return }
+        let stale = (UserDefaults.standard.array(forKey: claimsKey) as? [Int] ?? []).map(WindowID.init)
+        for id in stale where id != currentWindowID && windows.contains(where: { $0.id == id }) {
+            Task { await client.post(TmuxCommand.releaseWindowSize(id)) }
+        }
+        claimed = []
+        saveClaims()
+    }
+
+    private func saveClaims() {
+        UserDefaults.standard.set(claimed.map(\.rawValue), forKey: claimsKey)
+    }
+
     // MARK: - Presets
 
     private var presetKey: String { "presets.\(server.id.uuidString)" }
@@ -798,6 +851,7 @@ final class SessionController {
             sentSize = size
             log.add("Resize \(size.cols)x\(size.rows)")
             await client.post(TmuxCommand.refreshClientSize(columns: size.cols, rows: size.rows))
+            if let page = currentWindow { claim(page) }
         }
     }
 }
