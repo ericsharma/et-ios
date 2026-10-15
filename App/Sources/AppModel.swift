@@ -14,6 +14,7 @@ final class AppModel {
     private(set) var session: SessionController?
     /// The server to reconnect to when the app comes back to the foreground.
     private var activeServerID: UUID?
+    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
     private let storeURL: URL = {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -84,12 +85,28 @@ final class AppModel {
         activeServerID = nil
     }
 
+    private func endBackgroundTask() {
+        guard backgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTask)
+        backgroundTask = .invalid
+    }
+
     func scenePhaseChanged(_ phase: ScenePhase) {
         switch phase {
         case .background:
             // SPEC §7: close the control client; the tmux session keeps running.
-            session?.disconnect()
+            // Not while a login waits for approval: the user is in Safari
+            // approving it, and that login would be lost.
+            if let session, session.isAwaitingApproval {
+                // Ask for background time so the held login keeps being serviced.
+                backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "login approval") { [weak self] in
+                    self?.endBackgroundTask()
+                }
+            } else if let session, session.pendingHostKey == nil {
+                session.disconnect()
+            }
         case .active:
+            endBackgroundTask()
             if let session, session.isDisconnected,
                let id = activeServerID, let server = servers.first(where: { $0.id == id }) {
                 log.add("Foreground: reconnecting")

@@ -1,5 +1,5 @@
 {
-  "originHash" : "79a3af331f699f33977ef32cb9529e62c09387644625b1361d53e5814df4cb4f",
+  "originHash" : "6c79512bf63158556bf549aa9347641c8ca0ecd4616f5647dbce9f80d61ec79d",
   "pins" : [
     {
       "identity" : "bigint",
@@ -8,15 +8,6 @@
       "state" : {
         "revision" : "e07e00fa1fd435143a2dcf8b7eec9a7710b2fdfe",
         "version" : "5.7.0"
-      }
-    },
-    {
-      "identity" : "citadel",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/orlandos-nl/Citadel.git",
-      "state" : {
-        "revision" : "ae8562f895de06ccb86fdb1cbb65fd99c8976e12",
-        "version" : "0.12.1"
       }
     },
     {
@@ -51,8 +42,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections.git",
       "state" : {
-        "revision" : "a0cb0954ecb21e4e31b0070e6ed5674e8556685a",
-        "version" : "1.6.0"
+        "revision" : "35a1edcb8ebd2bfe251d587f0b69e62af28f508c",
+        "version" : "1.7.3"
       }
     },
     {
@@ -69,8 +60,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-log.git",
       "state" : {
-        "revision" : "9c6fb14227f55d8f711ce3847dc2f419fb0ecacb",
-        "version" : "1.15.1"
+        "revision" : "4038b6a4f74a1426f47eb1dd5b4bb5628a15d597",
+        "version" : "1.16.1"
       }
     },
     {

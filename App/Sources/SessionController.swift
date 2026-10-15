@@ -48,6 +48,11 @@ final class SessionController {
     }
     /// Set while asking the user to trust a new host key.
     private(set) var pendingHostKey: HostKey?
+    /// Text the server sent during login, for example Tailscale SSH asking
+    /// the user to approve the connection in a browser.
+    private(set) var authBanner: String?
+    /// The first https link in `authBanner`.
+    private(set) var approvalURL: URL?
 
     @ObservationIgnored private let identity: SSHIdentity
     @ObservationIgnored private let log: DebugLog
@@ -92,9 +97,14 @@ final class SessionController {
         state = .connecting("Connecting to \(server.host)…")
         log.add("Connecting to \(server.user)@\(server.host):\(server.port)")
         do {
-            let connection = try await SSHConnection.connect(server, identity: identity) { [weak self] key in
-                await self?.askToTrust(key) ?? false
-            }
+            let connection = try await SSHConnection.connect(
+                server, identity: identity,
+                trustNewHostKey: { [weak self] key in await self?.askToTrust(key) ?? false },
+                onAuthBanner: { [weak self] text in
+                    Task { @MainActor in self?.received(banner: text) }
+                })
+            authBanner = nil
+            approvalURL = nil
             self.connection = connection
             state = .connecting("Finding tmux…")
             let tmux = try await connection.findTmux()
@@ -179,7 +189,12 @@ final class SessionController {
 
     private func fail(_ error: Error) {
         log.add("Error: \(error)")
-        state = .failed(Self.describe(error, server: server))
+        var message = Self.describe(error, server: server)
+        if let banner = authBanner, approvalURL == nil {
+            message += "\n\nThe server said:\n" + banner
+        }
+        approvalURL = nil
+        state = .failed(message)
     }
 
     static func describe(_ error: Error, server: ServerConfig) -> String {
@@ -191,7 +206,7 @@ final class SessionController {
         case SSHConnectionError.hostKeyRejected:
             "Host key not trusted."
         case SSHConnectionError.timedOut:
-            "\(server.host) answered but the SSH login didn't finish in time. Retry, or share the debug log."
+            "\(server.host) answered but the SSH login didn't finish in time. If it asked you to approve the login, retry and approve within 5 minutes."
         case SSHConnectionError.hostKeyChanged(_, let presented):
             "\(server.host)'s host key changed (now \(presented.fingerprint)). Not connecting. If this is expected, delete and re-add the server."
         case SSHConnectionError.tmuxNotFound:
@@ -201,6 +216,31 @@ final class SessionController {
         default:
             "\(error)"
         }
+    }
+
+    // MARK: - Login banner
+
+    private func received(banner text: String) {
+        log.add("Server message: \(text.trimmingCharacters(in: .whitespacesAndNewlines))")
+        authBanner = (authBanner.map { $0 + "\n" } ?? "") + text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if approvalURL == nil, let url = Self.firstHTTPSURL(in: text) {
+            approvalURL = url
+            state = .connecting("Waiting for approval…")
+        }
+    }
+
+    /// True while the server holds the login for the user to approve it.
+    var isAwaitingApproval: Bool {
+        if case .connecting = state, approvalURL != nil { return true }
+        return false
+    }
+
+    static func firstHTTPSURL(in text: String) -> URL? {
+        let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+        let range = NSRange(text.startIndex..., in: text)
+        return detector?.matches(in: text, range: range)
+            .compactMap(\.url)
+            .first { $0.scheme == "https" }
     }
 
     // MARK: - Host key

@@ -256,7 +256,11 @@ struct SessionView: View {
     @ViewBuilder private var content: some View {
         switch session.state {
         case .connecting(let message):
-            centered { ProgressView(); Text(message).foregroundStyle(.secondary) }
+            if let url = session.approvalURL {
+                ApprovalView(host: session.server.displayName, banner: session.authBanner ?? "", url: url)
+            } else {
+                centered { ProgressView(); Text(message).foregroundStyle(.secondary) }
+            }
         case .failed(let message):
             centered {
                 Image(systemName: "exclamationmark.triangle").font(.largeTitle).foregroundStyle(Theme.active)
@@ -362,5 +366,41 @@ struct WindowPager: View {
         .onChange(of: session.currentWindowID) {
             UISelectionFeedbackGenerator().selectionChanged()
         }
+    }
+}
+
+/// Shown while the server holds the login for approval, as Tailscale SSH
+/// does in "check" mode. The login continues by itself once approved.
+struct ApprovalView: View {
+    let host: String
+    let banner: String
+    let url: URL
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "person.badge.shield.checkmark").font(.system(size: 44)).foregroundStyle(Theme.accent)
+            Text("Approve this login").font(.title3.weight(.semibold))
+            Text("\(host) wants you to confirm it's you before the connection continues.")
+                .multilineTextAlignment(.center).foregroundStyle(.secondary)
+            Button {
+                openURL(url)
+            } label: {
+                Label("Approve in browser", systemImage: "safari").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent).controlSize(.large)
+            HStack(spacing: 8) {
+                ProgressView()
+                Text("Waiting for approval. Come back here when you're done.").font(.footnote).foregroundStyle(.secondary)
+            }
+            if !banner.isEmpty {
+                Text(banner).font(.caption2.monospaced()).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10).background(Theme.surface, in: RoundedRectangle(cornerRadius: 8))
+                    .textSelection(.enabled)
+            }
+        }
+        .padding(28)
+        .frame(maxWidth: 480, maxHeight: .infinity)
     }
 }

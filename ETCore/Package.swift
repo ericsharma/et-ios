@@ -9,7 +9,8 @@ let package = Package(
         .library(name: "ETSSH", targets: ["ETSSH"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/orlandos-nl/Citadel.git", exact: "0.12.1"),
+        // Vendored with small patches; see Vendor/Citadel/PATCHES.md.
+        .package(path: "../Vendor/Citadel"),
     ],
     targets: [
         /// tmux control mode: parser, commands, client. No dependencies, no I/O.

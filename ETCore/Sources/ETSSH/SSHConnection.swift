@@ -54,6 +54,7 @@ public actor SSHConnection {
         _ config: ServerConfig,
         identity: SSHIdentity,
         trustNewHostKey: @escaping HostKeyTrustHandler,
+        onAuthBanner: (@Sendable (String) -> Void)? = nil,
         timeout: Duration = .seconds(10)
     ) async throws -> SSHConnection {
         var config = config
@@ -70,15 +71,19 @@ public actor SSHConnection {
 
         let validator = PinningHostKeyValidator(pinned: config.hostKey!)
         let auth = PublicKeyAuthentication(user: config.user, key: identity.privateKey)
+        var settings = SSHClientSettings(
+            host: config.host,
+            port: config.port,
+            authenticationMethod: { .custom(auth) },
+            hostKeyValidator: .custom(validator)
+        )
+        settings.connectTimeout = .seconds(timeout.components.seconds)
+        settings.loginTimeout = .seconds(timeout.components.seconds)
+        // Servers like Tailscale SSH ("check" mode) hold the login and send an
+        // approval URL as a banner; the timeout then grows to 5 minutes.
+        settings.onUserAuthBanner = onAuthBanner
         do {
-            let client = try await SSHClient.connect(
-                host: config.host,
-                port: config.port,
-                authenticationMethod: .custom(auth),
-                hostKeyValidator: .custom(validator),
-                reconnect: .never,
-                connectTimeout: .seconds(timeout.components.seconds)
-            )
+            let client = try await SSHClient.connect(to: settings)
             return SSHConnection(config: config, client: client, newlyTrustedHostKey: newlyTrusted)
         } catch {
             if let presented = validator.mismatch {
