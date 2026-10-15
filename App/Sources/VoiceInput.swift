@@ -5,6 +5,12 @@ import Speech
 /// One-tap dictation with on-device speech recognition (SPEC §6.3). Audio
 /// never leaves the device. Partial text is published live; `stop()`
 /// returns the final text.
+///
+/// Apple's recognizer ends a recognition after a pause or roughly 30–60 s
+/// of speech, and may start its next transcript from scratch. Like the
+/// system dictation, this keeps everything: finished stretches are kept in
+/// `committed`, and a new recognition task is started on the same audio
+/// stream whenever one ends while the user is still dictating.
 @MainActor @Observable
 final class VoiceInput {
     enum State: Equatable {
@@ -14,14 +20,23 @@ final class VoiceInput {
     }
 
     private(set) var state: State = .idle
-    /// The transcription so far, updated as the user speaks.
+    /// Everything heard so far, updated as the user speaks.
     private(set) var text = ""
     /// Set when dictation can't start (permissions, no on-device model).
     var error: String?
 
+    /// Text from finished recognitions.
+    @ObservationIgnored private var committed = ""
+    /// The live transcript of the current recognition.
+    @ObservationIgnored private var current = ""
+    @ObservationIgnored private var recognizer: SFSpeechRecognizer?
+    @ObservationIgnored private var contextualStrings: [String] = []
     @ObservationIgnored private var engine: AVAudioEngine?
-    @ObservationIgnored private var request: SFSpeechAudioBufferRecognitionRequest?
+    /// The request the audio tap feeds; swapped when a recognition restarts.
+    @ObservationIgnored private let sink = RequestSink()
     @ObservationIgnored private var task: SFSpeechRecognitionTask?
+    /// Bumped per recognition task, so late callbacks from an old task are ignored.
+    @ObservationIgnored private var generation = 0
     @ObservationIgnored private var finalResult: CheckedContinuation<Void, Never>?
     @ObservationIgnored private var safetyStop: Task<Void, Never>?
 
@@ -29,6 +44,8 @@ final class VoiceInput {
         guard state == .idle else { return }
         error = nil
         text = ""
+        committed = ""
+        current = ""
         guard await Self.requestPermissions() else {
             error = "E.T. needs Microphone and Speech Recognition access. Turn them on in Settings → E.T."
             return
@@ -38,13 +55,8 @@ final class VoiceInput {
             error = "On-device dictation isn't available for this language. Use the keyboard's mic instead."
             return
         }
-
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.requiresOnDeviceRecognition = true
-        request.shouldReportPartialResults = true
-        request.addsPunctuation = true
-        request.contextualStrings = contextualStrings
-        self.request = request
+        self.recognizer = recognizer
+        self.contextualStrings = contextualStrings
 
         let engine = AVAudioEngine()
         do {
@@ -53,7 +65,7 @@ final class VoiceInput {
             try session.setActive(true, options: .notifyOthersOnDeactivation)
             let input = engine.inputNode
             input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0),
-                             block: Self.tapBlock(appendingTo: request))
+                             block: Self.tapBlock(sink))
             engine.prepare()
             try engine.start()
         } catch {
@@ -63,20 +75,66 @@ final class VoiceInput {
         }
         self.engine = engine
         state = .listening
+        startRecognition()
 
-        task = recognizer.recognitionTask(with: request, resultHandler: Self.resultHandler { [weak self] transcript, done in
-            Task { @MainActor in
-                guard let self else { return }
-                if let transcript { self.text = transcript }
-                if done { self.finalResult?.resume(); self.finalResult = nil }
-            }
-        })
-        // On-device recognition doesn't stop by itself; cap a forgotten mic.
+        // Cap a forgotten mic.
         safetyStop = Task {
-            try? await Task.sleep(for: .seconds(120))
+            try? await Task.sleep(for: .seconds(600))
             guard !Task.isCancelled else { return }
             _ = await self.stop()
         }
+    }
+
+    /// Starts a recognition task fed by the running audio tap.
+    private func startRecognition() {
+        guard let recognizer else { return }
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.requiresOnDeviceRecognition = true
+        request.shouldReportPartialResults = true
+        request.addsPunctuation = true
+        request.contextualStrings = contextualStrings
+        sink.set(request)
+        generation += 1
+        let generation = generation
+        task = recognizer.recognitionTask(with: request, resultHandler: Self.resultHandler { [weak self] transcript, isFinal, ended in
+            Task { @MainActor in
+                self?.update(generation: generation, transcript: transcript, isFinal: isFinal, ended: ended)
+            }
+        })
+    }
+
+    private func update(generation: Int, transcript: String?, isFinal: Bool, ended: Bool) {
+        guard generation == self.generation else { return }
+        if let transcript {
+            // The recognizer sometimes starts over within one task after a
+            // pause; keep what it had instead of letting it vanish.
+            if !current.isEmpty, transcript.count < current.count / 2,
+               !transcript.lowercased().hasPrefix(current.lowercased().prefix(transcript.count)) {
+                commit()
+            }
+            current = transcript
+        }
+        if isFinal { commit() }
+        text = [committed, current].filter { !$0.isEmpty }.joined(separator: " ")
+
+        guard ended else { return }
+        switch state {
+        case .listening:
+            // Ended by a pause or the length limit; keep listening.
+            commit()
+            startRecognition()
+        case .stopping:
+            finalResult?.resume()
+            finalResult = nil
+        case .idle:
+            break
+        }
+    }
+
+    private func commit() {
+        let piece = current.trimmingCharacters(in: .whitespaces)
+        if !piece.isEmpty { committed = committed.isEmpty ? piece : committed + " " + piece }
+        current = ""
     }
 
     /// Stops listening and returns the final text (empty if nothing heard).
@@ -86,7 +144,7 @@ final class VoiceInput {
         safetyStop?.cancel()
         engine?.stop()
         engine?.inputNode.removeTap(onBus: 0)
-        request?.endAudio()
+        sink.endAudio()
         // Wait briefly for the recognizer's final pass over the last words.
         await withCheckedContinuation { continuation in
             finalResult = continuation
@@ -96,7 +154,8 @@ final class VoiceInput {
                 self.finalResult = nil
             }
         }
-        let result = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        commit()
+        let result = committed
         cleanUp()
         return result
     }
@@ -104,8 +163,10 @@ final class VoiceInput {
     private func cleanUp() {
         task?.cancel()
         task = nil
-        request = nil
+        sink.set(nil)
         engine = nil
+        recognizer = nil
+        generation += 1
         state = .idle
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
@@ -114,16 +175,16 @@ final class VoiceInput {
     // Closures written inside this @MainActor class would inherit main-actor
     // isolation and trap there, so they are built in nonisolated helpers.
 
-    nonisolated private static func tapBlock(appendingTo request: SFSpeechAudioBufferRecognitionRequest) -> AVAudioNodeTapBlock {
-        nonisolated(unsafe) let request = request
-        return { buffer, _ in request.append(buffer) }
+    nonisolated private static func tapBlock(_ sink: RequestSink) -> AVAudioNodeTapBlock {
+        { buffer, _ in sink.append(buffer) }
     }
 
     nonisolated private static func resultHandler(
-        _ update: @escaping @Sendable (String?, Bool) -> Void
+        _ update: @escaping @Sendable (_ transcript: String?, _ isFinal: Bool, _ ended: Bool) -> Void
     ) -> (SFSpeechRecognitionResult?, (any Error)?) -> Void {
         { result, error in
-            update(result?.bestTranscription.formattedString, result?.isFinal == true || error != nil)
+            let isFinal = result?.isFinal == true
+            update(result?.bestTranscription.formattedString, isFinal, isFinal || error != nil)
         }
     }
 
@@ -133,5 +194,27 @@ final class VoiceInput {
         }
         guard speech else { return false }
         return await AVAudioApplication.requestRecordPermission()
+    }
+}
+
+/// Holds the current recognition request for the audio thread.
+private final class RequestSink: @unchecked Sendable {
+    private let lock = NSLock()
+    private var request: SFSpeechAudioBufferRecognitionRequest?
+
+    func set(_ request: SFSpeechAudioBufferRecognitionRequest?) {
+        let old = lock.withLock { () -> SFSpeechAudioBufferRecognitionRequest? in
+            defer { self.request = request }
+            return self.request
+        }
+        old?.endAudio()
+    }
+
+    func append(_ buffer: AVAudioPCMBuffer) {
+        lock.withLock { request }?.append(buffer)
+    }
+
+    func endAudio() {
+        lock.withLock { request }?.endAudio()
     }
 }

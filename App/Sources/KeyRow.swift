@@ -354,6 +354,7 @@ struct ListeningBubble: View {
                     .foregroundStyle(voice.text.isEmpty ? .secondary : .primary)
                     .multilineTextAlignment(.leading)
                     .lineLimit(6)
+                    .truncationMode(.head) // long dictation: show the latest words
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text("Tap to stop").font(.caption2).foregroundStyle(.secondary)
             }
