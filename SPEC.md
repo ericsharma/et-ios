@@ -2,7 +2,7 @@
 
 "ET phone home": one tap opens your tmux session on a server you own. Each tmux window is a full-screen terminal; switch with a two-finger swipe. Push notifications tell you when a long command finishes or Claude Code needs you.
 
-Bundle ID `xyz.ericsharma.et` · repo `github.com/ericsharma/et-ios` (private) · status: spec v3 (describes the app as built), 2026-10-15.
+User guide: [docs/GUIDE.md](docs/GUIDE.md) · Bundle ID `xyz.ericsharma.et` · repo `github.com/ericsharma/et-ios` (private) · status: spec v3 (describes the app as built), 2026-10-15.
 
 ## 1. Scope
 
