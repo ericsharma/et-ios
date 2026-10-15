@@ -1,402 +1,298 @@
-# E.T. — iOS tmux client for trigkey
+# E.T. — a tmux client for iPhone and iPad
 
-Name: **E.T.** (display name; "ET phone home"). Bundle ID `xyz.ericsharma.et`. Owner: Eric. Builder: an agent on m1-mini (Xcode).
-Status: draft spec, 2026-10-14.
+"ET phone home": one tap opens your tmux session on a server you own. Each tmux window is a full-screen page; swipe between them. A compose bar with on-device dictation sends text to the terminal.
 
-## 1. Goal
+Bundle ID `xyz.ericsharma.et` · repo `github.com/ericsharma/et-ios` (private) · status: spec v2, 2026-10-15.
 
-One tap on the iPhone or iPad opens the live tmux session on trigkey. Each tmux window is one full-screen terminal page. Swipe left or right to move between windows. A compose bar with on-device dictation sends text to the terminal.
+## 1. Scope
 
-The app replaces this flow: `ssh trigkey` → `tmux attach` → `prefix n` / `prefix p`.
+**The app replaces:** `ssh server` → `tmux attach` → `prefix n` / `prefix p`, on a phone keyboard.
 
-### 1.1 Facts about the current setup (verified on trigkey, 2026-10-14)
+**It must work for any tmux user.** Nothing in the app assumes a host name, session name, window naming scheme, or install path. Eric's setup (below) is the first real test case, not the design.
 
-| Fact | Value |
-|---|---|
-| tmux version | 3.6a |
-| Session name | `0` (the only session) |
-| tmux binary | `/etc/profiles/per-user/eric/bin/tmux` |
-| `window-size` | `latest` (default) |
-| SSH auth | public key only (`PasswordAuthentication = false`) |
-| Authorized keys for trigkey | `~/nixos-config/hosts/nixos/trigkey/default.nix:61` |
-| Persistence | tmux-resurrect + tmux-continuum, `@resurrect-processes 'ssh'` |
-| Network | iPhone reaches trigkey over Tailscale (MagicDNS name `trigkey`) |
+**v1 includes:** saved servers, session picker, one page per window, history restore, typing, key-row presets, compose bar with dictation, new-window templates, reconnect, iPad layout with keyboard shortcuts, Secure Enclave key.
 
-Current windows in session `0`. The names follow a pattern: one shell window and one Claude Code window per machine.
+**Not in v1:** a general SSH client (SFTP, port forwards), Mosh, split-pane layouts (the app shows each window's active pane), push notifications, AI features, Android, macOS.
 
-```
-1 trigkey          (bash)
-2 trigkey-claude   (claude)
-3 gmktec           (ssh)
-4 gmktec-claude    (ssh → claude on gmktec)
-5 mac-mini         (ssh)
-6 mac-mini-claude  (ssh → claude on mac-mini)
-```
+### 1.1 Example setup: Eric
 
-The app must use this pattern. See §5.3 (host grouping) and §6.4 (Claude windows).
+- Server `trigkey` (NixOS, tmux 3.6a), reached over Tailscale. One session, `0`.
+- Windows follow `<machine>` / `<machine>-claude`: `trigkey`, `trigkey-claude`, `gmktec`, `gmktec-claude`, `mac-mini`, `mac-mini-claude`. Windows for other machines run `ssh <machine>` from trigkey, then a shell or `claude` there.
+- tmux-resurrect and tmux-continuum keep windows across reboots.
 
-### 1.2 Decisions made
+The app should make this setup pleasant through general features: templates (§6.4), key-row presets (§5.4), and optional name grouping (§5.3).
 
-| Topic | Decision |
-|---|---|
-| Distribution | Paid Apple Developer account. TestFlight. |
-| Voice | On-device dictation into a compose box. The user edits, then sends. No AI. |
-| Panes | One shell per window. The app shows the active pane of each window. No split-pane UI. |
-| Devices | iPhone and iPad. |
-| Network | Tailscale is already on. The app does not manage Tailscale. |
+## 2. How it works: tmux control mode
 
-### 1.3 Non-goals (v1)
+The app does **not** draw tmux's own screen (status bar, borders) in one terminal. It uses **control mode** (`tmux -C`), like iTerm2's tmux integration:
 
-- General SSH client (host list for direct connections, SFTP, port forwards).
-- Mosh.
-- Split-pane layout view.
-- Push notifications (see §11, later).
-- Any AI feature.
-- Android, macOS.
+- Each pane's output arrives as its own stream (`%output %<pane> …`).
+- Window changes arrive as notifications (`%window-add`, `%window-renamed`, …).
+- The app sends ordinary tmux commands; each reply comes in a `%begin` … `%end` / `%error` block.
 
-## 2. Core technical approach: tmux control mode
+So each tmux window becomes a native page with its own terminal emulator, and the window list becomes native UI.
 
-Do **not** render tmux's own screen (status bar, borders) in a single terminal. Use **tmux control mode** (`tmux -C`), like iTerm2's tmux integration.
+### 2.1 Connecting
 
-In control mode, tmux sends a text protocol instead of a drawn screen:
+1. SSH to the server with the app's key (§9).
+2. **Find tmux:** run one exec that tries `command -v tmux` in a login shell (`$SHELL -lc`), then common paths: `/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin`, `/run/current-system/sw/bin`, `/etc/profiles/per-user/$USER/bin`, `~/.nix-profile/bin`. Cache the result per server. Users can override it in server settings.
+3. **Pick a session:** run `tmux list-sessions -F '#{session_id} #{session_name} #{session_windows} #{session_attached}'`.
+   - One session: attach it.
+   - Several: attach the session used last on this server, or show a picker the first time.
+   - None, or "no server running": offer to create one (name defaults to `main`).
+4. **Attach:** open an exec channel **without a PTY** and run `exec <tmux> -C attach-session -t <session>`. Create a session with `exec <tmux> -C new-session -A -s <name>`.
 
-- Each pane's raw output comes as a separate stream (`%output %<pane-id> ...`).
-- Window events come as notifications (`%window-add`, `%window-close`, `%window-renamed`, ...).
-- The app sends normal tmux commands (`send-keys`, `new-window`, `capture-pane`, ...) and gets replies in `%begin` / `%end` blocks.
+Verified on tmux 3.5a: `-C` works without a PTY. **Still to check on 3.6a (trigkey).** If it fails, request a PTY, use `-CC`, and strip the DCS wrapper (`ESC P 1000 p` … `ESC \`). The parser already accepts `\r\n` line endings for that case.
 
-Result: each tmux window becomes a native page with its own terminal emulator. The window list becomes native UI. Scrollback per window works natively.
+### 2.2 Protocol notes (verified, tmux 3.5a)
 
-### 2.1 Connection command
+- Lines end in `\n`. In `%output` data, bytes < 0x20 and `\` arrive as octal `\ooo`. Everything else is raw, so **a UTF-8 character can be split across two `%output` lines**. Treat output as bytes, never as strings.
+- Reply bodies (`capture-pane` etc.) are raw and not escaped. Body lines can start with `%`, so a block ends only at the `%end`/`%error` line whose time and number match its `%begin`.
+- Reply flags: `1` means a command sent by this client. `0` means a command tmux ran itself (the initial attach). Match only flag-1 replies, in order, against the queue of sent commands.
+- tmux prints tabs in `-F` output as `_`. Use space-separated fields with the free-text field (the window name) last.
+- `new-window -n` and `rename-window` expand `#{…}` in names, so double `#` in names typed by the user.
+- Closing stdin ends the control client with `%exit`. The session keeps running.
+- Unknown `%` lines are logged and ignored, never fatal.
 
-Open an SSH **exec channel without a PTY** and run:
-
-```sh
-exec /etc/profiles/per-user/eric/bin/tmux -C attach-session -t 0
-```
-
-- Use `-C` (one C), not `-CC`. `-CC` is for a TTY and wraps output in a DCS sequence.
-- The tmux path and session name are settings (§8). Default as above.
-- If the session does not exist (`%exit` or error at start), show the session list (`list-sessions`) and let the user pick or create one.
-- **Spike item:** confirm that `tmux -C attach` works on a channel with no PTY on 3.6a. If not, request a PTY, use `-CC`, and strip the DCS wrapper (`ESC P 1000 p` at start, `ESC \` at end).
-
-### 2.2 Protocol details the parser must handle
-
-Lines end with `\n`. Each line is one of:
-
-| Line | Meaning |
-|---|---|
-| `%begin <time> <cmd-num> <flags>` | Start of reply to a command. Lines up to `%end`/`%error` are the reply body. |
-| `%end <time> <cmd-num> <flags>` | Reply OK. |
-| `%error <time> <cmd-num> <flags>` | Reply failed. Body is the error text. |
-| `%output %<pane> <data>` | Pane output. In `<data>`, bytes < 0x20 and `\` are octal-escaped as `\ooo`. Decode to raw bytes. |
-| `%extended-output %<pane> <age> : <data>` | Same, when `pause-after` flow control is on. |
-| `%pause %<pane>` / `%continue %<pane>` | Flow control. |
-| `%window-add @<win>` | New window. |
-| `%window-close @<win>` / `%unlinked-window-close @<win>` | Window gone. |
-| `%window-renamed @<win> <name>` | Rename. |
-| `%window-pane-changed @<win> %<pane>` | Active pane in window changed. |
-| `%session-window-changed $<sess> @<win>` | Current window changed (for example, from the laptop). |
-| `%layout-change @<win> <layout> ...` | Pane layout or size changed. |
-| `%session-changed $<sess> <name>` / `%sessions-changed` | Session events. |
-| `%subscription-changed ...` | Reply to `refresh-client -B` subscriptions. |
-| `%exit [reason]` | Control client ends. Treat as disconnect. |
-
-Rules:
-
-- Commands are answered in order. Keep a FIFO of pending commands. Match replies to commands by order, and check `<cmd-num>`.
-- Unknown `%` lines: log and ignore. Do not crash.
-- The parser is a pure Swift type with no I/O. Unit-test it with recorded fixtures (§10).
-
-### 2.3 Commands the app uses
+### 2.3 Commands
 
 | Purpose | Command |
 |---|---|
-| Window list | `list-windows -F '#{window_id} #{window_index} #{window_active} #{pane_id} #{window_panes} #{window_width} #{window_height} #{s/ /_/:pane_current_command} #{window_name}'` — tmux prints tabs in `-F` output as `_`, so fields are space-separated with the name last. |
-| Send input (any bytes) | `send-keys -t %<pane> -H <hex bytes...>` |
-| Restore history | `capture-pane -p -e -J -t %<pane> -S -<N>` (N = scrollback setting, default 2000) |
+| Window list | `list-windows -F '#{window_id} #{window_index} #{window_active} #{pane_id} #{window_panes} #{window_width} #{window_height} #{s/ /_/:pane_current_command} #{window_name}'` |
+| Type input | `send-keys -t %<pane> -H <hex bytes>`, sent without waiting for replies, in chunks of up to 256 bytes |
+| History | `capture-pane -p -e -J -t %<pane> -S -<N>` (N = scrollback setting, default 2000) |
 | Cursor and screen mode | `display-message -p -t %<pane> '#{cursor_x} #{cursor_y} #{alternate_on} #{pane_width} #{pane_height}'` |
-| Alternate screen (vim, htop, claude) | `capture-pane -p -e -a -t %<pane>` when `alternate_on` is 1 |
-| Set client size | `refresh-client -C <cols>x<rows>` |
-| New window | `new-window -d -n <name> -P -F '#{window_id} #{pane_id}'` (`-d`: the server's current window does not change; `#` in names doubled) then `send-keys -t <new pane> 'ssh <target>' Enter` (see §6.3) |
-| Rename / close / select | `rename-window`, `kill-window` (with confirm), `select-window` |
-| Activity tracking | `refresh-client -B act:@*:#{window_activity}` (subscription) or track `%output` per pane |
+| Alternate screen | `capture-pane -p -e -a -t %<pane>`, only when `alternate_on` is 1 (fails otherwise) |
+| Client size | `refresh-client -C <cols>x<rows>` |
+| New window | `new-window -d -n <name> -P -F '#{window_id} #{pane_id}'`. `-d` leaves the server's current window alone. |
+| Rename / close / select | `rename-window`, `kill-window` (after confirm), `select-window` |
 
-### 2.4 History restore on attach
+### 2.4 Restoring a window
 
-For each window, before live output for its pane is shown:
+For each window, before showing live output:
 
 1. Create the terminal emulator at the pane's size.
-2. Run `capture-pane` (history + visible screen, with `-e` for colors). Feed the result into the emulator.
-3. Run `display-message` for cursor position. Send a CUP sequence (`ESC [ row ; col H`) to the emulator.
-4. Buffer any `%output` for this pane that arrives during steps 2–3. Apply it after step 3.
+2. Feed it `capture-pane` output: history plus visible screen, with colors.
+3. If `alternate_on`, also feed the alternate-screen capture.
+4. Move the cursor (`ESC [ row ; col H`) from `display-message`.
+5. Hold `%output` for this pane that arrives during steps 2–4, and apply it afterwards.
 
-Do this for the visible window first, then the neighbors, then the rest in the background.
+Order: the visible window first, then its neighbors, then the rest in the background.
 
 ### 2.5 Window size
 
-`window-size latest` means each window takes the size of the last active client. When the phone attaches and the user types, windows resize to the phone. When the user types on the laptop again, windows go back.
+With tmux's default `window-size latest`, windows take the size of whichever client was used last. Typing on the phone resizes windows to fit the phone; typing on a laptop resizes them back. The app never changes the server's `window-size` option.
 
-- On attach, on rotation, on font-size change, and on iPad window resize: compute cols × rows from the visible terminal view and font. Send `refresh-client -C <cols>x<rows>`.
-- Debounce resize by 150 ms.
-- Do not change the server's `window-size` option.
+Send `refresh-client -C` on attach, rotation, font-size change, and iPad window resize, debounced by 150 ms.
 
 ## 3. Stack
 
-| Part | Choice | Notes |
-|---|---|---|
-| Language | Swift 6, strict concurrency | |
-| UI | SwiftUI; UIKit where SwiftTerm needs it | |
-| Minimum OS | iOS / iPadOS 18 | Builds with Xcode 16.3 on m1-mini (macOS 15.5 cannot run Xcode 26). |
-| Terminal emulator | [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) (`TerminalView` for iOS) | Wrap in `UIViewRepresentable`. |
-| SSH | [Citadel](https://github.com/orlandos-nl/Citadel) on SwiftNIO SSH | **Spike item:** confirm a long-running exec channel with stdin writes and stdout stream. If Citadel cannot do it, use `swift-nio-ssh` directly. |
-| Keys | CryptoKit `SecureEnclave.P256.Signing.PrivateKey` | **Spike item:** confirm SwiftNIO SSH accepts a Secure Enclave key (`NIOSSHPrivateKey(secureEnclaveP256Key:)`). Fallback: Ed25519 key in Keychain, `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`. |
-| Speech | `SFSpeechRecognizer` with `requiresOnDeviceRecognition = true`, plus `contextualStrings` | Decided 2026-10-14. Later: move to `SpeechAnalyzer` + `SpeechTranscriber` (iOS 26, Xcode 26) if dictation quality is not good enough. Only `VoiceInput` changes. |
-| Persistence | SwiftData or a JSON file for settings and host list | No server. |
-| Network monitor | `NWPathMonitor` | Reconnect on path change. |
+| Part | Choice |
+|---|---|
+| Language / UI | Swift 6 (strict concurrency), SwiftUI, UIKit where SwiftTerm needs it |
+| Minimum OS | iOS / iPadOS 18 |
+| Terminal | [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) `TerminalView` in a `UIViewRepresentable` |
+| SSH | [Citadel](https://github.com/orlandos-nl/Citadel) (SwiftNIO SSH). Must support a long-running exec channel with streamed stdin and stdout; fall back to `swift-nio-ssh` directly if not. |
+| Keys | Secure Enclave P-256 (CryptoKit). Fallback: Ed25519 in the Keychain, `WhenUnlockedThisDeviceOnly`. |
+| Speech | `SFSpeechRecognizer` with `requiresOnDeviceRecognition`, plus `contextualStrings`. Later, `SpeechAnalyzer` (iOS 26) if quality isn't good enough; only `VoiceInput` changes. |
+| Storage | JSON in Application Support for servers, templates, and settings. Keychain for keys and pinned host keys. |
+| Network | `NWPathMonitor` for reconnect |
 
-No other third-party packages unless the spike proves a need.
+No other third-party packages unless one proves necessary.
 
 ## 4. Architecture
 
 ```
-SSHTransport        — connects, authenticates, opens exec channel, byte streams in/out
-ControlParser       — pure: bytes → [ControlEvent]  (no I/O, fully unit-tested)
-TmuxClient (actor)  — command queue, reply matching, sends commands, emits events
-SessionStore (@Observable, MainActor)
-                    — windows [id, index, name, host, activePane, hasActivity, bell]
-                    — connection state
-PaneTerminal        — one SwiftTerm TerminalView per pane; fed by %output;
-                      keyboard input → send-keys -H
-UI                  — WindowPager, WindowStrip, Overview, ComposeBar, KeyRow, Settings
-VoiceInput          — SFSpeechRecognizer wrapper (on-device); publishes partial + final text
-KeyStore            — key generation, public key export, host-key pinning
+ETCore (Swift package, no UI, tested on macOS)
+  ControlParser    bytes → [ControlEvent]; pure                           ✅ done
+  TmuxCommand      command builders + reply parsing; pure                 ✅ done
+  TmuxClient       actor: command queue, reply matching, event stream     ✅ done
+  ControlChannel   protocol: bytes in/out (SSH in the app, a pipe in tests) ✅ done
+App
+  SSHTransport     Citadel connection, tmux discovery, exec channel → ControlChannel
+  SessionStore     @Observable, MainActor: windows, connection state, restore progress
+  PaneTerminal     one TerminalView per window, fed by %output; keys → send-keys -H
+  UI               ServerList, SessionPicker, WindowPager, TabBar, Overview, KeyRow, ComposeBar, Settings
+  VoiceInput       SFSpeechRecognizer wrapper: partial + final text
+  KeyStore         key generation, public key export, host-key pinning
 ```
 
-Rules:
+- Keep a `TerminalView` alive for every window, even off screen, so no output is lost and swipes are instant. Plan for up to about 30 windows.
+- All tmux traffic goes through `TmuxClient`. UI code never writes to SSH.
 
-- Keep a `TerminalView` alive for every window, also when off screen, so output is not lost and swipes are instant. Expect fewer than 20 windows.
-- All tmux traffic goes through `TmuxClient`. UI code never writes raw bytes to SSH.
+## 5. UI
 
-## 5. UI / UX
+The style borrows from the Claude app's Remote Control screen: dark and calm, one main surface, the compose bar at the bottom, connection status at the top.
 
-Borrow from the Claude mobile app's Remote Control screen: dark, calm, one main surface, a compose bar at the bottom, clear connection status at the top.
-
-### 5.1 iPhone layout (portrait)
+### 5.1 iPhone
 
 ```
 ┌─────────────────────────────────┐
-│ ● trigkey · 0          ⊞   ⚙   │  status row: connection dot, session, overview, settings
-│ [trigkey][gmktec][mac-mini]     │  host strip (§5.3)
-│   shell · claude                │  sub-tabs for the current host
+│ ● trigkey · 0          ⊞   ⚙   │  status dot, server · session, overview, settings
+│ trigkey │ trigkey-claude │ gmk… │  window tabs (§5.3), scrolls
 ├─────────────────────────────────┤
 │                                 │
-│     terminal (active pane)      │  ← swipe left/right = next/previous window
-│                                 │
+│        terminal (window)        │  ← swipe = previous / next window
 │                                 │
 ├─────────────────────────────────┤
-│ esc tab ctrl ↑ ↓ ← → | ~ / -    │  key row (§5.5)
-│ [ type or dictate…     ] 🎤  ➤ │  compose bar (§6)
+│ esc tab ctrl ↑ ↓ ← → | ~ / -    │  key row (§5.4)
+│ [ type or dictate…     ] 🎤  ➤ │  compose bar (§6.2)
 └─────────────────────────────────┘
 ```
 
+**First run:** "Add server" (host, port, user) → show the app's public key with Copy and Share, plus a one-line hint ("add to `~/.ssh/authorized_keys` on the server") → connect → trust the host key (§9) → session picker if needed → terminal.
+
+**Server list:** reached from the status row. Tap a server to switch to it; long-press to edit or delete. One connection at a time in v1.
+
 ### 5.2 Window pager
 
-- A horizontal pager. One page = one tmux window, in `window_index` order.
-- Swipe left/right changes page. Light haptic on page change.
-- The pager must not take vertical pans (the terminal uses those for scrollback). Start a page change only when the horizontal pan is clearly larger than the vertical pan.
-- When text selection is active, the pager does not page.
-- Changing page in the app does **not** run `select-window` on the server by default. The laptop keeps its own current window. Setting: "Follow phone window on server" (off).
-- When a window is added on the server, insert a page. When a window closes, remove the page and go to the neighbor.
+- One page per tmux window, in `window_index` order. Light haptic on page change.
+- Vertical pans belong to the terminal (scrollback). The pager only takes clearly horizontal swipes, and never while text is selected.
+- Changing page does **not** run `select-window` on the server, so other clients keep their own current window. Setting: "Follow app window on server", off by default.
+- Windows added or closed on the server add or remove pages live. When the current window closes, show its neighbor.
+- Remember the last window per server and session **by name**, since IDs change when the tmux server restarts.
 
-### 5.3 Host grouping
+### 5.3 Window tabs
 
-Parse window names as `<host>` or `<host>-<role>`. Known role suffix in v1: `claude`.
+- **Default:** a scrolling tab row, one tab per window, labeled with the window name. It follows the pager.
+- **Optional grouping** (per server, off by default): "Group windows by name prefix" splits names at the first `-`. The top row shows one chip per prefix (`trigkey`, `gmktec`, `mac-mini`); a second row shows the windows in that group (`trigkey`, `claude`). The prefix chip, tab underline, and a 2 pt line above the terminal take that prefix's color, editable in settings, so you can see at a glance which machine is live.
 
-- The **host strip** shows one chip per host, in the order of the host's first window. Tap a chip to jump to that host's first window.
-- Under it, **sub-tabs** show the windows of the current host (`shell`, `claude`, any other suffix).
-- Each host has a color (settings). The chip, the sub-tab underline, and a 2 pt line at the top of the terminal use that color. This shows at a glance which machine is live.
-- Window names that do not match a known host get a neutral color and their own chip.
-- Swipe still goes window by window across hosts. Strip and sub-tabs update to follow.
+### 5.4 Key row and presets
 
-### 5.4 Overview
+One row above the compose bar; it scrolls horizontally if it doesn't fit. It's hidden when a hardware keyboard is attached.
 
-- Tap ⊞ (or two-finger pinch-in on the pager) to open a grid of all windows, grouped by host.
-- Each tile shows a live snapshot of the terminal (last N lines, scaled), name, and badges (activity, bell).
-- Tap a tile to open it. Long-press a tile: Rename, Close (confirm), New window for this host.
-- A **+** tile opens "New window" (§6.3).
+| Preset | Keys |
+|---|---|
+| Shell (default) | `esc` `tab` `ctrl` `↑` `↓` `←` `→` `\|` `~` `/` `-` `^C` `^D` |
+| Claude | `esc` `⇧tab` `1` `2` `3` `↑` `↓` `enter` `^C` |
 
-### 5.5 Key row
+- `ctrl` is sticky: tap once and the next key is sent with Ctrl; long-press to lock it.
+- The preset is chosen per window (long-press the key row) and remembered by window name.
+- **Suggestion:** when a window's pane runs `claude`, or its name contains `claude`, the app switches it to the Claude preset, unless the user has already chosen a preset for it. (A window that runs claude over ssh shows `ssh` as its command, so the name check matters.)
+- A Claude-preset window also changes the compose bar: prose mode (spoken symbols off) and the placeholder "Message Claude…". That makes the phone a good place to answer Claude's questions and approve actions.
 
-One row above the compose bar. Scrolls horizontally if it does not fit.
+### 5.5 Overview
 
-v1 keys: `esc`, `tab`, `ctrl` (sticky: next key is sent with Ctrl), `↑ ↓ ← →`, `|`, `~`, `/`, `-`, `^C`, `^D`.
-
-- Long-press `ctrl` = locked Ctrl until tapped again.
-- In Claude windows the row changes (§6.4).
-- iPad with a hardware keyboard: hide the key row.
+- Tap ⊞, or pinch in on the pager: a grid of all windows (grouped when grouping is on). Each tile shows a live snapshot, the name, and activity or bell badges.
+- Tap a tile to open it. Long-press: Rename, Close (confirm), New window from template.
+- A **+** tile opens New window (§6.4).
 
 ### 5.6 Activity and bells
 
-- A window that gets output while it is not visible gets a dot on its chip and sub-tab.
-- A BEL byte (`0x07`) in a non-visible window: red badge and a light haptic.
+- A window that gets output while not visible gets a dot on its tab.
+- A BEL (`0x07`) in a window that isn't visible gives a red badge and a light haptic.
 - Opening the window clears both.
 
 ### 5.7 Connection state
 
-Status dot at the top left:
-
 | State | Look |
 |---|---|
-| Connected | green dot, no text |
-| Connecting / restoring | pulsing amber, "Restoring 3/6" |
-| Reconnecting | amber banner: "Reconnecting…" The last screen stays visible, dimmed 30%. Input is disabled. |
-| Cannot reach trigkey | red banner: "Cannot reach trigkey. Is Tailscale on?" with a Retry button |
-| Auth failed | red banner with a link to Settings → Key |
+| Connected | Green dot |
+| Connecting / restoring | Pulsing amber dot, "Restoring 3/6" |
+| Reconnecting | Amber banner "Reconnecting…". Last screen stays visible, dimmed 30%, input disabled. |
+| Unreachable | Red banner "Can't reach <host>. Check your network or VPN." + Retry |
+| Auth failed | Red banner + "Show my key" (Settings → Key) |
+| Host key changed | Red full-screen error, no connect (§9) |
+| tmux not found | Prompt for the tmux path |
 
-### 5.8 Font size
+### 5.8 Font
 
-- Pinch inside the terminal changes font size (all windows). Then send a resize (§2.5).
-- Default font: SF Mono 13 pt on iPhone, 14 pt on iPad.
+Pinch in the terminal changes the font size for all windows, then resizes (§2.5). Default: SF Mono 13 pt on iPhone, 14 pt on iPad.
 
 ### 5.9 iPad
 
-- `NavigationSplitView`. Sidebar: hosts, with their windows under each. Detail: the terminal.
-- In compact width (Slide Over, narrow Stage Manager), use the iPhone layout.
-- Hardware keyboard shortcuts:
-  - `⌘[` / `⌘]` previous / next window
-  - `⌘1`…`⌘9` window by index
-  - `⌘T` new window
-  - `⌘K` focus compose bar
-  - `⌘\` toggle sidebar
-- All other key presses go to the terminal, including Ctrl and Esc.
+- `NavigationSplitView`: the sidebar lists windows (grouped if grouping is on); the detail is the terminal. In compact width, use the iPhone layout.
+- Hardware keyboard: `⌘[` / `⌘]` previous / next window, `⌘1`…`⌘9` window by position, `⌘T` new window, `⌘K` focus the compose bar, `⌘\` toggle the sidebar. All other keys go to the terminal, including Ctrl and Esc.
 
 ## 6. Input
 
-### 6.1 Direct typing
+### 6.1 Typing
 
-Tap the terminal to show the iOS keyboard. Keys go straight to the pane through SwiftTerm's input delegate → `send-keys -H`. Same as a normal terminal.
+Tap the terminal for the keyboard. Keys go straight to the pane: SwiftTerm input → `send-keys -H`.
 
-### 6.2 Compose bar and dictation
+### 6.2 Compose bar
 
-The compose bar is a multi-line text field (grows to 5 lines) with two buttons: mic and send.
+A text field that grows to 5 lines, with mic and send buttons.
 
-- **Mic:** tap to start, tap to stop. While listening, the mic button is red and partial text shows live in the field. Transcription is on-device only.
-- **Send:** sends the field text to the active pane, then Enter. Long-press Send: menu with "Send without Enter" and "Paste only".
-- The user can edit the text before sending, with the keyboard or by dictating more.
-- Clear the field after send. Keep a per-host history of sent text. Swipe up on the field (or ↑ in the field) shows recent items.
-- Speech context: give the transcriber contextual strings — host names, window names, and a fixed list (`systemctl`, `journalctl`, `nixos-rebuild`, `tmux`, `ssh`, `sudo`, `docker`, `git`, `grep`, `claude`).
+- **Send:** sends the text, then Enter. Long-press for "Send without Enter".
+- Clears after sending. Keeps a per-window history: ↑ in an empty field, or swipe up, shows recent entries.
 
-**Spoken-symbol mode** (toggle on the compose bar, default **off** in Claude windows and **on** in shell windows). After transcription, replace spoken words with symbols, without AI:
+### 6.3 Dictation
 
-| Say | Gets |
-|---|---|
-| "dash dash" / "dash" | `--` / `-` |
-| "pipe" | `\|` |
-| "slash" | `/` |
-| "tilde" | `~` |
-| "dot" | `.` |
-| "star" | `*` |
-| "and and" | `&&` |
-| "greater than" | `>` |
-| "space" | ` ` |
-| "all caps X" | `X` uppercase |
+- Tap the mic to start, tap again to stop. While listening, the mic is red and partial text appears live. Recognition is on-device only.
+- Contextual strings: the server's window names and session names, plus a fixed list (`ssh`, `sudo`, `git`, `grep`, `tmux`, `docker`, `systemctl`, `journalctl`, `claude`, `vim`, `cd`, `ls`).
+- **Spoken-symbol mode:** a toggle on the compose bar. It defaults to on in Shell-preset windows and off in Claude-preset windows. After transcription it replaces words with symbols, without AI: "dash" `-`, "dash dash" `--`, "pipe" `|`, "slash" `/`, "tilde" `~`, "dot" `.`, "star" `*`, "and and" `&&`, "greater than" `>`, "space" ` `, "all caps X" → uppercase X. It also lowercases the first word and drops a trailing period.
+- Permissions: microphone and speech recognition, with plain purpose strings.
 
-Also: lowercase the first word; remove a trailing period.
+### 6.4 New window and templates
 
-Permissions: microphone and speech recognition, with clear purpose strings.
+**New window** (from the overview **+**, `⌘T`, or a long-press on a tab): enter a name and, optionally, pick a template.
 
-### 6.3 New window
+A **template** is stored per server and has:
+- a label, such as "Claude on gmktec"
+- a default window name, such as `gmktec-claude`
+- command lines to type into the new window, one per line, each followed by Enter, such as `ssh gmktec` and `claude`
 
-From the overview **+**, a long-press on a host chip, or `⌘T`:
+To create the window, the app runs `new-window -d -n <name> -P -F …`, then sends each command line with `send-keys`, then opens the page.
 
-1. Pick a host from the host list (settings) or type a name.
-2. Pick a role: `shell` or `claude`.
-3. The app runs `new-window -n <host>[-claude]`, then `send-keys 'ssh <ssh-target>' Enter` (skip for trigkey). For `claude`, it also sends `claude` Enter after ssh.
+Commands are typed into the new window's shell, not passed to `new-window` as its command. So when `ssh` exits, the window stays as a shell, and session-restore plugins (tmux-resurrect) save it like any window the user made by hand.
 
-Why send-keys and not `new-window 'ssh gmktec'`: the pane must stay a shell that **runs** ssh, so it does not close when ssh exits, and tmux-resurrect restores it the same way as the user's own windows.
-
-### 6.4 Claude windows
-
-A window whose name ends in `-claude` is a Claude window:
-
-- Key row changes to: `esc`, `⇧tab` (mode switch), `1`, `2`, `3`, `↑`, `↓`, `enter`, `^C`.
-- Compose bar sends in prose mode (spoken-symbol mode off).
-- Compose bar placeholder: "Message Claude on <host>…"
-
-This copies the Remote Control feel: the phone is a good place to answer Claude's questions and approve actions.
+There are no built-in templates. Eric's six windows are six templates he adds once.
 
 ## 7. Lifecycle
 
 | Event | Action |
 |---|---|
-| App launch / foreground | Connect. Target: first terminal visible < 2 s on Tailscale. Restore visible window first (§2.4). |
-| Background | Request background time (`beginBackgroundTask`). Close the control client cleanly. Closing the SSH channel is enough; the tmux session stays on trigkey. |
+| Launch / foreground | Connect to the last server and session. Goal: first terminal on screen in under 2 s on a good network. Visible window restores first. |
+| Background | `beginBackgroundTask`, then close the control client. The session keeps running on the server. |
 | Network path change | Reconnect. |
-| Disconnect | Reconnect with backoff: 0.5 s, 1 s, 2 s, 4 s, then every 8 s. Stop after 2 min; show Retry. |
-| Reconnect | Run the full restore (§2.4) again. Keep existing `TerminalView`s and replace their content, so pages do not flash. |
-
-Restore last viewed window on launch (store window name, not ID; IDs change after a trigkey reboot).
+| Disconnect | Reconnect after 0.5, 1, 2, 4 s, then every 8 s; stop after 2 min and show Retry. |
+| Reconnect | Full restore (§2.4) into the existing `TerminalView`s, so pages don't flash. |
 
 ## 8. Settings
 
-| Setting | Default |
-|---|---|
-| Host | `trigkey` |
-| Port | 22 |
-| User | `eric` |
-| tmux path | `/etc/profiles/per-user/eric/bin/tmux` |
-| Session | `0` |
-| Scrollback lines to restore | 2000 |
-| Follow phone window on server | off |
-| Require Face ID to open | off |
-| Font size | 13 / 14 pt |
-| Host list | `trigkey` (local, no ssh), `gmktec`, `mac-mini` — each with display name, ssh target, color |
-| Theme | Dark, colors from `~/nixos-config/home/common/tmux.nix` (Catppuccin Mocha: bg `#181825`, accent `#89b4fa`, active `#f38ba8`) |
+**Per server:** display name, host, port (22), user, tmux path (auto), last session, scrollback lines to restore (2000), follow app window on server (off), group by name prefix (off), prefix colors, templates.
+
+**App:** font size, theme (default Catppuccin Mocha: bg `#181825`, accent `#89b4fa`, active `#f38ba8`, plus a few built-ins), require Face ID to open (off), Key (view, copy, share).
 
 ## 9. Security
 
-- **Client key:** generated on first launch, in the Secure Enclave (P-256). It cannot leave the device. Settings → Key shows the public key in OpenSSH format with Copy and Share buttons.
-- The user adds that key to `~/nixos-config/hosts/nixos/trigkey/default.nix:61` (`users.users.eric.openssh.authorizedKeys.keys`) and deploys trigkey.
-- **Host key:** trust on first use. Show the fingerprint and ask once. Store it. If it changes later, stop and show a clear error. Do not connect.
-- No passwords. No keyboard-interactive.
-- Optional Face ID before the app shows terminal content.
-- Hide terminal content in the app switcher snapshot (blur overlay on `scenePhase` inactive).
+- **Client key:** generated on first launch in the Secure Enclave (P-256); it can't leave the device. One key for all servers. Settings → Key shows the public key in OpenSSH format with Copy and Share.
+- **Host keys:** trust on first use. Show the fingerprint and ask once, then pin it per server. If it changes, stop and show a clear error; there's no "connect anyway" in v1. To accept a new key, the user deletes and re-adds the server.
+- No passwords, no keyboard-interactive.
+- Optional Face ID before showing terminal content.
+- Blur the content in the app switcher snapshot (when `scenePhase` is inactive).
 
-## 10. Build and test plan for the agent
+## 10. Build plan
 
-Build on m1-mini with Xcode. Times are agent working time.
+**Build environment:** Mac mini (m1-mini), headless, macOS 15.5, Xcode 16.3 (iOS 18.4 SDK). The project is generated with `xcodegen`. Signing is headless: an App Store Connect API key passed to `xcodebuild -allowProvisioningUpdates -authenticationKey…`. Testing runs on Eric's iPhone, installed with `xcrun devicectl`.
 
-| Phase | Work | Done when | Time |
+**TestFlight needs Xcode 26** (Apple requires the iOS 26 SDK for uploads), which needs macOS 15.6+. Upgrade from the terminal (`softwareupdate`, `xcodes`) before phase 6.
+
+| Phase | Work | Done when | Status |
 |---|---|---|---|
-| 0. Spike | Xcode project. SSH from Simulator to trigkey (LAN or Tailscale) with a test key. Run `tmux -C attach -t 0`. Print events to the console. Answer the three spike items (§2.1, §3 SSH, §3 keys). | Console shows `%output` from a real pane | 2–4 h |
-| 1. Core | `ControlParser` + tests, `TmuxClient`, one `PaneTerminal` page, typing via `send-keys -H`, history restore, resize | Can use the trigkey window like a normal terminal | 1–2 days |
-| 2. Navigation | Pager, host strip, sub-tabs, overview, new/rename/close window, activity dots, bells | Swipe through all 6 windows; create `gmktec` shell window from the app | 1 day |
-| 3. Input | Key row, compose bar, dictation, spoken-symbol mode, Claude windows | Dictate `systemctl status tmux-server` in shell mode and it runs | 1 day |
-| 4. Lifecycle | Reconnect, background, network change, restore last window, connection banners | Turn on Airplane Mode 10 s, turn off: session comes back without user action | 1 day |
-| 5. iPad | Split view, keyboard shortcuts, compact fallback | `⌘]` moves through windows with a hardware keyboard | 1 day |
-| 6. Ship | Settings screen, Secure Enclave key, host-key pinning, app icon, TestFlight upload | Installed from TestFlight on Eric's iPhone | 4 h |
-
-Total: about 6–8 agent days.
+| 1a. Core | `ControlParser`, `TmuxCommand`, `TmuxClient`, tests | Integration test passes against a local tmux | ✅ |
+| 1b. SSH + first page | Citadel transport, tmux discovery, session picker, one `PaneTerminal`, typing, history restore, resize, debug log screen | Use a real window on trigkey from the iPhone like a normal terminal; 3.6a no-PTY question answered | |
+| 2. Navigation | Pager, tabs, optional grouping, overview, new/rename/close, templates, activity, bells | Swipe through all windows; create a `gmktec-claude` window from a template | |
+| 3. Input | Key row and presets, compose bar, dictation, spoken symbols | Dictate `systemctl status sshd` in a shell window and it runs | |
+| 4. Lifecycle | Reconnect, background, network changes, restore last window, banners | Airplane Mode for 10 s, then off: the session comes back without touching anything | |
+| 5. iPad | Split view, keyboard shortcuts, compact fallback | `⌘]` moves through windows on a hardware keyboard | |
+| 6. Ship | Server list polish, Secure Enclave key, host-key pinning, app icon, Xcode 26, TestFlight | Installed from TestFlight on Eric's iPhone | |
 
 ### 10.1 Tests
 
-- **Parser unit tests:** record real control-mode output (run `tmux -C attach` on the Mac with `script` or a pipe) and save it as fixtures. Cover: octal escapes, UTF-8 split across `%output` lines, `%begin` blocks with lines that start with `%`, unknown notifications, `%exit`.
-- **Integration test on the Mac:** start a tmux server on m1-mini with a test socket (`tmux -L attachtest`), drive `TmuxClient` against it over a local pipe (no SSH). Check window add/close/rename events and `send-keys` round trip.
-- **Manual test on device:** the "Done when" column above.
+- **Parser:** recorded control-mode output as fixtures. Covers octal escapes, UTF-8 split across lines, `%`-lines inside reply blocks, unknown notifications, `%exit`, and any chunking.
+- **Client integration:** a throwaway tmux server on a private socket (`tmux -L et-test-…`), driven over a pipe. Covers window add/rename/close, `send-keys` round trip, capture, resize, errors, disconnect.
+- **SSH:** against this Mac's own sshd, using a throwaway key.
+- **Manual on device:** the "Done when" column.
+- Never run destructive commands (`kill-window`, `kill-session`) against a real session. Use a separate one (`tmux new -d -s ettest`).
 
-Do not test against session `0` on trigkey with destructive commands (`kill-window`, `kill-session`). Use a separate session (`tmux new -d -s attachtest`) for those.
+## 11. Later
 
-## 11. Later (not v1)
-
-1. **Push notifications** when a window rings a bell or a Claude window waits for input. Needs a small service on trigkey (tmux `alert-bell` hook → APNs). Paid account makes this possible.
-2. **Live Activity / Dynamic Island** for a long command ("nixos-rebuild on gmktec — running").
-3. **Snippets:** saved commands per host, one tap to send.
-4. **Shortcuts / Siri:** "Open gmktec in E.T.".
-5. **Split-pane support** if the user starts to split windows.
-
-## 12. Open questions
-
-1. ~~App name~~ Decided: **E.T.** (2026-10-14).
-2. ~~Bundle ID~~ Decided: `xyz.ericsharma.et`.
-3. ~~Repo~~ Decided: private repo `ericsharma/et-ios`, local `~/tmux-ios`.
-4. ~~ssh first?~~ Decided: yes. New windows for non-trigkey hosts always ssh first, as `gmktec-claude` and `mac-mini-claude` already do.
+1. Push notifications when a window rings a bell or Claude waits for input (needs a small hook service on the server → APNs).
+2. Live Activity for a long-running command.
+3. Snippets: saved commands per server, one tap to send.
+4. Shortcuts / Siri: "Open gmktec in E.T.".
+5. Several servers connected at once.
+6. Split-pane layouts.
+7. `SpeechAnalyzer` dictation (iOS 26).
