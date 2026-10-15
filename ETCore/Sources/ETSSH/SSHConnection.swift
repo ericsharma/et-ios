@@ -127,7 +127,8 @@ public actor SSHConnection {
     /// Runs `command` with `sh` and returns stdout and stderr together, plus
     /// the exit code. Wrapped in `sh -c` so it works whatever the login shell is.
     public func run(_ command: String) async throws -> (output: String, exitCode: Int) {
-        let script = "\(command) 2>&1; echo \"\(Self.exitMarker)$?\""
+        // Subshell, so an `exit` inside `command` still reaches the marker.
+        let script = "( \(command) ) 2>&1; echo \"\(Self.exitMarker)$?\""
         // Absolute path: some servers (Tailscale SSH) run commands with a
         // minimal PATH.
         let buffer = try await client.executeCommand("/bin/sh -c \(shQuote(script))")
