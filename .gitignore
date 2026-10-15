@@ -6,3 +6,7 @@ xcuserdata/
 .DS_Store
 *.p8
 .spm/
+.build-app/
+.build-app16/
+*.log
+App/Generated/

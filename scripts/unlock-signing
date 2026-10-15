@@ -1,0 +1,3 @@
+#!/bin/sh
+# Unlocks the dedicated signing keychain before a headless build.
+security unlock-keychain -p "$(cat "$HOME/.appstoreconnect/et-signing.pass")" "$HOME/Library/Keychains/et-signing.keychain-db"

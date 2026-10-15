@@ -7,15 +7,23 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		45D6BA62083244C784927078 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC2C774B86C691F339F5290 /* Views.swift */; };
+		5DDBE00FB490CBC8C3CE2B31 /* SessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B7EB4283A5F1B4E8DAE0DCE /* SessionController.swift */; };
 		6F005C5539A7B64474934977 /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = ACB31B6DE076A6AEE0E31967 /* ETCore */; };
-		9883DC46C85AE06C00277FC1 /* Citadel in Frameworks */ = {isa = PBXBuildFile; productRef = 0759CD3FF1583DD22C22F3D5 /* Citadel */; };
+		7B7A1AB52E7AAEB0D5283959 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB367F7DC192EBCCA06508BC /* AppModel.swift */; };
+		9883DC46C85AE06C00277FC1 /* ETSSH in Frameworks */ = {isa = PBXBuildFile; productRef = A3FE42A77BFB03B651F1C8C3 /* ETSSH */; };
 		B3B645CBAE52AC315F4D26D1 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 78E36ABFF9A6F111E6BC39DD /* SwiftTerm */; };
+		B9EF4532C1A648569D5AD074 /* TerminalHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */; };
 		F8F1BACDD89A3936FDBA3DCA /* ETApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE328D04440F47561CB04404 /* ETApp.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		090F6A6A5A570B49BDA73AE9 /* ET.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ET.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0B7EB4283A5F1B4E8DAE0DCE /* SessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionController.swift; sourceTree = "<group>"; };
+		0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHost.swift; sourceTree = "<group>"; };
 		929A6DF5668934E4FF4835DA /* ETCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ETCore; path = ../ETCore; sourceTree = SOURCE_ROOT; };
+		AAC2C774B86C691F339F5290 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
+		AB367F7DC192EBCCA06508BC /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		EE328D04440F47561CB04404 /* ETApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ETApp.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -25,7 +33,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				6F005C5539A7B64474934977 /* ETCore in Frameworks */,
-				9883DC46C85AE06C00277FC1 /* Citadel in Frameworks */,
+				9883DC46C85AE06C00277FC1 /* ETSSH in Frameworks */,
 				B3B645CBAE52AC315F4D26D1 /* SwiftTerm in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -44,7 +52,11 @@
 		8CC7CBC42751C95F504943AC /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				AB367F7DC192EBCCA06508BC /* AppModel.swift */,
 				EE328D04440F47561CB04404 /* ETApp.swift */,
+				0B7EB4283A5F1B4E8DAE0DCE /* SessionController.swift */,
+				0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */,
+				AAC2C774B86C691F339F5290 /* Views.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -83,7 +95,7 @@
 			name = ET;
 			packageProductDependencies = (
 				ACB31B6DE076A6AEE0E31967 /* ETCore */,
-				0759CD3FF1583DD22C22F3D5 /* Citadel */,
+				A3FE42A77BFB03B651F1C8C3 /* ETSSH */,
 				78E36ABFF9A6F111E6BC39DD /* SwiftTerm */,
 			);
 			productName = ET;
@@ -116,7 +128,6 @@
 			mainGroup = E30081932FC350E49AC67E58;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				254A40C423469BA8B4A34733 /* XCRemoteSwiftPackageReference "Citadel" */,
 				D972A5EEDD00B5ECD33C75D6 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 				2095010AD733EA4E1483945C /* XCLocalSwiftPackageReference "../ETCore" */,
 			);
@@ -134,7 +145,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7B7A1AB52E7AAEB0D5283959 /* AppModel.swift in Sources */,
 				F8F1BACDD89A3936FDBA3DCA /* ETApp.swift in Sources */,
+				5DDBE00FB490CBC8C3CE2B31 /* SessionController.swift in Sources */,
+				B9EF4532C1A648569D5AD074 /* TerminalHost.swift in Sources */,
+				45D6BA62083244C784927078 /* Views.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -329,14 +344,6 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		254A40C423469BA8B4A34733 /* XCRemoteSwiftPackageReference "Citadel" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/orlandos-nl/Citadel.git";
-			requirement = {
-				kind = exactVersion;
-				version = 0.12.1;
-			};
-		};
 		D972A5EEDD00B5ECD33C75D6 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm.git";
@@ -348,15 +355,14 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		0759CD3FF1583DD22C22F3D5 /* Citadel */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 254A40C423469BA8B4A34733 /* XCRemoteSwiftPackageReference "Citadel" */;
-			productName = Citadel;
-		};
 		78E36ABFF9A6F111E6BC39DD /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = D972A5EEDD00B5ECD33C75D6 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
+		};
+		A3FE42A77BFB03B651F1C8C3 /* ETSSH */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ETSSH;
 		};
 		ACB31B6DE076A6AEE0E31967 /* ETCore */ = {
 			isa = XCSwiftPackageProductDependency;

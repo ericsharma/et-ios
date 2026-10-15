@@ -7,9 +7,6 @@ options:
 packages:
   ETCore:
     path: ../ETCore
-  Citadel:
-    url: https://github.com/orlandos-nl/Citadel.git
-    exactVersion: 0.12.1
   SwiftTerm:
     url: https://github.com/migueldeicaza/SwiftTerm.git
     exactVersion: 1.20.0
@@ -27,7 +24,9 @@ targets:
     resources: [Resources]
     dependencies:
       - package: ETCore
-      - package: Citadel
+        product: ETCore
+      - package: ETCore
+        product: ETSSH
       - package: SwiftTerm
     info:
       path: Generated/Info.plist
