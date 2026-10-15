@@ -54,7 +54,28 @@ final class SelectModeModel {
     /// Which end of the selection the volume buttons move.
     var movingStart = false
 
-    /// Volume up/down: move the chosen end one character forward/back.
+    @ObservationIgnored private var pendingPress: Task<Void, Never>?
+
+    /// A volume button press. Two presses within a third of a second swap
+    /// Start/End; a single press moves the chosen end one character (after
+    /// that short wait, to tell the two apart).
+    func volumePressed(up: Bool) {
+        if let pending = pendingPress {
+            pending.cancel()
+            pendingPress = nil
+            movingStart.toggle()
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            return
+        }
+        pendingPress = Task {
+            try? await Task.sleep(for: .milliseconds(330))
+            guard !Task.isCancelled else { return }
+            pendingPress = nil
+            nudge(forward: up)
+        }
+    }
+
+    /// Move the chosen end one character forward/back.
     func nudge(forward: Bool) {
         textView?.moveEnd(start: movingStart, forward: forward)
     }
@@ -104,7 +125,7 @@ struct SelectModeView: View {
                     .frame(width: 140)
                     Image(systemName: "speaker.wave.2").font(.caption).foregroundStyle(.secondary)
                 }
-                Text("tap word · double-tap line · triple-tap block · long-press + drag · volume ± moves the \(model.movingStart ? "start" : "end") by a letter")
+                Text("tap word · double-tap line · triple-tap block · long-press + drag · volume ± moves the \(model.movingStart ? "start" : "end") by a letter · double-press swaps")
                     .font(.caption2).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.6)
             }
             .padding(.horizontal, 12).padding(.vertical, 6)
@@ -127,7 +148,7 @@ struct SelectModeView: View {
         .background { HiddenVolumeView(buttons: volume).frame(width: 1, height: 1) }
         .onDisappear { volume.stop() }
         .onAppear {
-            volume.onPress = { [model] up in model.nudge(forward: up) }
+            volume.onPress = { [model] up in model.volumePressed(up: up) }
             volume.start()
             _ = request.page.terminal.view.resignFirstResponder()
             let text = request.page.terminal.frozenText()
