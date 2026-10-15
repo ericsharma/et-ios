@@ -1,0 +1,30 @@
+#!/bin/sh
+# Archives E.T. and uploads it to App Store Connect / TestFlight, headless:
+# signing and upload use the App Store Connect API key (scripts/asc.env).
+# The build number is the UTC time, so every upload is unique.
+set -eu
+cd "$(dirname "$0")/../App"
+. ../scripts/asc.env
+../scripts/unlock-signing
+
+BUILD=$(date -u +%Y%m%d%H%M)
+ARCHIVE=../.build-app/ET-$BUILD.xcarchive
+AUTH="-allowProvisioningUpdates -authenticationKeyPath $ASC_KEY_PATH -authenticationKeyID $ASC_KEY_ID -authenticationKeyIssuerID $ASC_ISSUER_ID"
+
+xcodegen generate -q
+echo "Archiving build $BUILD…"
+# shellcheck disable=SC2086
+xcodebuild -project ET.xcodeproj -scheme ET -configuration Release \
+  -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" \
+  -derivedDataPath ../.build-app -clonedSourcePackagesDirPath ../.spm \
+  -skipPackagePluginValidation -skipMacroValidation $AUTH \
+  CURRENT_PROJECT_VERSION="$BUILD" archive > ../.build-app/archive.log 2>&1 \
+  || { grep -E 'error:' ../.build-app/archive.log | sort -u; exit 1; }
+
+echo "Uploading…"
+# shellcheck disable=SC2086
+xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist ExportOptions.plist \
+  -exportPath ../.build-app/export $AUTH > ../.build-app/export.log 2>&1 \
+  || { grep -E 'error' ../.build-app/export.log | sort -u; exit 1; }
+grep -E 'Upload succeeded|EXPORT SUCCEEDED' ../.build-app/export.log || true
+echo "Uploaded build $BUILD. It appears in TestFlight after Apple finishes processing (usually 5–15 min)."
