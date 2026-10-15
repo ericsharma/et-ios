@@ -53,6 +53,23 @@ final class SelectModeModel {
     @ObservationIgnored var screenStart = 0
     /// Which end of the selection the volume buttons move.
     var movingStart = false
+    /// Characters copied by copy-on-select, for the header.
+    var autoCopied: Int?
+    @ObservationIgnored private var copyTask: Task<Void, Never>?
+
+    /// Copy-on-select: the selection goes to the clipboard once it stops
+    /// changing for a moment (drags and held volume buttons change it a lot).
+    func selectionChanged() {
+        copyTask?.cancel()
+        copyTask = Task {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            let text = selectedText
+            guard !text.isEmpty else { return }
+            UIPasteboard.general.string = text
+            autoCopied = text.count
+        }
+    }
 
     @ObservationIgnored private var lastPress: (up: Bool, at: Date)?
 
@@ -124,6 +141,10 @@ struct SelectModeView: View {
                     .pickerStyle(.segmented)
                     .frame(width: 140)
                     Image(systemName: "speaker.wave.2").font(.caption).foregroundStyle(.secondary)
+                }
+                if let n = model.autoCopied {
+                    Label("Copied \(n) characters", systemImage: "checkmark.circle.fill")
+                        .font(.caption2.weight(.semibold)).foregroundStyle(.green)
                 }
                 Text("tap word · double-tap line · triple-tap block · long-press + drag · volume ± moves the \(model.movingStart ? "start" : "end") by a letter · up+down together swaps")
                     .font(.caption2).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.6)
@@ -214,7 +235,7 @@ struct SelectTextRepresentable: UIViewRepresentable {
     let sendToEditor: () -> Void
     let copyOneLine: () -> Void
 
-    func makeCoordinator() -> Coordinator { Coordinator(sendToEditor: sendToEditor, copyOneLine: copyOneLine) }
+    func makeCoordinator() -> Coordinator { Coordinator(model: model, sendToEditor: sendToEditor, copyOneLine: copyOneLine) }
 
     func makeUIView(context: Context) -> SelectTextView {
         let tv = SelectTextView()
@@ -239,11 +260,17 @@ struct SelectTextRepresentable: UIViewRepresentable {
     func updateUIView(_ uiView: SelectTextView, context: Context) {}
 
     final class Coordinator: NSObject, UITextViewDelegate {
+        let model: SelectModeModel
         let sendToEditor: () -> Void
         let copyOneLine: () -> Void
-        init(sendToEditor: @escaping () -> Void, copyOneLine: @escaping () -> Void) {
+        init(model: SelectModeModel, sendToEditor: @escaping () -> Void, copyOneLine: @escaping () -> Void) {
+            self.model = model
             self.sendToEditor = sendToEditor
             self.copyOneLine = copyOneLine
+        }
+
+        func textViewDidChangeSelection(_ textView: UITextView) {
+            MainActor.assumeIsolated { model.selectionChanged() }
         }
 
         /// The selection's own menu gets the select-mode actions too.
