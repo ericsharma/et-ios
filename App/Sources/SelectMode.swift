@@ -54,7 +54,7 @@ final class SelectModeModel {
     /// Which end of the selection the volume buttons move.
     var movingStart = false
 
-    /// Volume up/down: move the chosen end one word forward/back.
+    /// Volume up/down: move the chosen end one character forward/back.
     func nudge(forward: Bool) {
         textView?.moveEnd(start: movingStart, forward: forward)
     }
@@ -104,7 +104,7 @@ struct SelectModeView: View {
                     .frame(width: 140)
                     Image(systemName: "speaker.wave.2").font(.caption).foregroundStyle(.secondary)
                 }
-                Text("tap word · double-tap line · triple-tap block · long-press + drag · volume ± moves the \(model.movingStart ? "start" : "end")")
+                Text("tap word · double-tap line · triple-tap block · long-press + drag · volume ± moves the \(model.movingStart ? "start" : "end") by a letter")
                     .font(.caption2).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.6)
             }
             .padding(.horizontal, 12).padding(.vertical, 6)
@@ -331,59 +331,31 @@ final class SelectTextView: UITextView {
         select(range)
     }
 
-    // MARK: - Moving an end by words (volume buttons)
+    // MARK: - Moving an end by characters (volume buttons)
 
-    private func isSpace(_ ns: NSString, _ i: Int) -> Bool {
-        guard let scalar = UnicodeScalar(ns.character(at: i)) else { return false }
-        return CharacterSet.whitespacesAndNewlines.contains(scalar)
-    }
-
-    /// Moves the start or end of the selection one shell word forward or
-    /// back. With no selection, selects the first word in view.
+    /// Moves the start or end of the selection one character forward or
+    /// back, for precise ends. With no selection, selects the first
+    /// character in view.
     func moveEnd(start movingStart: Bool, forward: Bool) {
         let ns = text as NSString
         guard ns.length > 0 else { return }
-        var range = selectedRange
+        let range = selectedRange
         if range.length == 0 {
             let top = closestPosition(to: CGPoint(x: textContainerInset.left + 2, y: contentOffset.y + textContainerInset.top + 4))
-            var i = top.map { offset(from: beginningOfDocument, to: $0) } ?? 0
-            while i < ns.length - 1, isSpace(ns, i) { i += 1 }
-            var e = i
-            while e < ns.length - 1, !isSpace(ns, e + 1) { e += 1 }
-            select(NSRange(location: i, length: e - i + 1))
+            let i = min(top.map { offset(from: beginningOfDocument, to: $0) } ?? 0, ns.length - 1)
+            select(NSRange(location: i, length: 1))
             return
         }
         var lo = range.location, hi = NSMaxRange(range)  // hi is exclusive
         if movingStart {
-            if forward {
-                // To the start of the next word, keeping at least one character.
-                var i = lo
-                while i < hi - 1, !isSpace(ns, i) { i += 1 }
-                while i < hi - 1, isSpace(ns, i) { i += 1 }
-                lo = i
-            } else {
-                var i = lo
-                while i > 0, isSpace(ns, i - 1) { i -= 1 }
-                while i > 0, !isSpace(ns, i - 1) { i -= 1 }
-                lo = i
-            }
+            lo = forward ? min(lo + 1, hi - 1) : max(lo - 1, 0)
         } else {
-            if forward {
-                var i = hi
-                while i < ns.length, isSpace(ns, i) { i += 1 }
-                while i < ns.length, !isSpace(ns, i) { i += 1 }
-                hi = i
-            } else {
-                var i = hi
-                while i > lo + 1, isSpace(ns, i - 1) { i -= 1 }
-                while i > lo + 1, !isSpace(ns, i - 1) { i -= 1 }
-                while i > lo + 1, isSpace(ns, i - 1) { i -= 1 }
-                hi = i
-            }
+            hi = forward ? min(hi + 1, ns.length) : max(hi - 1, lo + 1)
         }
-        range = NSRange(location: lo, length: max(1, hi - lo))
-        select(range)
-        scrollRangeToVisible(NSRange(location: movingStart ? lo : max(lo, hi - 1), length: 1))
+        // Keep composed characters (emoji, accents) whole.
+        let fixed = ns.rangeOfComposedCharacterSequences(for: NSRange(location: lo, length: hi - lo))
+        select(fixed)
+        scrollRangeToVisible(NSRange(location: movingStart ? fixed.location : max(fixed.location, NSMaxRange(fixed) - 1), length: 1))
     }
 
     /// The logical line around `i`, without its newline.
