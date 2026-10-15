@@ -54,25 +54,25 @@ final class SelectModeModel {
     /// Which end of the selection the volume buttons move.
     var movingStart = false
 
-    @ObservationIgnored private var pendingPress: Task<Void, Never>?
+    @ObservationIgnored private var lastPress: (up: Bool, at: Date)?
 
-    /// A volume button press. Two presses within a third of a second swap
-    /// Start/End; a single press moves the chosen end one character (after
-    /// that short wait, to tell the two apart).
+    /// A volume button press. Each press moves the chosen end one character
+    /// right away, so holding a button keeps moving. Up and down pressed
+    /// together (opposite directions within a third of a second) swaps
+    /// Start/End instead; holding one button only ever repeats one
+    /// direction, so it never swaps by accident.
     func volumePressed(up: Bool) {
-        if let pending = pendingPress {
-            pending.cancel()
-            pendingPress = nil
+        let now = Date()
+        if let last = lastPress, last.up != up, now.timeIntervalSince(last.at) < 0.33 {
+            // This press undoes the first one's move, then swap ends.
+            nudge(forward: up)
             movingStart.toggle()
+            lastPress = nil
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             return
         }
-        pendingPress = Task {
-            try? await Task.sleep(for: .milliseconds(330))
-            guard !Task.isCancelled else { return }
-            pendingPress = nil
-            nudge(forward: up)
-        }
+        nudge(forward: up)
+        lastPress = (up, now)
     }
 
     /// Move the chosen end one character forward/back.
@@ -125,7 +125,7 @@ struct SelectModeView: View {
                     .frame(width: 140)
                     Image(systemName: "speaker.wave.2").font(.caption).foregroundStyle(.secondary)
                 }
-                Text("tap word · double-tap line · triple-tap block · long-press + drag · volume ± moves the \(model.movingStart ? "start" : "end") by a letter · double-press swaps")
+                Text("tap word · double-tap line · triple-tap block · long-press + drag · volume ± moves the \(model.movingStart ? "start" : "end") by a letter · up+down together swaps")
                     .font(.caption2).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.6)
             }
             .padding(.horizontal, 12).padding(.vertical, 6)
