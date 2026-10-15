@@ -317,23 +317,3 @@ final class SelectTextView: UITextView {
         return r
     }
 }
-
-/// Floating button shown while text is selected in the live terminal:
-/// opens select mode with that selection.
-struct SelectButton: View {
-    let session: SessionController
-    let page: WindowPage
-
-    var body: some View {
-        Button {
-            session.enterSelectMode(page, initial: page.terminal.view.getSelection())
-        } label: {
-            Label("Select", systemImage: "text.cursor")
-                .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 16).padding(.vertical, 10)
-        }
-        .buttonStyle(.borderedProminent)
-        .clipShape(Capsule())
-        .shadow(radius: 8)
-    }
-}

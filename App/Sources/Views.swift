@@ -385,10 +385,6 @@ struct SessionView: View {
                 ListeningBubble(session: session, page: page, voice: voice)
                     .padding(.bottom, 84)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else if let page = session.currentWindow, page.hasSelection, session.selectMode == nil {
-                SelectButton(session: session, page: page)
-                    .padding(.bottom, 84)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
             } else if let page = session.currentWindow, page.dictationPrompt {
                 DictationEditButton(page: page)
                     .padding(.bottom, 84)
@@ -396,7 +392,6 @@ struct SessionView: View {
             }
         }
         .animation(.snappy, value: session.currentWindow?.dictationPrompt)
-        .animation(.snappy, value: session.currentWindow?.hasSelection)
         .overlay {
             if let request = session.selectMode {
                 SelectModeView(session: session, request: request)

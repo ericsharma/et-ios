@@ -14,17 +14,15 @@ enum KeyPreset: String, CaseIterable, Identifiable {
         switch self {
         case .shell:
             [.esc, .tab, .ctrl, .up, .down, .left, .right,
-             .text("|"), .text("~"), .text("/"), .text("-"), .ctrlC, .ctrlD, .select]
+             .text("|"), .text("~"), .text("/"), .text("-"), .ctrlC, .ctrlD]
         case .claude:
-            [.esc, .shiftTab, .text("1"), .text("2"), .text("3"), .up, .down, .enter, .ctrlC, .select]
+            [.esc, .shiftTab, .text("1"), .text("2"), .text("3"), .up, .down, .enter, .ctrlC]
         }
     }
 }
 
 enum Key: Hashable {
     case esc, tab, shiftTab, ctrl, up, down, left, right, enter, ctrlC, ctrlD
-    /// Opens select mode (not a key sent to the terminal).
-    case select
     case text(String)
 
     var title: String {
@@ -40,7 +38,6 @@ enum Key: Hashable {
         case .enter: "enter"
         case .ctrlC: "^C"
         case .ctrlD: "^D"
-        case .select: "sel"
         case .text(let t): t
         }
     }
@@ -53,7 +50,7 @@ enum Key: Hashable {
         case .esc: [0x1B]
         case .tab: [0x09]
         case .shiftTab: Array("\u{1b}[Z".utf8)
-        case .ctrl, .select: []
+        case .ctrl: []
         case .up: Array((csi + "A").utf8)
         case .down: Array((csi + "B").utf8)
         case .right: Array((csi + "C").utf8)
@@ -80,12 +77,21 @@ struct KeyRow: View {
 
     enum CtrlState { case off, once, locked }
 
+    /// Three 44-pt buttons and two 8-pt gaps.
+    static let sideWidth: CGFloat = 148
+
     var body: some View {
         let preset = session.preset(for: page)
-        HStack(spacing: 10) {
+        HStack(spacing: 0) {
+            // Both sides have the same width, so the mic stays centered.
+            HStack(spacing: 8) {
             barButton(systemName: "square.and.pencil", active: false) {
                 session.composeRequest = ComposeRequest(page: page, text: "")
             }
+            barButton(systemName: "text.cursor", active: false) {
+                session.enterSelectMode(page, initial: nil)
+            }
+            .accessibilityLabel("Select mode")
             if !HardwareKeyboard.shared.isConnected {
             barButton(systemName: showKeys ? "xmark" : "ellipsis", active: showKeys || ctrlState != .off) {
                 withAnimation(.snappy) { showKeys.toggle() }
@@ -106,13 +112,17 @@ struct KeyRow: View {
             }
             .zIndex(1)
             }
-            Spacer()
+            }
+            .frame(width: Self.sideWidth, alignment: .leading)
+            .zIndex(1)
+            Spacer(minLength: 4)
             MicButton(session: session, page: page, voice: voice)
-            Spacer()
+            Spacer(minLength: 4)
+            HStack(spacing: 8) {
             PhotosPicker(selection: $photo, matching: .images) {
                 Image(systemName: "photo")
                     .font(.system(size: 18, weight: .medium))
-                    .frame(width: 48, height: 40)
+                    .frame(width: 44, height: 40)
                     .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
@@ -129,13 +139,15 @@ struct KeyRow: View {
                 Label("Send", systemImage: "return")
                     .labelStyle(.iconOnly)
                     .font(.system(size: 18, weight: .semibold))
-                    .frame(width: 48, height: 40)
+                    .frame(width: 44, height: 40)
                     .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Send (Enter)")
+            }
+            .frame(width: Self.sideWidth, alignment: .trailing)
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 14)
         .onReceive(NotificationCenter.default.publisher(for: .terminalViewControlModifierReset)) { note in
             // SwiftTerm clears its sticky Ctrl after one key; mirror that,
             // unless Ctrl is locked.
@@ -164,7 +176,7 @@ struct KeyRow: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 18, weight: .medium))
-                .frame(width: 48, height: 40)
+                .frame(width: 44, height: 40)
                 .background(active ? Theme.accent.opacity(0.45) : Color.white.opacity(0.08),
                             in: RoundedRectangle(cornerRadius: 10))
         }
@@ -174,11 +186,6 @@ struct KeyRow: View {
     private func tap(_ key: Key) {
         if key == .ctrl {
             setCtrl(ctrlState == .off ? .once : .off)
-            return
-        }
-        if key == .select {
-            withAnimation(.snappy) { showKeys = false }
-            session.enterSelectMode(page, initial: nil)
             return
         }
         UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.5)
