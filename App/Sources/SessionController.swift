@@ -342,6 +342,12 @@ final class SessionController {
         state = .failed(message)
     }
 
+    /// LAN addresses need iOS's Local Network permission (Tailscale's don't).
+    static func isPrivateAddress(_ host: String) -> Bool {
+        host.hasPrefix("192.168.") || host.hasPrefix("10.") || host.hasSuffix(".local")
+            || (host.hasPrefix("172.") && (16...31).contains(Int(host.split(separator: ".").dropFirst().first ?? "") ?? 0))
+    }
+
     /// Network trouble worth retrying, as opposed to auth or host-key problems.
     static func isTransient(_ error: Error) -> Bool {
         switch error {
@@ -353,8 +359,10 @@ final class SessionController {
 
     static func describe(_ error: Error, server: ServerConfig) -> String {
         switch error {
-        case SSHConnectionError.unreachable:
-            "Can't reach \(server.host). Check your network or VPN."
+        case SSHConnectionError.unreachable(let detail):
+            Self.isPrivateAddress(server.host)
+                ? "Can't reach \(server.host). If this is the first time on this device, allow it in Settings → Privacy & Security → Local Network → E.T.\n\n(\(detail))"
+                : "Can't reach \(server.host). Check your network or VPN.\n\n(\(detail))"
         case SSHConnectionError.authenticationFailed:
             "\(server.host) didn't accept this app's key. Add it to ~/.ssh/authorized_keys for \(server.user)."
         case SSHConnectionError.hostKeyRejected:

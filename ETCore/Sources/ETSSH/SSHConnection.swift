@@ -104,6 +104,7 @@ public actor SSHConnection {
     /// Opens a connection only to read the server's host key, then drops it.
     static func fetchHostKey(_ config: ServerConfig, timeout: Duration) async throws -> HostKey {
         let recorder = HostKeyRecorder()
+        var failure: (any Error)?
         do {
             let client = try await SSHClient.connect(
                 host: config.host,
@@ -114,9 +115,11 @@ public actor SSHConnection {
                 connectTimeout: .seconds(timeout.components.seconds)
             )
             try? await client.close()
-        } catch {}
+        } catch {
+            failure = error
+        }
         guard let key = recorder.key else {
-            throw SSHConnectionError.unreachable("no host key from \(config.host):\(config.port)")
+            throw SSHConnectionError.unreachable(String(describing: failure ?? SSHConnectionError.hostKeyRejected))
         }
         return key
     }
