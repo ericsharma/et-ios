@@ -146,6 +146,35 @@ public actor SSHConnection {
         return (output, code)
     }
 
+    /// Writes `data` to the absolute `path` on the server. Uses SFTP, and
+    /// falls back to base64 chunks over plain commands if the server has no
+    /// SFTP subsystem.
+    public func upload(_ data: Data, to path: String) async throws {
+        do {
+            let sftp = try await client.openSFTP()
+            try await sftp.withFile(filePath: path, flags: [.write, .create, .truncate]) { file in
+                try await file.write(ByteBuffer(bytes: data))
+            }
+            try? await sftp.close()
+        } catch {
+            let encoded = data.base64EncodedString()
+            let chunk = 48_000
+            var start = encoded.startIndex
+            var first = true
+            while start < encoded.endIndex {
+                let end = encoded.index(start, offsetBy: chunk, limitedBy: encoded.endIndex) ?? encoded.endIndex
+                let redirect = first ? ">" : ">>"
+                let (output, code) = try await run("printf '%s' '\(encoded[start..<end])' \(redirect) \(shQuote(path + ".b64"))")
+                guard code == 0 else { throw SSHConnectionError.commandFailed(command: "upload", exitCode: code, output: output) }
+                start = end
+                first = false
+            }
+            let decode = "base64 -d \(shQuote(path + ".b64")) > \(shQuote(path)) && rm -f \(shQuote(path + ".b64"))"
+            let (output, code) = try await run(decode)
+            guard code == 0 else { throw SSHConnectionError.commandFailed(command: "upload", exitCode: code, output: output) }
+        }
+    }
+
     /// Common tmux locations, tried after `command -v` in a plain and a login
     /// shell. Non-interactive SSH often has a short PATH (macOS: no Homebrew).
     static let tmuxCandidates = [

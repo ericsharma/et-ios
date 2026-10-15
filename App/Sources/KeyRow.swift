@@ -1,4 +1,5 @@
 import GameController
+import PhotosUI
 import SwiftUI
 
 /// Key-row presets (SPEC §5.4).
@@ -71,6 +72,7 @@ struct KeyRow: View {
     let page: WindowPage
     let voice: VoiceInput
     @State private var showKeys = false
+    @State private var photo: PhotosPickerItem?
     @State private var ctrlState: CtrlState = .off
 
     enum CtrlState { case off, once, locked }
@@ -102,6 +104,19 @@ struct KeyRow: View {
             Spacer()
             MicButton(session: session, page: page, voice: voice)
             Spacer()
+            PhotosPicker(selection: $photo, matching: .images) {
+                Image(systemName: "photo")
+                    .font(.system(size: 18, weight: .medium))
+                    .frame(width: 48, height: 40)
+                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Send a screenshot or photo")
+            .onChange(of: photo) { _, item in
+                guard let item else { return }
+                photo = nil
+                Task { await upload(item) }
+            }
             Button {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 session.send([0x0D], to: page)
@@ -109,7 +124,7 @@ struct KeyRow: View {
                 Label("Send", systemImage: "return")
                     .labelStyle(.iconOnly)
                     .font(.system(size: 18, weight: .semibold))
-                    .frame(width: 106, height: 40)
+                    .frame(width: 48, height: 40)
                     .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
@@ -127,6 +142,17 @@ struct KeyRow: View {
             }
         }
         .sensoryFeedback(.selection, trigger: ctrlState)
+    }
+
+    /// Screenshots stay PNG; other photos (HEIC etc.) become JPEG, which
+    /// every tool can read.
+    private func upload(_ item: PhotosPickerItem) async {
+        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+        if item.supportedContentTypes.contains(where: { $0.conforms(to: .png) }) {
+            session.uploadImage(data, fileExtension: "png", to: page)
+        } else if let jpeg = UIImage(data: data)?.jpegData(compressionQuality: 0.85) {
+            session.uploadImage(jpeg, fileExtension: "jpg", to: page)
+        }
     }
 
     private func barButton(systemName: String, active: Bool, action: @escaping () -> Void) -> some View {

@@ -616,6 +616,83 @@ final class SessionController {
         currentWindowID = windows[j].id
     }
 
+    // MARK: - Image upload
+
+    /// Shown while an upload runs or after it finishes.
+    private(set) var uploadStatus: String?
+
+    /// Uploads an image to the server and types its path into the window.
+    /// If the window is an ssh session (e.g. Claude on another machine), the
+    /// file is forwarded there over the window's own ssh destination, since
+    /// the program in the window reads it locally.
+    func uploadImage(_ data: Data, fileExtension: String, to page: WindowPage) {
+        guard let connection, let client else { return }
+        Task {
+            uploadStatus = "Uploading image…"
+            do {
+                let stamp = Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false))
+                    .replacingOccurrences(of: ":", with: "")
+                let name = "et-\(stamp).\(fileExtension)"
+                let home = try await connection.run("printf '%s' \"$HOME\"").output
+                let dir = home + "/.cache/et-uploads"
+                _ = try await connection.run("mkdir -p \(TmuxCommand.quote(dir))")
+                let path = dir + "/" + name
+                try await connection.upload(data, to: path)
+                log.add("Uploaded \(data.count) bytes to \(path)")
+
+                var finalPath = path
+                if page.currentCommand == "ssh", let destination = try await sshDestination(of: page, client: client) {
+                    uploadStatus = "Sending to \(destination)…"
+                    let remote = "mkdir -p ~/.cache/et-uploads && cat > ~/.cache/et-uploads/\(name) && printf '%s' \"$HOME/.cache/et-uploads/\(name)\""
+                    let (output, code) = try await connection.run(
+                        "ssh -o BatchMode=yes -o ConnectTimeout=5 \(TmuxCommand.quote(destination)) \(TmuxCommand.quote(remote)) < \(TmuxCommand.quote(path))")
+                    if code == 0, let line = output.split(separator: "\n").last {
+                        finalPath = String(line)
+                        log.add("Forwarded to \(destination): \(finalPath)")
+                    } else {
+                        log.add("Forward to \(destination) failed (exit \(code)): \(output)")
+                        uploadStatus = "Couldn't forward to \(destination); left on \(server.displayName)"
+                    }
+                }
+                // Type the path (no Enter), so the user can add a question.
+                send(Array((finalPath + " ").utf8), to: page)
+                if uploadStatus?.hasPrefix("Couldn't") != true { uploadStatus = "Image path typed into \(page.name)" }
+            } catch {
+                log.add("Upload failed: \(error)")
+                uploadStatus = "Upload failed: \(error)"
+            }
+            try? await Task.sleep(for: .seconds(4))
+            uploadStatus = nil
+        }
+    }
+
+    /// The host an ssh session in this window points at ("gmktec",
+    /// "user@host"), from the ssh process's arguments.
+    private func sshDestination(of page: WindowPage, client: TmuxClient) async throws -> String? {
+        guard let connection else { return nil }
+        let pidReply = try await client.command("display-message -p -t \(page.pane) '#{pane_pid}'")
+        guard let pid = pidReply.textLines.first.flatMap({ Int($0) }) else { return nil }
+        let (output, _) = try await connection.run("for p in $(pgrep -P \(pid)); do ps -o args= -p $p; done")
+        guard let line = output.split(separator: "\n").map(String.init).first(where: { $0.hasPrefix("ssh ") }) else { return nil }
+        return Self.sshDestination(fromArguments: line.split(separator: " ").map(String.init))
+    }
+
+    /// Picks the destination out of `ssh [options] destination [command]`.
+    static func sshDestination(fromArguments args: [String]) -> String? {
+        let takesValue = Set("BbcDEeFIiJLlmOoPpQRSWw")
+        var i = 1
+        while i < args.count {
+            let arg = args[i]
+            if arg.hasPrefix("-") {
+                if arg.count == 2, let flag = arg.last, takesValue.contains(flag) { i += 1 }
+                i += 1
+                continue
+            }
+            return arg
+        }
+        return nil
+    }
+
     // MARK: - Presets
 
     private var presetKey: String { "presets.\(server.id.uuidString)" }

@@ -351,6 +351,18 @@ struct SessionView: View {
             }
         }
         .animation(.snappy, value: session.bellBanner?.id)
+        .overlay(alignment: .top) {
+            if let status = session.uploadStatus, session.bellBanner == nil {
+                Label(status, systemImage: "photo")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(.top, 8).padding(.horizontal, 16)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy, value: session.uploadStatus)
         .onChange(of: Push.shared.pendingWindowName) { session.openPendingWindow() }
         .alert("Dictation", isPresented: Binding(get: { voice.error != nil }, set: { if !$0 { voice.error = nil } })) {
             Button("OK", role: .cancel) {}
