@@ -66,6 +66,8 @@ final class SessionController {
     @ObservationIgnored private var sentSize: (cols: Int, rows: Int)?
     @ObservationIgnored private var resizeTask: Task<Void, Never>?
     @ObservationIgnored private var reloadTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingReload: Task<Void, Never>?
+    @ObservationIgnored private var loggedFirstInput = false
     @ObservationIgnored private var restoreLines = 2000
 
     init(server: ServerConfig, identity: SSHIdentity, log: DebugLog,
@@ -160,8 +162,11 @@ final class SessionController {
                 try await client.command(TmuxCommand.refreshClientSize(columns: size.cols, rows: size.rows))
                 sentSize = size
             }
-            try await reloadWindows()
-            if state != .connected, client === self.client { state = .connected }
+            try await serializedReload(restoreAll: true)
+            if client === self.client {
+                state = .connected
+                log.add("Ready: \(windows.count) windows")
+            }
         } catch {
             fail(error)
         }
@@ -270,7 +275,10 @@ final class SessionController {
 
     // MARK: - Windows
 
-    private func reloadWindows() async throws {
+    /// Re-reads the window list and restores new or changed windows. With
+    /// `restoreAll` (attach / reconnect) every window is restored and
+    /// progress is shown in `state`.
+    private func reloadWindows(restoreAll: Bool = false) async throws {
         guard let client else { return }
         let infos = TmuxCommand.parseWindowList(try await client.command(TmuxCommand.listWindows()))
             .sorted { $0.index < $1.index }
@@ -299,7 +307,7 @@ final class SessionController {
             }
         }
         // Reconnect: existing pages keep their views but get fresh content.
-        if state != .connected {
+        if restoreAll {
             toRestore = pages
         }
         windows = pages
@@ -309,19 +317,33 @@ final class SessionController {
 
         // Visible window first, then the rest (SPEC §2.4).
         toRestore.sort { a, _ in a.id == currentWindowID }
-        let restoringAll = state != .connected
         for (i, page) in toRestore.enumerated() {
-            if restoringAll { state = .restoring(done: i, total: toRestore.count) }
+            if restoreAll { state = .restoring(done: i, total: toRestore.count) }
             try await restore(page)
         }
     }
 
+    /// Runs reloads one at a time. Two overlapping reloads would interleave
+    /// restores of the same pane.
+    private func serializedReload(restoreAll: Bool = false) async throws {
+        let previous = reloadTask
+        let task = Task { () -> Void in
+            await previous?.value
+            do { try await reloadWindows(restoreAll: restoreAll) } catch {
+                log.add("Reload failed: \(error)")
+                if restoreAll { throw error }
+            }
+        }
+        reloadTask = Task { _ = try? await task.value }
+        try await task.value
+    }
+
     private func scheduleReload() {
-        reloadTask?.cancel()
-        reloadTask = Task {
+        pendingReload?.cancel()
+        pendingReload = Task {
             try? await Task.sleep(for: .milliseconds(100))
             guard !Task.isCancelled else { return }
-            do { try await reloadWindows() } catch { log.add("Reload failed: \(error)") }
+            try? await serializedReload()
         }
     }
 
@@ -384,9 +406,11 @@ final class SessionController {
         case .windowRenamed(let id, let name):
             log.add("event: \(event)")
             windows.first { $0.id == id }?.name = name
-        case .windowAdd, .windowClose, .unlinkedWindowClose, .windowPaneChanged, .sessionChanged, .layoutChange:
+        case .windowAdd, .windowClose, .unlinkedWindowClose, .windowPaneChanged, .sessionChanged:
             log.add("event: \(event)")
             scheduleReload()
+        case .layoutChange:
+            break
         case .exit(let reason):
             log.add("tmux %exit \(reason ?? "")")
         default:
@@ -403,7 +427,14 @@ final class SessionController {
     // MARK: - Input and size
 
     func send(_ bytes: [UInt8], to page: WindowPage) {
-        guard let client, state == .connected else { return }
+        guard let client else {
+            log.add("Input dropped: not connected")
+            return
+        }
+        if !loggedFirstInput {
+            loggedFirstInput = true
+            log.add("First input: \(bytes.count) bytes to \(page.name) (\(page.pane))")
+        }
         let commands = TmuxCommand.sendKeys(pane: page.pane, bytes: bytes)
         Task { for c in commands { await client.post(c) } }
     }
