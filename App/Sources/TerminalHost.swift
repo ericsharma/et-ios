@@ -226,6 +226,9 @@ final class TerminalHost: NSObject {
     var onDictationPrompt: ((String?) -> Void)?
     /// Two-finger swipe: true = next window, false = previous.
     var onSwipe: ((Bool) -> Void)?
+    /// A real BEL, as parsed by SwiftTerm (not the 0x07 that ends a title
+    /// escape sequence).
+    var onBell: (() -> Void)?
     /// The user tapped Edit: open the editor with this text.
     var onEditDictation: ((String) -> Void)?
     private let log: DebugLog
@@ -320,7 +323,7 @@ extension TerminalHost: @preconcurrency TerminalViewDelegate {
         onSizeChange?(newCols, newRows)
     }
 
-    func bell(source: TerminalView) {}
+    func bell(source: TerminalView) { onBell?() }
     func setTerminalTitle(source: TerminalView, title: String) {}
     func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
     func scrolled(source: TerminalView, position: Double) {}

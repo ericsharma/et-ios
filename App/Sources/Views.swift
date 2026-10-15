@@ -332,6 +332,26 @@ struct SessionView: View {
         }
         .animation(.snappy, value: session.currentWindow?.dictationPrompt)
         .animation(.snappy, value: voice.state)
+        .overlay(alignment: .top) {
+            if let page = session.bellBanner {
+                Button {
+                    session.currentWindowID = page.id
+                    session.dismissBellBanner()
+                } label: {
+                    Label(page.id == session.currentWindowID ? "\(page.name) is done" : "\(page.name) needs you — tap to open",
+                          systemImage: "bell.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 16).padding(.vertical, 10)
+                        .background(Theme.accent.opacity(0.9), in: Capsule())
+                        .foregroundStyle(Color(Theme.background))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy, value: session.bellBanner?.id)
+        .onChange(of: Push.shared.pendingWindowName) { session.openPendingWindow() }
         .alert("Dictation", isPresented: Binding(get: { voice.error != nil }, set: { if !$0 { voice.error = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {

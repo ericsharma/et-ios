@@ -47,6 +47,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: xyz.ericsharma.et
+        CODE_SIGN_ENTITLEMENTS: ET.entitlements
         CURRENT_PROJECT_VERSION: "1"
         MARKETING_VERSION: "0.1"
         TARGETED_DEVICE_FAMILY: "1,2"

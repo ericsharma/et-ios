@@ -24,6 +24,8 @@ final class WindowPage: Identifiable {
     var hasBell = false
     /// Keyboard dictation started here; showing "Edit first / Into terminal".
     var dictationPrompt = false
+    /// Set briefly when this window rings its bell (in-app banner).
+    var lastBell: Date?
     @ObservationIgnored let terminal: TerminalHost
     /// Output that arrived while history was being restored (SPEC §2.4).
     @ObservationIgnored var buffered: [[UInt8]]? = nil
@@ -75,6 +77,8 @@ final class SessionController {
     private(set) var approvalURL: URL?
     /// Set to open the compose editor.
     var composeRequest: ComposeRequest?
+    /// The window whose bell just rang, for the in-app banner.
+    private(set) var bellBanner: WindowPage?
     /// True between an unexpected disconnect and the next successful attach.
     private(set) var isReconnecting = false
     /// Key-row presets the user picked, by window name (SPEC §5.4).
@@ -241,6 +245,8 @@ final class SessionController {
                 reconnectStarted = nil
                 reconnectAttempt = 0
                 log.add("Ready: \(windows.count) windows")
+                openPendingWindow()
+                Task { await registerPushToken() }
             }
         } catch {
             fail(error)
@@ -405,6 +411,10 @@ final class SessionController {
                     self?.terminalResized(cols: cols, rows: rows)
                 }
                 page.terminal.onSwipe = { [weak self] next in self?.switchWindow(next: next) }
+                page.terminal.onBell = { [weak self, weak page] in
+                    guard let self, let page else { return }
+                    self.bellRang(in: page)
+                }
                 page.terminal.onDictationPrompt = { [weak page] text in
                     page?.dictationPrompt = text != nil
                 }
@@ -508,10 +518,6 @@ final class SessionController {
             }
             if page.id != currentWindowID {
                 page.hasActivity = true
-                if data.contains(0x07) && !page.hasBell {
-                    page.hasBell = true
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                }
             }
         case .windowRenamed(let id, let name):
             log.add("event: \(event)")
@@ -525,6 +531,45 @@ final class SessionController {
             log.add("tmux %exit \(reason ?? "")")
         default:
             log.add("event: \(event)")
+        }
+    }
+
+    /// A command finished or Claude wants input (both ring the bell; see
+    /// nixos-config et-notify). In the app: vibrate and show a banner.
+    private func bellRang(in page: WindowPage) {
+        guard state == .connected else { return }
+        if page.id != currentWindowID { page.hasBell = true }
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        bellBanner = page
+        let shown = page
+        Task {
+            try? await Task.sleep(for: .seconds(4))
+            if self.bellBanner === shown { self.bellBanner = nil }
+        }
+    }
+
+    func dismissBellBanner() { bellBanner = nil }
+
+    /// Opens the window a tapped notification named, once it exists.
+    func openPendingWindow() {
+        guard let name = Push.shared.pendingWindowName,
+              let page = windows.first(where: { $0.name == name }) else { return }
+        Push.shared.pendingWindowName = nil
+        currentWindowID = page.id
+    }
+
+    /// Writes this phone's push token to ~/.config/et/devices on the server,
+    /// where et-notify reads it. Runs after each attach.
+    private func registerPushToken() async {
+        guard let connection, let token = Push.shared.token else { return }
+        let id = UIDevice.current.identifierForVendor?.uuidString ?? "unknown"
+        let json = #"{"token":"\#(token)","environment":"\#(Push.environment)","bundle":"xyz.ericsharma.et","name":"\#(UIDevice.current.name)"}"#
+        let command = "mkdir -p ~/.config/et/devices && printf '%s\\n' '\(json.replacingOccurrences(of: "'", with: ""))' > ~/.config/et/devices/\(id).json"
+        do {
+            let result = try await connection.run(command)
+            log.add(result.exitCode == 0 ? "Push token registered on \(server.host)" : "Push token not saved: \(result.output)")
+        } catch {
+            log.add("Push token not saved: \(error)")
         }
     }
 
