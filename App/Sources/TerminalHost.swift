@@ -37,6 +37,9 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
     private var lastTranslationY: CGFloat = 0
     /// Two-finger swipe left (true = next window) or right (false = previous).
     var onTwoFingerSwipe: ((Bool) -> Void)?
+    /// Whether a selection exists changed (shows the Select button).
+    var onSelectionChange: ((Bool) -> Void)?
+    private var hadSelection = false
 
     // Selection handles: a line with a knob at each end of the selection,
     // draggable to change it (SwiftTerm selects but draws no handles).
@@ -112,6 +115,11 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
     /// Keeps the handles on the selection's ends (selection changes have no
     /// callback, so this runs on a display link; it is cheap when idle).
     @objc private func updateHandles() {
+        let active = selection?.active == true
+        if active != hadSelection {
+            hadSelection = active
+            onSelectionChange?(active)
+        }
         guard let selection, selection.active, let cell else {
             startHandle.isHidden = true
             endHandle.isHidden = true
@@ -364,6 +372,7 @@ final class TerminalHost: NSObject {
     var onDictationPrompt: ((String?) -> Void)?
     /// Two-finger swipe: true = next window, false = previous.
     var onSwipe: ((Bool) -> Void)?
+    var onSelectionChange: ((Bool) -> Void)?
     /// A real BEL, as parsed by SwiftTerm (not the 0x07 that ends a title
     /// escape sequence).
     var onBell: (() -> Void)?
@@ -398,6 +407,7 @@ final class TerminalHost: NSObject {
         view.onDictationResult = { [weak self] text in self?.dictationFinished(text) }
         view.onTap = { [weak self] in self?.dismissDictationPrompt() }
         view.onTwoFingerSwipe = { [weak self] next in self?.onSwipe?(next) }
+        view.onSelectionChange = { [weak self] active in self?.onSelectionChange?(active) }
         view.onInputDebug = { [weak self] line in self?.log.add("input: \(line)") }
     }
 

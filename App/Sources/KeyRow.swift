@@ -14,15 +14,17 @@ enum KeyPreset: String, CaseIterable, Identifiable {
         switch self {
         case .shell:
             [.esc, .tab, .ctrl, .up, .down, .left, .right,
-             .text("|"), .text("~"), .text("/"), .text("-"), .ctrlC, .ctrlD]
+             .text("|"), .text("~"), .text("/"), .text("-"), .ctrlC, .ctrlD, .select]
         case .claude:
-            [.esc, .shiftTab, .text("1"), .text("2"), .text("3"), .up, .down, .enter, .ctrlC]
+            [.esc, .shiftTab, .text("1"), .text("2"), .text("3"), .up, .down, .enter, .ctrlC, .select]
         }
     }
 }
 
 enum Key: Hashable {
     case esc, tab, shiftTab, ctrl, up, down, left, right, enter, ctrlC, ctrlD
+    /// Opens select mode (not a key sent to the terminal).
+    case select
     case text(String)
 
     var title: String {
@@ -38,6 +40,7 @@ enum Key: Hashable {
         case .enter: "enter"
         case .ctrlC: "^C"
         case .ctrlD: "^D"
+        case .select: "sel"
         case .text(let t): t
         }
     }
@@ -50,7 +53,7 @@ enum Key: Hashable {
         case .esc: [0x1B]
         case .tab: [0x09]
         case .shiftTab: Array("\u{1b}[Z".utf8)
-        case .ctrl: []
+        case .ctrl, .select: []
         case .up: Array((csi + "A").utf8)
         case .down: Array((csi + "B").utf8)
         case .right: Array((csi + "C").utf8)
@@ -171,6 +174,11 @@ struct KeyRow: View {
     private func tap(_ key: Key) {
         if key == .ctrl {
             setCtrl(ctrlState == .off ? .once : .off)
+            return
+        }
+        if key == .select {
+            withAnimation(.snappy) { showKeys = false }
+            session.enterSelectMode(page, initial: nil)
             return
         }
         UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.5)

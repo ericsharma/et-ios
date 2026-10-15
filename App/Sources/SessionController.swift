@@ -26,6 +26,8 @@ final class WindowPage: Identifiable {
     var dictationPrompt = false
     /// Set briefly when this window rings its bell (in-app banner).
     var lastBell: Date?
+    /// Text is selected in the live terminal (shows the Select button).
+    var hasSelection = false
     @ObservationIgnored let terminal: TerminalHost
     /// Output that arrived while history was being restored (SPEC §2.4).
     @ObservationIgnored var buffered: [[UInt8]]? = nil
@@ -86,6 +88,12 @@ final class SessionController {
     var composeRequest: ComposeRequest?
     var showNewWindow = false
     var showOverview = false
+    /// Select mode for a window, while open.
+    var selectMode: SelectModeRequest?
+
+    func enterSelectMode(_ page: WindowPage, initial: String?) {
+        selectMode = SelectModeRequest(page: page, initialSelection: initial)
+    }
     /// The window whose bell just rang, for the in-app banner.
     private(set) var bellBanner: WindowPage?
     /// True between an unexpected disconnect and the next successful attach.
@@ -433,6 +441,7 @@ final class SessionController {
                     self?.terminalResized(cols: cols, rows: rows)
                 }
                 page.terminal.onSwipe = { [weak self] next in self?.switchWindow(next: next) }
+                page.terminal.onSelectionChange = { [weak page] active in page?.hasSelection = active }
                 page.terminal.onBell = { [weak self, weak page] in
                     guard let self, let page else { return }
                     self.bellRang(in: page)
