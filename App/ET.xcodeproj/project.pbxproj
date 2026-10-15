@@ -14,6 +14,7 @@
 		5DDBE00FB490CBC8C3CE2B31 /* SessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B7EB4283A5F1B4E8DAE0DCE /* SessionController.swift */; };
 		6F005C5539A7B64474934977 /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = ACB31B6DE076A6AEE0E31967 /* ETCore */; };
 		7B7A1AB52E7AAEB0D5283959 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB367F7DC192EBCCA06508BC /* AppModel.swift */; };
+		7E75886C82FBA663C296E12F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 65A00CC919987D56EC6D81C2 /* Assets.xcassets */; };
 		9883DC46C85AE06C00277FC1 /* ETSSH in Frameworks */ = {isa = PBXBuildFile; productRef = A3FE42A77BFB03B651F1C8C3 /* ETSSH */; };
 		B3B645CBAE52AC315F4D26D1 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 78E36ABFF9A6F111E6BC39DD /* SwiftTerm */; };
 		B9EF4532C1A648569D5AD074 /* TerminalHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */; };
@@ -26,6 +27,7 @@
 		0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHost.swift; sourceTree = "<group>"; };
 		175E8D2F9B6999615A8AAF59 /* VoiceInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInput.swift; sourceTree = "<group>"; };
 		5E147244B49816415D5E26BA /* Templates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Templates.swift; sourceTree = "<group>"; };
+		65A00CC919987D56EC6D81C2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		929A6DF5668934E4FF4835DA /* ETCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ETCore; path = ../ETCore; sourceTree = SOURCE_ROOT; };
 		AAC2C774B86C691F339F5290 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
 		AB367F7DC192EBCCA06508BC /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
@@ -70,6 +72,14 @@
 			path = Sources;
 			sourceTree = "<group>";
 		};
+		B3763F0955C58291DC8D648B /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				65A00CC919987D56EC6D81C2 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		CDFDE144CB13D7575C0F9986 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -82,6 +92,7 @@
 			isa = PBXGroup;
 			children = (
 				59806B3A3A9AA44AF6BF3019 /* Packages */,
+				B3763F0955C58291DC8D648B /* Resources */,
 				8CC7CBC42751C95F504943AC /* Sources */,
 				CDFDE144CB13D7575C0F9986 /* Products */,
 			);
@@ -95,6 +106,7 @@
 			buildConfigurationList = F9B0C08F3FDADEF9705224D0 /* Build configuration list for PBXNativeTarget "ET" */;
 			buildPhases = (
 				287C36CAC568C69167B2298D /* Sources */,
+				52F148B754CC9D9BF3E893E1 /* Resources */,
 				E2641D91C285F1CDA653F2ED /* Frameworks */,
 			);
 			buildRules = (
@@ -148,6 +160,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		52F148B754CC9D9BF3E893E1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7E75886C82FBA663C296E12F /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		287C36CAC568C69167B2298D /* Sources */ = {

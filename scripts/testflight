@@ -21,10 +21,18 @@ xcodebuild -project ET.xcodeproj -scheme ET -configuration Release \
   CURRENT_PROJECT_VERSION="$BUILD" archive > ../.build-app/archive.log 2>&1 \
   || { grep -E 'error:' ../.build-app/archive.log | sort -u; exit 1; }
 
-echo "Uploading…"
+echo "Exporting signed .ipa…"
+EXPORT=../.build-app/export-$BUILD
 # shellcheck disable=SC2086
 xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist ExportOptions.plist \
-  -exportPath ../.build-app/export $AUTH > ../.build-app/export.log 2>&1 \
+  -exportPath "$EXPORT" $AUTH > ../.build-app/export.log 2>&1 \
   || { grep -E 'error' ../.build-app/export.log | sort -u; exit 1; }
-grep -E 'Upload succeeded|EXPORT SUCCEEDED' ../.build-app/export.log || true
+
+# xcodebuild's own upload needs an Apple ID signed into Xcode; altool takes
+# the API key (it finds the .p8 in ~/.appstoreconnect/private_keys).
+echo "Uploading…"
+xcrun altool --upload-app --type ios --file "$EXPORT/ET.ipa" \
+  --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" > ../.build-app/upload.log 2>&1 \
+  || { tail -15 ../.build-app/upload.log; echo "Upload FAILED."; exit 1; }
+tail -3 ../.build-app/upload.log
 echo "Uploaded build $BUILD. It appears in TestFlight after Apple finishes processing (usually 5–15 min)."

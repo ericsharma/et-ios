@@ -20,8 +20,9 @@ targets:
   ET:
     type: application
     platform: iOS
-    sources: [Sources]
-    resources: [Resources]
+    # xcodegen picks the build phase by file type, so the asset catalog
+    # (app icon) is listed under sources too.
+    sources: [Sources, Resources]
     dependencies:
       - package: ETCore
         product: ETCore
