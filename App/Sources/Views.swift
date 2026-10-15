@@ -270,6 +270,12 @@ struct SessionView: View {
             }
         case .choosingSession(let sessions):
             List {
+                if sessions.isEmpty {
+                    Section {
+                        Text("No tmux sessions found on \(session.server.displayName). If you expected one, check the debug log for the TMUX_TMPDIR it used.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
                 Section("Sessions on \(session.server.displayName)") {
                     ForEach(sessions) { info in
                         Button { session.chooseSession(info.name) } label: {

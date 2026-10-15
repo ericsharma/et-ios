@@ -109,12 +109,14 @@ final class SessionController {
             state = .connecting("Finding tmux…")
             let tmux = try await connection.findTmux()
             self.tmux = tmux
-            log.add("tmux: \(tmux.path) (\(tmux.version))")
+            log.add("tmux: \(tmux.path) (\(tmux.version)), TMUX_TMPDIR=\(tmux.tmpDir ?? "default")")
 
             let sessions = try await connection.listSessions(tmux: tmux)
             log.add("Sessions: \(sessions.map(\.name))")
             if sessions.isEmpty {
-                await attach(.attachOrCreate("main"), name: "main")
+                // Never create a session silently; a wrong socket would look
+                // exactly like this. The picker offers "New session".
+                state = .choosingSession([])
             } else if sessions.count == 1 {
                 await attach(.attach(sessions[0].name), name: sessions[0].name)
             } else if let last = server.lastSession, sessions.contains(where: { $0.name == last }) {

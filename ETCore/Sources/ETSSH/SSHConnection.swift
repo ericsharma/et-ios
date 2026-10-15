@@ -27,6 +27,11 @@ public struct TmuxInstall: Sendable, Equatable {
     public var path: String
     /// For example "tmux 3.6a".
     public var version: String
+    /// The TMUX_TMPDIR to use, or nil for tmux's default (/tmp). Found by
+    /// looking for a live server, because a non-login SSH command may not
+    /// have the TMUX_TMPDIR that interactive shells set (home-manager's
+    /// secureSocket puts the socket under /run/user/<uid>).
+    public var tmpDir: String?
 }
 
 public struct SessionInfo: Sendable, Equatable, Identifiable {
@@ -153,20 +158,37 @@ public actor SSHConnection {
         "/snap/bin/tmux",
     ]
 
-    /// Finds tmux (SPEC.md §2.1). Uses `config.tmuxPath` if set.
+    /// Finds tmux and its socket directory (SPEC.md §2.1). Uses
+    /// `config.tmuxPath` if set.
     public func findTmux() async throws -> TmuxInstall {
         let candidates = config.tmuxPath.map { [shQuote($0)] } ?? (
             ["\"$(command -v tmux 2>/dev/null)\"",
              "\"$(\"${SHELL:-sh}\" -lc 'command -v tmux' 2>/dev/null | tail -n 1)\""]
             + Self.tmuxCandidates.map { "\"\($0)\"" })
-        let script = "for p in \(candidates.joined(separator: " ")); do " +
-            "if [ -n \"$p\" ] && [ -x \"$p\" ]; then echo \"$p\"; \"$p\" -V; exit 0; fi; done; exit 127"
+        let socket = config.socketName.map { shQuote($0) } ?? "default"
+        // Prints: path, version, then "tmpdir:<dir>". <dir> is where a server
+        // answers; failing that, the login shell's TMUX_TMPDIR (where a new
+        // server should go); failing that, empty (tmux's default).
+        let script = """
+            for p in \(candidates.joined(separator: " ")); do \
+            if [ -n "$p" ] && [ -x "$p" ]; then \
+            echo "$p"; "$p" -V; \
+            uid=$(id -u); \
+            lt=$("${SHELL:-sh}" -lc 'printf "%s" "$TMUX_TMPDIR"' 2>/dev/null | tail -n 1); \
+            for d in "$TMUX_TMPDIR" "$lt" "$XDG_RUNTIME_DIR" "/run/user/$uid" /tmp; do \
+            if [ -n "$d" ] && [ -S "$d/tmux-$uid/\(socket)" ] && \
+            TMUX_TMPDIR="$d" "$p" -L \(socket) list-sessions >/dev/null 2>&1; then \
+            echo "tmpdir:$d"; exit 0; fi; done; \
+            echo "tmpdir:$lt"; exit 0; fi; done; exit 127
+            """
         let (output, code) = try await run(script)
         let lines = output.split(separator: "\n").map(String.init)
-        guard code == 0, lines.count >= 2 else {
+        guard code == 0, let tmpLine = lines.last(where: { $0.hasPrefix("tmpdir:") }),
+              let index = lines.lastIndex(of: tmpLine), index >= 2 else {
             throw SSHConnectionError.tmuxNotFound(output: "exit \(code): \(output)")
         }
-        return TmuxInstall(path: lines[lines.count - 2], version: lines[lines.count - 1])
+        let dir = String(tmpLine.dropFirst("tmpdir:".count))
+        return TmuxInstall(path: lines[index - 2], version: lines[index - 1], tmpDir: dir.isEmpty ? nil : dir)
     }
 
     /// Sessions on the server. Empty when no tmux server is running.
@@ -205,8 +227,10 @@ public actor SSHConnection {
         return try await SSHControlChannel.open(client: client, command: "exec " + tmuxCommand(tmux) + " " + args)
     }
 
+    /// `env` works the same in sh, bash and fish, and composes with `exec`.
     private func tmuxCommand(_ tmux: TmuxInstall) -> String {
         var command = shQuote(tmux.path)
+        if let dir = tmux.tmpDir { command = "env TMUX_TMPDIR=\(shQuote(dir)) " + command }
         if let socket = config.socketName { command += " -L \(shQuote(socket))" }
         return command
     }
