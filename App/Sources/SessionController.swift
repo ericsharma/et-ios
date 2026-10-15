@@ -536,6 +536,8 @@ final class SessionController {
         // The reset cleared the program's modes (arrow-key mode, mouse
         // reporting, hidden cursor); put them back.
         bytes += Array(paneState.modeSequences.utf8)
+        // tmux doesn't report bracketed paste; keep what the program set.
+        if page.terminal.terminal.bracketedPasteMode { bytes += Array("\u{1b}[?2004h".utf8) }
         page.terminal.reset(with: bytes)
     }
 
@@ -837,6 +839,20 @@ final class SessionController {
     var dictationVocabulary: [String] {
         windows.map(\.name) + [server.host, "tmux", "ssh", "sudo", "git", "grep", "claude",
                                 "systemctl", "journalctl", "nixos-rebuild", "docker", "vim", "ls", "cd"]
+    }
+
+    /// Pastes clipboard text into the window. When the program asked for
+    /// bracketed paste (shells, Claude Code), the text is marked as a paste,
+    /// so a multi-line paste arrives as one block instead of running line by
+    /// line.
+    func paste(_ text: String, to page: WindowPage) {
+        guard !text.isEmpty else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        if page.terminal.terminal.bracketedPasteMode {
+            send(Array("\u{1b}[200~".utf8) + Array(text.utf8) + Array("\u{1b}[201~".utf8), to: page)
+        } else {
+            send(Array(text.replacingOccurrences(of: "\n", with: "\r").utf8), to: page)
+        }
     }
 
     /// Sends compose-bar text (SPEC §6.2). Multi-line text goes to Claude
