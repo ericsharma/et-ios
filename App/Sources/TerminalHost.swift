@@ -297,6 +297,14 @@ final class TerminalHost: NSObject {
 
     var terminal: Terminal { view.getTerminal() }
 
+    /// The bottom of the visible screen as plain text, for overview tiles.
+    func snapshot(lines count: Int) -> [String] {
+        let t = terminal
+        var rows = (0..<t.rows).map { t.getLine(row: $0)?.translateToString(trimRight: true) ?? "" }
+        while rows.last?.isEmpty == true { rows.removeLast() }
+        return Array(rows.suffix(count))
+    }
+
     /// Sends bytes as if typed, honoring SwiftTerm's sticky Ctrl.
     func type(_ bytes: [UInt8]) {
         view.send(bytes)

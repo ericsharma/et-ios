@@ -83,6 +83,7 @@ struct KeyRow: View {
             barButton(systemName: "square.and.pencil", active: false) {
                 session.composeRequest = ComposeRequest(page: page, text: "")
             }
+            if !HardwareKeyboard.shared.isConnected {
             barButton(systemName: showKeys ? "xmark" : "ellipsis", active: showKeys || ctrlState != .off) {
                 withAnimation(.snappy) { showKeys.toggle() }
             }
@@ -101,6 +102,7 @@ struct KeyRow: View {
                 }
             }
             .zIndex(1)
+            }
             Spacer()
             MicButton(session: session, page: page, voice: voice)
             Spacer()

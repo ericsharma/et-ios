@@ -19,6 +19,7 @@
 		9883DC46C85AE06C00277FC1 /* ETSSH in Frameworks */ = {isa = PBXBuildFile; productRef = A3FE42A77BFB03B651F1C8C3 /* ETSSH */; };
 		B3B645CBAE52AC315F4D26D1 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 78E36ABFF9A6F111E6BC39DD /* SwiftTerm */; };
 		B9EF4532C1A648569D5AD074 /* TerminalHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */; };
+		C7D22526ADD3F1CB22E245DD /* Overview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36A4263F016A81FE6C5B2B5E /* Overview.swift */; };
 		F8F1BACDD89A3936FDBA3DCA /* ETApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE328D04440F47561CB04404 /* ETApp.swift */; };
 /* End PBXBuildFile section */
 
@@ -27,6 +28,7 @@
 		0B7EB4283A5F1B4E8DAE0DCE /* SessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionController.swift; sourceTree = "<group>"; };
 		0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHost.swift; sourceTree = "<group>"; };
 		175E8D2F9B6999615A8AAF59 /* VoiceInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInput.swift; sourceTree = "<group>"; };
+		36A4263F016A81FE6C5B2B5E /* Overview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Overview.swift; sourceTree = "<group>"; };
 		5E147244B49816415D5E26BA /* Templates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Templates.swift; sourceTree = "<group>"; };
 		65A00CC919987D56EC6D81C2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		929A6DF5668934E4FF4835DA /* ETCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ETCore; path = ../ETCore; sourceTree = SOURCE_ROOT; };
@@ -65,6 +67,7 @@
 				AB367F7DC192EBCCA06508BC /* AppModel.swift */,
 				EE328D04440F47561CB04404 /* ETApp.swift */,
 				FFCBF94AC41590A9B15E7FAA /* KeyRow.swift */,
+				36A4263F016A81FE6C5B2B5E /* Overview.swift */,
 				D3251CE9C9BA08235AF09F96 /* Push.swift */,
 				0B7EB4283A5F1B4E8DAE0DCE /* SessionController.swift */,
 				5E147244B49816415D5E26BA /* Templates.swift */,
@@ -183,6 +186,7 @@
 				7B7A1AB52E7AAEB0D5283959 /* AppModel.swift in Sources */,
 				F8F1BACDD89A3936FDBA3DCA /* ETApp.swift in Sources */,
 				176CEB6F04458465BE3439DA /* KeyRow.swift in Sources */,
+				C7D22526ADD3F1CB22E245DD /* Overview.swift in Sources */,
 				3A3285F4C8B435AFADFA4F39 /* Push.swift in Sources */,
 				5DDBE00FB490CBC8C3CE2B31 /* SessionController.swift in Sources */,
 				5AF0ADD6EBFE20C5D372C10F /* Templates.swift in Sources */,

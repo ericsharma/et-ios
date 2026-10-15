@@ -201,13 +201,38 @@ struct SessionView: View {
     @State private var showLog = false
     @State private var newSessionName = ""
     @State private var voice = VoiceInput()
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @State private var sidebar: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            content
+        Group {
+            if sizeClass == .regular {
+                // iPad, full width (SPEC §5.9): window list beside the terminal.
+                NavigationSplitView(columnVisibility: $sidebar) {
+                    WindowSidebar(session: session)
+                        .navigationTitle(session.server.displayName + (session.sessionName.map { " · \($0)" } ?? ""))
+                        .toolbar { sidebarToolbar }
+                } detail: {
+                    content
+                        .toolbar(.hidden, for: .navigationBar)
+                        .background(Color(Theme.background))
+                }
+                .navigationSplitViewStyle(.balanced)
+            } else {
+                VStack(spacing: 0) {
+                    header
+                    content
+                }
+            }
         }
         .background(Color(Theme.background))
+        .background { ShortcutKeys(session: session, toggleSidebar: toggleSidebar) }
+        .sheet(isPresented: $session.showNewWindow) {
+            NavigationStack { NewWindowSheet(session: session) }
+        }
+        .fullScreenCover(isPresented: $session.showOverview) {
+            OverviewView(session: session)
+        }
         .alert("Trust this server?", isPresented: .constant(session.pendingHostKey != nil), presenting: session.pendingHostKey) { _ in
             Button("Trust") { session.answerHostKey(trust: true) }
             Button("Cancel", role: .cancel) { session.answerHostKey(trust: false) }
@@ -234,6 +259,11 @@ struct SessionView: View {
                     Text("Restoring \(done)/\(total)").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
+                Button { session.showOverview = true } label: {
+                    Image(systemName: "square.grid.2x2").font(.title3)
+                }
+                .disabled(session.windows.isEmpty)
+                .accessibilityLabel("Overview")
                 Menu {
                     Button("Debug log") { showLog = true }
                     if session.isDisconnected {
@@ -252,6 +282,27 @@ struct SessionView: View {
         .padding(.top, 4)
         .padding(.bottom, 6)
         .background(Theme.surface)
+    }
+
+    private func toggleSidebar() {
+        withAnimation { sidebar = sidebar == .detailOnly ? .all : .detailOnly }
+    }
+
+    @ToolbarContentBuilder private var sidebarToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Circle().fill(statusColor).frame(width: 9, height: 9)
+        }
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            Button { session.showNewWindow = true } label: { Image(systemName: "plus") }
+                .disabled(session.state != .connected)
+            Button { session.showOverview = true } label: { Image(systemName: "square.grid.2x2") }
+                .disabled(session.windows.isEmpty)
+            Menu {
+                Button("Debug log") { showLog = true }
+                if session.isDisconnected { Button("Reconnect") { session.reconnect() } }
+                Button("Servers", role: .destructive) { model.closeSession() }
+            } label: { Image(systemName: "ellipsis.circle") }
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -310,11 +361,14 @@ struct SessionView: View {
     private var terminalArea: some View {
         VStack(spacing: 6) {
             WindowPager(session: session)
+                .simultaneousGesture(MagnifyGesture().onEnded { value in
+                    // Pinch in: zoom out to the overview.
+                    if value.magnification < 0.7 { session.showOverview = true }
+                })
                 .overlay { if session.state != .connected { Color.black.opacity(0.3) } }
                 .overlay(alignment: .top) { statusBanner }
                 .allowsHitTesting(session.state == .connected)
-            if let page = session.currentWindow, session.state == .connected,
-               !HardwareKeyboard.shared.isConnected {
+            if let page = session.currentWindow, session.state == .connected {
                 KeyRow(session: session, page: page, voice: voice)
                     .padding(.bottom, 6)
             }
@@ -421,7 +475,6 @@ struct SessionView: View {
 
 struct WindowTabs: View {
     @Bindable var session: SessionController
-    @State private var newWindow = false
     @State private var renaming: WindowPage?
     @State private var newName = ""
     @State private var closing: WindowPage?
@@ -449,11 +502,11 @@ struct WindowTabs: View {
                         .id(page.id)
                         .contextMenu {
                             Button("Rename…") { newName = page.name; renaming = page }
-                            Button("New window…") { newWindow = true }
+                            Button("New window…") { session.showNewWindow = true }
                             Button("Close window…", role: .destructive) { closing = page }
                         }
                     }
-                    Button { newWindow = true } label: {
+                    Button { session.showNewWindow = true } label: {
                         Image(systemName: "plus").font(.caption.weight(.semibold))
                             .padding(.horizontal, 10).padding(.vertical, 6)
                             .overlay(Capsule().stroke(Color.secondary.opacity(0.3)))
@@ -462,9 +515,6 @@ struct WindowTabs: View {
                     .disabled(session.state != .connected)
                 }
                 .padding(.horizontal, 12)
-            }
-            .sheet(isPresented: $newWindow) {
-                NavigationStack { NewWindowSheet(session: session) }
             }
             .alert("Rename window", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
                 TextField("Name", text: $newName)
@@ -539,5 +589,62 @@ struct ApprovalView: View {
         }
         .padding(28)
         .frame(maxWidth: 480, maxHeight: .infinity)
+    }
+}
+
+/// iPad sidebar: the session's windows, with activity and bell dots.
+struct WindowSidebar: View {
+    @Bindable var session: SessionController
+
+    var body: some View {
+        List(selection: $session.currentWindowID) {
+            ForEach(session.windows) { page in
+                HStack(spacing: 8) {
+                    if page.hasBell {
+                        Circle().fill(.red).frame(width: 7, height: 7)
+                    } else if page.hasActivity {
+                        Circle().fill(Theme.accent).frame(width: 7, height: 7)
+                    } else {
+                        Color.clear.frame(width: 7, height: 7)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(page.name).font(.body.monospaced())
+                        Text(page.currentCommand).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Text("\(page.index)").font(.caption.monospaced()).foregroundStyle(.tertiary)
+                }
+                .tag(Optional(page.id))
+            }
+        }
+        .listStyle(.sidebar)
+    }
+}
+
+/// Hardware-keyboard shortcuts (SPEC §5.9). Invisible buttons, so the
+/// shortcuts work and show in the ⌘-hold overlay; everything else goes to
+/// the terminal.
+struct ShortcutKeys: View {
+    let session: SessionController
+    let toggleSidebar: () -> Void
+
+    var body: some View {
+        Group {
+            Button("Previous window") { session.switchWindow(next: false) }.keyboardShortcut("[", modifiers: .command)
+            Button("Next window") { session.switchWindow(next: true) }.keyboardShortcut("]", modifiers: .command)
+            ForEach(1..<10) { n in
+                Button("Window \(n)") { session.selectWindow(at: n - 1) }
+                    .keyboardShortcut(KeyEquivalent(Character("\(n)")), modifiers: .command)
+            }
+            Button("New window") { session.showNewWindow = true }.keyboardShortcut("t", modifiers: .command)
+            Button("Compose") {
+                if let page = session.currentWindow { session.composeRequest = ComposeRequest(page: page, text: "") }
+            }.keyboardShortcut("k", modifiers: .command)
+            Button("Overview") { session.showOverview.toggle() }.keyboardShortcut("o", modifiers: .command)
+            Button("Toggle sidebar", action: toggleSidebar).keyboardShortcut("\\", modifiers: .command)
+        }
+        .opacity(0)
+        .frame(width: 0, height: 0)
+        .accessibilityHidden(true)
     }
 }

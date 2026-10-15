@@ -84,6 +84,8 @@ final class SessionController {
     private(set) var approvalURL: URL?
     /// Set to open the compose editor.
     var composeRequest: ComposeRequest?
+    var showNewWindow = false
+    var showOverview = false
     /// The window whose bell just rang, for the in-app banner.
     private(set) var bellBanner: WindowPage?
     /// True between an unexpected disconnect and the next successful attach.
@@ -618,6 +620,12 @@ final class SessionController {
         guard let page = currentWindow else { return }
         page.hasActivity = false
         page.hasBell = false
+    }
+
+    /// ⌘1…⌘9: the window at that position in the list.
+    func selectWindow(at position: Int) {
+        guard windows.indices.contains(position) else { return }
+        currentWindowID = windows[position].id
     }
 
     /// Two-finger swipe: next or previous window, no wrap-around.
