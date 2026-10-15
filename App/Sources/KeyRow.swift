@@ -73,13 +73,23 @@ struct KeyRow: View {
 
     var body: some View {
         let preset = session.preset(for: page)
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(preset.keys, id: \.self) { key in
-                    keyButton(key)
-                }
+        HStack(spacing: 0) {
+            Button { session.composeRequest = ComposeRequest(page: page, text: "") } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 16, weight: .medium))
+                    .frame(width: 44, height: 32)
+                    .background(Theme.accent.opacity(0.25), in: RoundedRectangle(cornerRadius: 7))
             }
-            .padding(.horizontal, 10)
+            .buttonStyle(.plain)
+            .padding(.leading, 10)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(preset.keys, id: \.self) { key in
+                        keyButton(key)
+                    }
+                }
+                .padding(.horizontal, 8)
+            }
         }
         .frame(height: 38)
         .contextMenu {
@@ -162,41 +172,69 @@ final class HardwareKeyboard {
     }
 }
 
-/// Write or dictate a whole message, edit it, then send it (SPEC §6.2).
-/// Uses the keyboard's own dictation; E.T. has no mic of its own.
-struct ComposeBar: View {
+/// A roomy editor for writing or dictating a whole message, then sending
+/// it in one go (SPEC §6.2). Opened from the key row's compose button, or
+/// with dictated text when the user picks "Edit first".
+struct ComposeSheet: View {
     @Bindable var session: SessionController
     let page: WindowPage
-    @State private var text = ""
+    @State var text: String
+    @Environment(\.dismiss) private var dismiss
     @FocusState private var focused: Bool
 
     var body: some View {
         let isClaude = session.preset(for: page) == .claude
-        HStack(alignment: .bottom, spacing: 8) {
-            TextField(isClaude ? "Message Claude…" : "Type or dictate a command…", text: $text, axis: .vertical)
-                .lineLimit(1...5)
+        NavigationStack {
+            TextEditor(text: $text)
+                .font(.body)
                 .textInputAutocapitalization(isClaude ? .sentences : .never)
                 .autocorrectionDisabled(!isClaude)
                 .focused($focused)
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
-                .onSubmit(send)
-            Button(action: send) {
-                Image(systemName: "arrow.up.circle.fill").font(.system(size: 30))
-            }
-            .disabled(text.isEmpty)
-            .contextMenu {
-                Button("Send without Enter") { send(pressEnter: false) }
-            }
+                .scrollContentBackground(.hidden)
+                .padding(.horizontal, 12)
+                .background(Theme.surface)
+                .navigationTitle(isClaude ? "Message to \(page.name)" : "Command for \(page.name)")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Menu {
+                            Button("Send without Enter") { send(pressEnter: false) }
+                        } label: {
+                            Text("Send").bold()
+                        } primaryAction: {
+                            send(pressEnter: true)
+                        }
+                        .disabled(text.isEmpty)
+                    }
+                }
         }
-        .padding(.horizontal, 10)
+        .presentationDetents([.medium, .large])
+        .onAppear { focused = true }
     }
 
-    private func send() { send(pressEnter: true) }
-
     private func send(pressEnter: Bool) {
-        guard !text.isEmpty else { return }
         session.sendComposed(text, to: page, pressEnter: pressEnter)
-        text = ""
+        dismiss()
+    }
+}
+
+/// Floating question shown when keyboard dictation starts in a terminal.
+/// It doesn't take the keyboard, so dictation keeps running while it shows.
+struct DictationChoice: View {
+    let page: WindowPage
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "mic.fill").foregroundStyle(.red)
+            Button("Edit first") { page.terminal.chooseDictation(edit: true) }
+                .buttonStyle(.borderedProminent)
+            Button("Into terminal") { page.terminal.chooseDictation(edit: false) }
+                .buttonStyle(.bordered)
+        }
+        .font(.subheadline.weight(.semibold))
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(.ultraThinMaterial, in: Capsule())
+        .shadow(radius: 8)
     }
 }

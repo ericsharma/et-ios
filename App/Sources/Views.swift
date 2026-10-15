@@ -312,13 +312,22 @@ struct SessionView: View {
                 .overlay { if session.state != .connected { Color.black.opacity(0.3) } }
                 .overlay(alignment: .top) { statusBanner }
                 .allowsHitTesting(session.state == .connected)
-            if let page = session.currentWindow, session.state == .connected {
-                if !HardwareKeyboard.shared.isConnected {
-                    KeyRow(session: session, page: page)
-                }
-                ComposeBar(session: session, page: page)
+            if let page = session.currentWindow, session.state == .connected,
+               !HardwareKeyboard.shared.isConnected {
+                KeyRow(session: session, page: page)
                     .padding(.bottom, 6)
             }
+        }
+        .overlay(alignment: .bottom) {
+            if let page = session.currentWindow, page.dictationPrompt {
+                DictationChoice(page: page)
+                    .padding(.bottom, 56)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy, value: session.currentWindow?.dictationPrompt)
+        .sheet(item: $session.composeRequest) { request in
+            ComposeSheet(session: session, page: request.page, text: request.text)
         }
     }
 

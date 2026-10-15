@@ -32,6 +32,10 @@ extension UIColor {
 final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
     private var wheelPan: UIPanGestureRecognizer?
     private var wheelRemainder: CGFloat = 0
+    /// Called when keyboard dictation starts (true) or stops (false) while
+    /// this terminal has the keyboard.
+    var onDictationChange: ((Bool) -> Void)?
+    private var isDictating = false
 
     override init(frame: CGRect, font: UIFont?) {
         super.init(frame: frame, font: font)
@@ -44,6 +48,18 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
         wheel.delegate = self
         wheelPan = wheel
         addGestureRecognizer(wheel)
+        // iOS has no public "dictation started" event. While dictation runs,
+        // the keyboard's input mode reports the language "dictation".
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(inputModeChanged),
+            name: UITextInputMode.currentInputModeDidChangeNotification, object: nil)
+    }
+
+    @objc private func inputModeChanged() {
+        let dictating = isFirstResponder && textInputMode?.primaryLanguage == "dictation"
+        guard dictating != isDictating else { return }
+        isDictating = dictating
+        onDictationChange?(dictating)
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -101,7 +117,22 @@ final class TerminalHost: NSObject {
     let view: ETTerminalView
     var onInput: (([UInt8]) -> Void)?
     var onSizeChange: ((Int, Int) -> Void)?
+    /// Dictation started: ask "edit first or into terminal?" (true), or the
+    /// question is no longer needed (false).
+    var onDictationPrompt: ((Bool) -> Void)?
+    /// Dictation finished in "edit first" mode: open the editor with this text.
+    var onEditDictation: ((String) -> Void)?
     private let log: DebugLog
+
+    /// While dictation runs and the user hasn't chosen, or chose to edit,
+    /// typed bytes are held here instead of going to tmux.
+    private enum Dictation {
+        case idle
+        case undecided(buffer: [UInt8], ended: Bool)
+        case editing(buffer: [UInt8])
+        case passthrough
+    }
+    private var dictation: Dictation = .idle
 
     static var fontSize: CGFloat = UIDevice.current.userInterfaceIdiom == .pad ? 14 : 13
 
@@ -124,6 +155,61 @@ final class TerminalHost: NSObject {
         view.smartDashesType = .no
         // E.T. draws its own key row (KeyRow) instead of SwiftTerm's.
         view.inputAccessoryView = nil
+        view.onDictationChange = { [weak self] active in self?.dictationChanged(active) }
+    }
+
+    // MARK: - Dictation choice
+
+    private func dictationChanged(_ active: Bool) {
+        log.add("Keyboard dictation \(active ? "started" : "ended")")
+        switch (active, dictation) {
+        case (true, _):
+            dictation = .undecided(buffer: [], ended: false)
+            onDictationPrompt?(true)
+        case (false, .undecided(let buffer, _)):
+            dictation = .undecided(buffer: buffer, ended: true)
+        case (false, .editing(let buffer)):
+            dictation = .idle
+            onEditDictation?(Self.text(from: buffer))
+        case (false, _):
+            dictation = .idle
+        }
+    }
+
+    /// The user's answer to "edit first or into terminal?".
+    func chooseDictation(edit: Bool) {
+        onDictationPrompt?(false)
+        guard case .undecided(let buffer, let ended) = dictation else { return }
+        if edit {
+            if ended {
+                dictation = .idle
+                onEditDictation?(Self.text(from: buffer))
+            } else {
+                dictation = .editing(buffer: buffer)
+                // Leave dictation running; the editor opens when it stops.
+            }
+        } else {
+            dictation = ended ? .idle : .passthrough
+            if !buffer.isEmpty { onInput?(buffer) }
+        }
+    }
+
+    /// Turns held keystrokes into text, applying the backspaces dictation
+    /// sends when it revises a word.
+    static func text(from bytes: [UInt8]) -> String {
+        var text = ""
+        var pending: [UInt8] = []
+        func flush() { text += String(decoding: pending, as: UTF8.self); pending = [] }
+        for b in bytes {
+            if b == 0x7F || b == 0x08 {
+                flush()
+                if !text.isEmpty { text.removeLast() }
+            } else {
+                pending.append(b)
+            }
+        }
+        flush()
+        return text
     }
 
     var terminal: Terminal { view.getTerminal() }
@@ -146,7 +232,16 @@ final class TerminalHost: NSObject {
 
 extension TerminalHost: @preconcurrency TerminalViewDelegate {
     func send(source: TerminalView, data: ArraySlice<UInt8>) {
-        onInput?(Array(data))
+        switch dictation {
+        case .undecided(var buffer, let ended):
+            buffer += data
+            dictation = .undecided(buffer: buffer, ended: ended)
+        case .editing(var buffer):
+            buffer += data
+            dictation = .editing(buffer: buffer)
+        case .idle, .passthrough:
+            onInput?(Array(data))
+        }
     }
 
     func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {

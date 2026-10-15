@@ -4,6 +4,13 @@ import Foundation
 import Observation
 import UIKit
 
+/// Opens `ComposeSheet` for a window, optionally with dictated text.
+struct ComposeRequest: Identifiable {
+    let id = UUID()
+    let page: WindowPage
+    let text: String
+}
+
 /// One tmux window shown as a page.
 @MainActor @Observable
 final class WindowPage: Identifiable {
@@ -15,6 +22,8 @@ final class WindowPage: Identifiable {
     var currentCommand: String
     var hasActivity = false
     var hasBell = false
+    /// Keyboard dictation started here; showing "Edit first / Into terminal".
+    var dictationPrompt = false
     @ObservationIgnored let terminal: TerminalHost
     /// Output that arrived while history was being restored (SPEC §2.4).
     @ObservationIgnored var buffered: [[UInt8]]? = nil
@@ -56,6 +65,8 @@ final class SessionController {
     private(set) var authBanner: String?
     /// The first https link in `authBanner`.
     private(set) var approvalURL: URL?
+    /// Set to open the compose editor.
+    var composeRequest: ComposeRequest?
     /// True between an unexpected disconnect and the next successful attach.
     private(set) var isReconnecting = false
     /// Key-row presets the user picked, by window name (SPEC §5.4).
@@ -384,6 +395,13 @@ final class SessionController {
                 }
                 page.terminal.onSizeChange = { [weak self] cols, rows in
                     self?.terminalResized(cols: cols, rows: rows)
+                }
+                page.terminal.onDictationPrompt = { [weak page] show in
+                    page?.dictationPrompt = show
+                }
+                page.terminal.onEditDictation = { [weak self, weak page] text in
+                    guard let self, let page else { return }
+                    self.composeRequest = ComposeRequest(page: page, text: text)
                 }
                 pages.append(page)
                 toRestore.append(page)
