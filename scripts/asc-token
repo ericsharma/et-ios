@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+"""Prints a 20-minute App Store Connect API JWT.
+
+Reads ASC_KEY_ID and ASC_ISSUER_ID from the environment (see scripts/asc.env)
+and the key from ~/.appstoreconnect/private_keys/AuthKey_<id>.p8.
+"""
+import base64, json, os, time
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
+
+key_id = os.environ["ASC_KEY_ID"]
+issuer = os.environ["ASC_ISSUER_ID"]
+path = os.path.expanduser(f"~/.appstoreconnect/private_keys/AuthKey_{key_id}.p8")
+key = serialization.load_pem_private_key(open(path, "rb").read(), password=None)
+
+def b64(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+header = {"alg": "ES256", "kid": key_id, "typ": "JWT"}
+now = int(time.time())
+payload = {"iss": issuer, "iat": now, "exp": now + 1200, "aud": "appstoreconnect-v1"}
+signing_input = f"{b64(json.dumps(header).encode())}.{b64(json.dumps(payload).encode())}"
+r, s = decode_dss_signature(key.sign(signing_input.encode(), ec.ECDSA(hashes.SHA256())))
+print(f"{signing_input}.{b64(r.to_bytes(32, 'big') + s.to_bytes(32, 'big'))}")

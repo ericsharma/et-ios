@@ -1,0 +1,368 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 54;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		6F005C5539A7B64474934977 /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = ACB31B6DE076A6AEE0E31967 /* ETCore */; };
+		9883DC46C85AE06C00277FC1 /* Citadel in Frameworks */ = {isa = PBXBuildFile; productRef = 0759CD3FF1583DD22C22F3D5 /* Citadel */; };
+		B3B645CBAE52AC315F4D26D1 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 78E36ABFF9A6F111E6BC39DD /* SwiftTerm */; };
+		F8F1BACDD89A3936FDBA3DCA /* ETApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE328D04440F47561CB04404 /* ETApp.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		090F6A6A5A570B49BDA73AE9 /* ET.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ET.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		929A6DF5668934E4FF4835DA /* ETCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ETCore; path = ../ETCore; sourceTree = SOURCE_ROOT; };
+		EE328D04440F47561CB04404 /* ETApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ETApp.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		E2641D91C285F1CDA653F2ED /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6F005C5539A7B64474934977 /* ETCore in Frameworks */,
+				9883DC46C85AE06C00277FC1 /* Citadel in Frameworks */,
+				B3B645CBAE52AC315F4D26D1 /* SwiftTerm in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		59806B3A3A9AA44AF6BF3019 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				929A6DF5668934E4FF4835DA /* ETCore */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		8CC7CBC42751C95F504943AC /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				EE328D04440F47561CB04404 /* ETApp.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		CDFDE144CB13D7575C0F9986 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				090F6A6A5A570B49BDA73AE9 /* ET.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		E30081932FC350E49AC67E58 = {
+			isa = PBXGroup;
+			children = (
+				59806B3A3A9AA44AF6BF3019 /* Packages */,
+				8CC7CBC42751C95F504943AC /* Sources */,
+				CDFDE144CB13D7575C0F9986 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		D7E2221DC5CFCB290C5A3D00 /* ET */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F9B0C08F3FDADEF9705224D0 /* Build configuration list for PBXNativeTarget "ET" */;
+			buildPhases = (
+				287C36CAC568C69167B2298D /* Sources */,
+				E2641D91C285F1CDA653F2ED /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ET;
+			packageProductDependencies = (
+				ACB31B6DE076A6AEE0E31967 /* ETCore */,
+				0759CD3FF1583DD22C22F3D5 /* Citadel */,
+				78E36ABFF9A6F111E6BC39DD /* SwiftTerm */,
+			);
+			productName = ET;
+			productReference = 090F6A6A5A570B49BDA73AE9 /* ET.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		6F4281A54E60728CCBAA3380 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					D7E2221DC5CFCB290C5A3D00 = {
+						DevelopmentTeam = 9MY2559FS4;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 51EC44C34C4A0307715EA2EF /* Build configuration list for PBXProject "ET" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = E30081932FC350E49AC67E58;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				254A40C423469BA8B4A34733 /* XCRemoteSwiftPackageReference "Citadel" */,
+				D972A5EEDD00B5ECD33C75D6 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
+				2095010AD733EA4E1483945C /* XCLocalSwiftPackageReference "../ETCore" */,
+			);
+			preferredProjectObjectVersion = 54;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D7E2221DC5CFCB290C5A3D00 /* ET */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		287C36CAC568C69167B2298D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F8F1BACDD89A3936FDBA3DCA /* ETApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		12C9F1C389B7E49C2A8982B8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = Generated/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = xyz.ericsharma.et;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		3E797E28C6C4A3B04AC3F69A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 9MY2559FS4;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		BBFBAA2B51A53C6772326EB5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 9MY2559FS4;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		D1633B72BCB9583CD7C47CC4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = Generated/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = xyz.ericsharma.et;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		51EC44C34C4A0307715EA2EF /* Build configuration list for PBXProject "ET" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3E797E28C6C4A3B04AC3F69A /* Debug */,
+				BBFBAA2B51A53C6772326EB5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F9B0C08F3FDADEF9705224D0 /* Build configuration list for PBXNativeTarget "ET" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				12C9F1C389B7E49C2A8982B8 /* Debug */,
+				D1633B72BCB9583CD7C47CC4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		2095010AD733EA4E1483945C /* XCLocalSwiftPackageReference "../ETCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ETCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		254A40C423469BA8B4A34733 /* XCRemoteSwiftPackageReference "Citadel" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/orlandos-nl/Citadel.git";
+			requirement = {
+				kind = exactVersion;
+				version = 0.12.1;
+			};
+		};
+		D972A5EEDD00B5ECD33C75D6 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm.git";
+			requirement = {
+				kind = exactVersion;
+				version = 1.20.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0759CD3FF1583DD22C22F3D5 /* Citadel */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 254A40C423469BA8B4A34733 /* XCRemoteSwiftPackageReference "Citadel" */;
+			productName = Citadel;
+		};
+		78E36ABFF9A6F111E6BC39DD /* SwiftTerm */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D972A5EEDD00B5ECD33C75D6 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
+			productName = SwiftTerm;
+		};
+		ACB31B6DE076A6AEE0E31967 /* ETCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ETCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 6F4281A54E60728CCBAA3380 /* Project object */;
+}
