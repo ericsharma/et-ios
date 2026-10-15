@@ -111,13 +111,13 @@ Rules:
 
 | Purpose | Command |
 |---|---|
-| Window list | `list-windows -F '#{window_id}\t#{window_index}\t#{window_name}\t#{window_active}\t#{pane_id}\t#{pane_current_command}\t#{window_panes}'` |
+| Window list | `list-windows -F '#{window_id} #{window_index} #{window_active} #{pane_id} #{window_panes} #{window_width} #{window_height} #{s/ /_/:pane_current_command} #{window_name}'` — tmux prints tabs in `-F` output as `_`, so fields are space-separated with the name last. |
 | Send input (any bytes) | `send-keys -t %<pane> -H <hex bytes...>` |
 | Restore history | `capture-pane -p -e -J -t %<pane> -S -<N>` (N = scrollback setting, default 2000) |
 | Cursor and screen mode | `display-message -p -t %<pane> '#{cursor_x} #{cursor_y} #{alternate_on} #{pane_width} #{pane_height}'` |
 | Alternate screen (vim, htop, claude) | `capture-pane -p -e -a -t %<pane>` when `alternate_on` is 1 |
 | Set client size | `refresh-client -C <cols>x<rows>` |
-| New window | `new-window -n <name>` then `send-keys -t <new pane> 'ssh <target>' Enter` (see §6.3) |
+| New window | `new-window -d -n <name> -P -F '#{window_id} #{pane_id}'` (`-d`: the server's current window does not change; `#` in names doubled) then `send-keys -t <new pane> 'ssh <target>' Enter` (see §6.3) |
 | Rename / close / select | `rename-window`, `kill-window` (with confirm), `select-window` |
 | Activity tracking | `refresh-client -B act:@*:#{window_activity}` (subscription) or track `%output` per pane |
 
