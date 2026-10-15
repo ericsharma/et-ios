@@ -28,6 +28,9 @@ final class WindowPage: Identifiable {
     var lastBell: Date?
     /// Text is selected in the live terminal (shows the Select button).
     var hasSelection = false
+    /// Shown after a long-press: the Select button, with the selected text.
+    var selectOffer: String??
+    @ObservationIgnored var selectOfferTask: Task<Void, Never>?
     @ObservationIgnored let terminal: TerminalHost
     /// Output that arrived while history was being restored (SPEC §2.4).
     @ObservationIgnored var buffered: [[UInt8]]? = nil
@@ -442,6 +445,19 @@ final class SessionController {
                 }
                 page.terminal.onSwipe = { [weak self] next in self?.switchWindow(next: next) }
                 page.terminal.onSelectionChange = { [weak page] active in page?.hasSelection = active }
+                page.terminal.onTapped = { [weak page] in
+                    if page?.hasSelection == false { page?.selectOffer = nil }
+                }
+                page.terminal.onLongPress = { [weak page] text in
+                    guard let page else { return }
+                    page.selectOffer = .some(text)
+                    page.selectOfferTask?.cancel()
+                    page.selectOfferTask = Task {
+                        try? await Task.sleep(for: .seconds(6))
+                        guard !Task.isCancelled, page.hasSelection == false else { return }
+                        page.selectOffer = nil
+                    }
+                }
                 page.terminal.onBell = { [weak self, weak page] in
                     guard let self, let page else { return }
                     self.bellRang(in: page)

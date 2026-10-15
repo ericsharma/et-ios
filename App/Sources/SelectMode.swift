@@ -326,7 +326,9 @@ struct SelectButton: View {
 
     var body: some View {
         Button {
-            session.enterSelectMode(page, initial: page.terminal.view.getSelection())
+            let initial = page.terminal.view.hasActiveSelection ? page.terminal.view.getSelection() : (page.selectOffer ?? nil)
+            page.selectOffer = nil
+            session.enterSelectMode(page, initial: initial)
         } label: {
             Label("Select", systemImage: "text.cursor")
                 .font(.subheadline.weight(.semibold))

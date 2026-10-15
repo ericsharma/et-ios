@@ -40,6 +40,10 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
     /// Whether a selection exists changed (shows the Select button).
     var onSelectionChange: ((Bool) -> Void)?
     private var hadSelection = false
+    /// A long-press happened (with the selected text, if SwiftTerm made a
+    /// selection). Programs with mouse reporting get the press instead of
+    /// SwiftTerm, so this is the reliable "user wants to select" signal.
+    var onLongPress: ((String?) -> Void)?
 
     // Selection handles: a line with a knob at each end of the selection,
     // draggable to change it (SwiftTerm selects but draws no handles).
@@ -77,6 +81,12 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
         }
         selectionHandleColor = startHandle.tintColor
 
+        let press = UILongPressGestureRecognizer(target: self, action: #selector(longPressed(_:)))
+        press.minimumPressDuration = 0.45
+        press.cancelsTouchesInView = false
+        press.delegate = self
+        addGestureRecognizer(press)
+
         let tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
         tap.cancelsTouchesInView = false
         tap.delegate = self
@@ -84,6 +94,17 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
     }
 
     @objc private func tapped() { onTap?() }
+
+    @objc private func longPressed(_ g: UILongPressGestureRecognizer) {
+        guard g.state == .began else { return }
+        // Let SwiftTerm's own long-press make its selection first.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            guard let self else { return }
+            let text = self.hasActiveSelection ? self.getSelection() : nil
+            self.onInputDebug?("long-press: selection=\(text != nil) mouseMode=\(self.getTerminal().mouseMode)")
+            self.onLongPress?(text)
+        }
+    }
 
     // MARK: - Selection handles
 
@@ -262,7 +283,7 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
     }
 
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-        (g === wheelPan && other === panGestureRecognizer) || g is UITapGestureRecognizer
+        (g === wheelPan && other === panGestureRecognizer) || g is UITapGestureRecognizer || g is UILongPressGestureRecognizer
     }
 
     @objc private func twoFingerPanned(_ gesture: UIPanGestureRecognizer) {
@@ -373,6 +394,9 @@ final class TerminalHost: NSObject {
     /// Two-finger swipe: true = next window, false = previous.
     var onSwipe: ((Bool) -> Void)?
     var onSelectionChange: ((Bool) -> Void)?
+    var onLongPress: ((String?) -> Void)?
+    /// A plain tap in the terminal (hides transient offers).
+    var onTapped: (() -> Void)?
     /// A real BEL, as parsed by SwiftTerm (not the 0x07 that ends a title
     /// escape sequence).
     var onBell: (() -> Void)?
@@ -405,9 +429,13 @@ final class TerminalHost: NSObject {
         // E.T. draws its own key row (KeyRow) instead of SwiftTerm's.
         view.inputAccessoryView = nil
         view.onDictationResult = { [weak self] text in self?.dictationFinished(text) }
-        view.onTap = { [weak self] in self?.dismissDictationPrompt() }
+        view.onTap = { [weak self] in
+            self?.dismissDictationPrompt()
+            self?.onTapped?()
+        }
         view.onTwoFingerSwipe = { [weak self] next in self?.onSwipe?(next) }
         view.onSelectionChange = { [weak self] active in self?.onSelectionChange?(active) }
+        view.onLongPress = { [weak self] text in self?.onLongPress?(text) }
         view.onInputDebug = { [weak self] line in self?.log.add("input: \(line)") }
     }
 
