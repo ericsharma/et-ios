@@ -263,13 +263,11 @@ final class TerminalHost: NSObject {
         onDictationPrompt?(false)
         guard case .undecided(let buffer, let ended) = dictation else { return }
         if edit {
-            if ended {
-                dictation = .idle
-                onEditDictation?(Self.text(from: buffer))
-            } else {
-                dictation = .editing(buffer: buffer)
-                // Leave dictation running; the editor opens when it stops.
-            }
+            // Open the editor now with what was dictated. Don't wait for an
+            // "ended" signal: on iOS 26 it can arrive before the prompt, and
+            // waiting would hold every keystroke (the keyboard looks frozen).
+            dictation = .idle
+            onEditDictation?(Self.text(from: buffer))
         } else {
             dictation = ended ? .idle : .passthrough
             if !buffer.isEmpty { onInput?(buffer) }
