@@ -59,19 +59,34 @@ final class Push: NSObject {
 }
 
 extension Push: UNUserNotificationCenterDelegate {
+    // Completion-handler versions on purpose: with the `async` versions the
+    // completion runs on a Swift concurrency thread, and UIKit aborts
+    // (main-thread assertion) when the user taps a notification.
+
     /// E.T. is open: trigkey normally skips the push then; if one arrives
     /// anyway, show it.
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .sound]
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
         let info = response.notification.request.content.userInfo
-        let request = Push.OpenRequest(
-            server: (info["server"] as? String).flatMap(UUID.init(uuidString:)),
-            session: info["session"] as? String,
-            window: info["window"] as? String)
-        await MainActor.run { Push.shared.open(request) }
+        let server = (info["server"] as? String).flatMap(UUID.init(uuidString:))
+        let session = info["session"] as? String
+        let window = info["window"] as? String
+        nonisolated(unsafe) let done = completionHandler
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                Push.shared.open(Push.OpenRequest(server: server, session: session, window: window))
+            }
+            done()
+        }
     }
 }
 
