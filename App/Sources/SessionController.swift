@@ -120,6 +120,7 @@ final class SessionController {
     @ObservationIgnored private var reconnectStarted: Date?
     @ObservationIgnored private var reconnectAttempt = 0
     @ObservationIgnored private var reconnectTask: Task<Void, Never>?
+    @ObservationIgnored private var heartbeatTask: Task<Void, Never>?
     /// Windows E.T. sized to the phone with resize-window (see claim).
     @ObservationIgnored private var claimed: Set<WindowID> = []
 
@@ -264,6 +265,8 @@ final class SessionController {
                 log.add("Ready: \(windows.count) windows")
                 releaseStaleClaims()
                 if let page = currentWindow { claim(page) }
+                detachStaleClients()
+                startHeartbeat()
                 openPendingWindow()
                 Task { await registerPushToken() }
             }
@@ -289,6 +292,7 @@ final class SessionController {
     }
 
     private func closeConnection(releasing windows: [WindowID] = []) {
+        heartbeatTask?.cancel()
         for task in tasks { task.cancel() }
         tasks.removeAll()
         let client = client
@@ -296,8 +300,10 @@ final class SessionController {
         self.client = nil
         self.connection = nil
         Task {
-            if let client, !windows.isEmpty {
+            if let client {
                 for id in windows { await client.post(TmuxCommand.releaseWindowSize(id)) }
+                // No longer open: notifications resume right away.
+                await client.post(Self.heartbeatClear)
                 // Let the writer send them before the channel closes.
                 try? await Task.sleep(for: .milliseconds(200))
             }
@@ -722,6 +728,50 @@ final class SessionController {
             return arg
         }
         return nil
+    }
+
+    // MARK: - "E.T. is open" signal for push notifications
+
+    // et-notify (nixos-config) skips pushes while E.T. is open. tmux can't
+    // tell a live control client from one whose SSH session lingers after
+    // iOS killed the app (control commands don't update client_activity),
+    // so E.T. touches a heartbeat file every 20 s while connected and
+    // removes it when it disconnects. et-notify treats E.T. as open only
+    // if the file is under a minute old.
+
+    private static let heartbeatTouch =
+        "run-shell -b 'mkdir -p ~/.local/state/et-notify && touch ~/.local/state/et-notify/foreground'"
+    private static let heartbeatClear = "run-shell -b 'rm -f ~/.local/state/et-notify/foreground'"
+
+    private func startHeartbeat() {
+        heartbeatTask?.cancel()
+        guard let client else { return }
+        heartbeatTask = Task {
+            while !Task.isCancelled {
+                await client.post(Self.heartbeatTouch)
+                try? await Task.sleep(for: .seconds(20))
+            }
+        }
+    }
+
+    /// Detaches E.T.'s own leftover control clients (TERM=et-ios) from
+    /// sessions that ended without closing, e.g. when iOS killed the app.
+    private func detachStaleClients() {
+        guard let client else { return }
+        Task {
+            do {
+                guard let me = try await client.command("display-message -p '#{client_name}'").textLines.first else { return }
+                let rows = try await client.command("list-clients -F '#{client_name} #{client_termname}'").textLines
+                for row in rows {
+                    let parts = row.split(separator: " ")
+                    guard parts.count == 2, parts[1] == "et-ios", parts[0] != me else { continue }
+                    log.add("Detaching stale E.T. client \(parts[0])")
+                    await client.post("detach-client -t \(TmuxCommand.quote(String(parts[0])))")
+                }
+            } catch {
+                log.add("Stale client check failed: \(error)")
+            }
+        }
     }
 
     // MARK: - Window size

@@ -253,7 +253,10 @@ public actor SSHConnection {
         case .attach(let name): "-C attach-session -t \(shQuote("=" + name))"
         case .attachOrCreate(let name): "-C new-session -A -s \(shQuote(name))"
         }
-        return try await SSHControlChannel.open(client: client, command: "exec " + tmuxCommand(tmux) + " " + args)
+        // TERM=et-ios marks E.T.'s control clients (#{client_termname}), so
+        // E.T. can find and detach its own stale ones; it doesn't affect a
+        // control client otherwise.
+        return try await SSHControlChannel.open(client: client, command: "exec env TERM=et-ios " + tmuxCommand(tmux) + " " + args)
     }
 
     /// `env` works the same in sh, bash and fish, and composes with `exec`.
