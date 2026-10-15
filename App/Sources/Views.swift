@@ -322,11 +322,11 @@ struct SessionView: View {
         .overlay(alignment: .bottom) {
             if let page = session.currentWindow, voice.state != .idle {
                 ListeningBubble(session: session, page: page, voice: voice)
-                    .padding(.bottom, 52)
+                    .padding(.bottom, 84)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             } else if let page = session.currentWindow, page.dictationPrompt {
                 DictationEditButton(page: page)
-                    .padding(.bottom, 56)
+                    .padding(.bottom, 84)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }

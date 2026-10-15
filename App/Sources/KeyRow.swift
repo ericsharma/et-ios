@@ -62,45 +62,45 @@ enum Key: Hashable {
     }
 }
 
-/// One row of keys above the compose bar. Scrolls if it doesn't fit.
-/// Long-press to switch presets.
+/// The bottom bar: editor on the left, a big mic in the middle (the main
+/// action), and ⋯ on the right, which opens a wheel of keys.
+/// Long-press ⋯ to switch between the Shell and Claude key sets.
 struct KeyRow: View {
     @Bindable var session: SessionController
     let page: WindowPage
     let voice: VoiceInput
+    @State private var showKeys = false
     @State private var ctrlState: CtrlState = .off
 
     enum CtrlState { case off, once, locked }
 
     var body: some View {
         let preset = session.preset(for: page)
-        HStack(spacing: 0) {
-            Button { session.composeRequest = ComposeRequest(page: page, text: "") } label: {
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: 16, weight: .medium))
-                    .frame(width: 44, height: 32)
-                    .background(Theme.accent.opacity(0.25), in: RoundedRectangle(cornerRadius: 7))
+        VStack(spacing: 8) {
+            if showKeys {
+                KeyWheel(keys: preset.keys, ctrlState: ctrlState, tap: tap, longPress: longPress)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            .buttonStyle(.plain)
-            .padding(.leading, 10)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(preset.keys, id: \.self) { key in
-                        keyButton(key)
+            HStack {
+                barButton(systemName: "square.and.pencil", active: false) {
+                    session.composeRequest = ComposeRequest(page: page, text: "")
+                }
+                Spacer()
+                MicButton(session: session, page: page, voice: voice)
+                Spacer()
+                barButton(systemName: showKeys ? "keyboard.chevron.compact.down" : "ellipsis",
+                          active: showKeys || ctrlState != .off) {
+                    withAnimation(.snappy) { showKeys.toggle() }
+                }
+                .contextMenu {
+                    Picker("Keys", selection: Binding(
+                        get: { session.preset(for: page) },
+                        set: { session.setPreset($0, for: page) })) {
+                        ForEach(KeyPreset.allCases) { Text($0.label).tag($0) }
                     }
                 }
-                .padding(.horizontal, 8)
             }
-            MicButton(session: session, page: page, voice: voice)
-                .padding(.trailing, 10)
-        }
-        .frame(height: 38)
-        .contextMenu {
-            Picker("Keys", selection: Binding(
-                get: { session.preset(for: page) },
-                set: { session.setPreset($0, for: page) })) {
-                ForEach(KeyPreset.allCases) { Text($0.label).tag($0) }
-            }
+            .padding(.horizontal, 20)
         }
         .onReceive(NotificationCenter.default.publisher(for: .terminalViewControlModifierReset)) { note in
             // SwiftTerm clears its sticky Ctrl after one key; mirror that,
@@ -112,28 +112,18 @@ struct KeyRow: View {
                 ctrlState = .off
             }
         }
+        .sensoryFeedback(.selection, trigger: ctrlState)
     }
 
-    @ViewBuilder private func keyButton(_ key: Key) -> some View {
-        let isCtrl = key == .ctrl
-        let active = isCtrl && ctrlState != .off
-        Text(key.title)
-            .font(.system(size: 15, weight: .medium, design: .monospaced))
-            .padding(.horizontal, 12)
-            .frame(minWidth: 40, minHeight: 32)
-            .background(active ? Theme.accent.opacity(ctrlState == .locked ? 0.7 : 0.35) : Color.white.opacity(0.08),
-                        in: RoundedRectangle(cornerRadius: 7))
-            .overlay(alignment: .bottom) {
-                if ctrlState == .locked && isCtrl {
-                    Capsule().fill(Theme.accent).frame(width: 14, height: 2).padding(.bottom, 3)
-                }
-            }
-            .contentShape(Rectangle())
-            .onTapGesture { tap(key) }
-            .onLongPressGesture(minimumDuration: 0.4) {
-                if isCtrl { setCtrl(.locked) }
-            }
-            .sensoryFeedback(.selection, trigger: ctrlState)
+    private func barButton(systemName: String, active: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 18, weight: .medium))
+                .frame(width: 48, height: 40)
+                .background(active ? Theme.accent.opacity(0.45) : Color.white.opacity(0.08),
+                            in: RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
     }
 
     private func tap(_ key: Key) {
@@ -142,20 +132,69 @@ struct KeyRow: View {
             return
         }
         UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.5)
-        let terminal = page.terminal
-        var bytes = key.bytes(applicationCursor: terminal.terminal.applicationCursor)
+        var bytes = key.bytes(applicationCursor: page.terminal.terminal.applicationCursor)
         if ctrlState != .off, case .text(let t) = key, let c = t.unicodeScalars.first, c.isASCII {
-            // Ctrl + a key-row character.
+            // Ctrl + a wheel character.
             bytes = [UInt8(c.value) & 0x1F]
             if ctrlState == .once { setCtrl(.off) }
         }
         session.send(bytes, to: page)
     }
 
+    private func longPress(_ key: Key) {
+        if key == .ctrl { setCtrl(.locked) }
+    }
+
     private func setCtrl(_ state: CtrlState) {
         ctrlState = state
         // Keyboard keys pick up Ctrl through SwiftTerm's sticky modifier.
         page.terminal.view.controlModifier = state != .off
+    }
+}
+
+/// A horizontally spinning strip of keys that snaps to each key, with the
+/// one in the middle enlarged like a picker wheel. Tap any key to send it.
+struct KeyWheel: View {
+    let keys: [Key]
+    let ctrlState: KeyRow.CtrlState
+    let tap: (Key) -> Void
+    let longPress: (Key) -> Void
+
+    var body: some View {
+        GeometryReader { geo in
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 8) {
+                    ForEach(keys, id: \.self) { key in
+                        keyCap(key)
+                            .scrollTransition(.interactive, axis: .horizontal) { content, phase in
+                                content
+                                    .scaleEffect(phase.isIdentity ? 1.12 : 0.88)
+                                    .opacity(phase.isIdentity ? 1 : 0.55)
+                            }
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.viewAligned)
+            .contentMargins(.horizontal, geo.size.width / 2 - 28, for: .scrollContent)
+            .defaultScrollAnchor(.leading)
+        }
+        .frame(height: 46)
+        .mask(LinearGradient(colors: [.clear, .black, .black, .clear], startPoint: .leading, endPoint: .trailing))
+    }
+
+    private func keyCap(_ key: Key) -> some View {
+        let isCtrl = key == .ctrl
+        let active = isCtrl && ctrlState != .off
+        return Text(key.title)
+            .font(.system(size: 16, weight: .semibold, design: .monospaced))
+            .frame(minWidth: 56, minHeight: 40)
+            .padding(.horizontal, 4)
+            .background(active ? Theme.accent.opacity(ctrlState == .locked ? 0.75 : 0.4) : Color.white.opacity(0.1),
+                        in: RoundedRectangle(cornerRadius: 10))
+            .contentShape(Rectangle())
+            .onTapGesture { tap(key) }
+            .onLongPressGesture(minimumDuration: 0.4) { longPress(key) }
     }
 }
 
@@ -252,11 +291,12 @@ struct MicButton: View {
             Task { await toggle() }
         } label: {
             Image(systemName: listening ? "stop.fill" : "mic.fill")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(listening ? .white : Theme.accent)
-                .frame(width: 44, height: 32)
-                .background(listening ? Color.red : Theme.accent.opacity(0.25), in: RoundedRectangle(cornerRadius: 7))
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(listening ? .white : Color(Theme.background))
+                .frame(width: 60, height: 60)
+                .background(listening ? Color.red : Theme.accent, in: Circle())
                 .symbolEffect(.pulse, isActive: listening)
+                .shadow(color: (listening ? Color.red : Theme.accent).opacity(0.4), radius: 8)
         }
         .buttonStyle(.plain)
         .disabled(voice.state == .stopping)
