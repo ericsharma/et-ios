@@ -153,7 +153,8 @@ struct SelectModeView: View {
             .background(Theme.surface)
             if let frozen {
                 SelectTextRepresentable(model: model, text: frozen, initialSelection: request.initialSelection,
-                                        sendToEditor: sendToEditor, copyOneLine: copyOneLine)
+                                        sendToEditor: sendToEditor, copyOneLine: copyOneLine,
+                                        switchWindow: { next in session.switchWindow(next: next) })
             } else {
                 Color(Theme.background)
             }
@@ -234,12 +235,15 @@ struct SelectTextRepresentable: UIViewRepresentable {
     let initialSelection: String?
     let sendToEditor: () -> Void
     let copyOneLine: () -> Void
+    /// Two-finger swipe, as in the terminal: true = next window.
+    let switchWindow: (Bool) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(model: model, sendToEditor: sendToEditor, copyOneLine: copyOneLine) }
 
     func makeUIView(context: Context) -> SelectTextView {
         let tv = SelectTextView()
         tv.delegate = context.coordinator
+        tv.onTwoFingerSwipe = switchWindow
         tv.text = text.text
         model.textView = tv
         DispatchQueue.main.async {
@@ -290,6 +294,7 @@ struct SelectTextRepresentable: UIViewRepresentable {
 /// of consecutive non-empty lines.
 final class SelectTextView: UITextView {
     private var ownTaps: [UITapGestureRecognizer] = []
+    var onTwoFingerSwipe: ((Bool) -> Void)?
 
     init() {
         super.init(frame: .zero, textContainer: nil)
@@ -313,9 +318,19 @@ final class SelectTextView: UITextView {
         single.require(toFail: double)
         ownTaps = [single, double, triple]
         ownTaps.forEach(addGestureRecognizer)
+        for direction in [UISwipeGestureRecognizer.Direction.left, .right] {
+            let swipe = UISwipeGestureRecognizer(target: self, action: #selector(swiped(_:)))
+            swipe.direction = direction
+            swipe.numberOfTouchesRequired = 2
+            addGestureRecognizer(swipe)
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
+
+    @objc private func swiped(_ g: UISwipeGestureRecognizer) {
+        onTwoFingerSwipe?(g.direction == .left)
+    }
 
     /// Our taps replace the text view's own tap handling; its long-press,
     /// handle drags and magnifier stay.

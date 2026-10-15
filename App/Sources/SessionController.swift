@@ -64,6 +64,12 @@ final class SessionController {
     var currentWindowID: WindowID? {
         didSet {
             guard currentWindowID != oldValue else { return }
+            // Switching windows closes select mode (its selection is
+            // already on the clipboard, ready to paste in the new window).
+            if let mode = selectMode, mode.page.id != currentWindowID {
+                mode.page.terminal.view.clearSelection()
+                selectMode = nil
+            }
             if let old = windows.first(where: { $0.id == oldValue }) { release(old) }
             if let page = currentWindow { claim(page) }
             clearBadges()
