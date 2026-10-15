@@ -1,5 +1,6 @@
 import ETSSH
 import Foundation
+import Network
 import Observation
 import SwiftUI
 
@@ -15,18 +16,29 @@ final class AppModel {
     /// The server to reconnect to when the app comes back to the foreground.
     private var activeServerID: UUID?
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+    /// Window templates per server (SPEC §6.4).
+    private var templatesByServer: [UUID: [WindowTemplate]] = [:]
+    private let pathMonitor = NWPathMonitor()
+    private var lastPath: String?
 
-    private let storeURL: URL = {
+    private static let supportDir: URL = {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("servers.json")
+        return dir
     }()
+    private let storeURL = AppModel.supportDir.appendingPathComponent("servers.json")
+    private let templatesURL = AppModel.supportDir.appendingPathComponent("templates.json")
 
     init() {
         if let data = try? Data(contentsOf: storeURL),
            let saved = try? JSONDecoder().decode([ServerConfig].self, from: data) {
             servers = saved
         }
+        if let data = try? Data(contentsOf: templatesURL),
+           let saved = try? JSONDecoder().decode([UUID: [WindowTemplate]].self, from: data) {
+            templatesByServer = saved
+        }
+        startPathMonitor()
         do {
             let identity = try KeyStore.loadOrCreate()
             self.identity = identity
@@ -62,6 +74,54 @@ final class AppModel {
             try JSONEncoder().encode(servers).write(to: storeURL, options: .atomic)
         } catch {
             log.add("Could not save servers: \(error)")
+        }
+    }
+
+    // MARK: - Templates
+
+    func templates(for server: UUID) -> [WindowTemplate] {
+        templatesByServer[server] ?? []
+    }
+
+    func saveTemplate(_ template: WindowTemplate, server: UUID) {
+        var list = templatesByServer[server] ?? []
+        if let i = list.firstIndex(where: { $0.id == template.id }) { list[i] = template } else { list.append(template) }
+        templatesByServer[server] = list
+        persistTemplates()
+    }
+
+    func deleteTemplate(_ template: WindowTemplate, server: UUID) {
+        templatesByServer[server]?.removeAll { $0.id == template.id }
+        persistTemplates()
+    }
+
+    private func persistTemplates() {
+        do {
+            try JSONEncoder().encode(templatesByServer).write(to: templatesURL, options: .atomic)
+        } catch {
+            log.add("Could not save templates: \(error)")
+        }
+    }
+
+    // MARK: - Network
+
+    /// SPEC §7: reconnect when the network path changes (Wi-Fi ↔ cellular).
+    private func startPathMonitor() {
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            let description = path.status == .satisfied
+                ? path.availableInterfaces.map { "\($0.type)" }.joined(separator: ",") : "offline"
+            Task { @MainActor in self?.pathChanged(to: description, satisfied: path.status == .satisfied) }
+        }
+        pathMonitor.start(queue: DispatchQueue(label: "et.path"))
+    }
+
+    private func pathChanged(to description: String, satisfied: Bool) {
+        defer { lastPath = description }
+        guard let previous = lastPath, previous != description else { return }
+        log.add("Network: \(previous) → \(description)")
+        guard satisfied, let session, UIApplication.shared.applicationState == .active else { return }
+        if session.state == .connected || session.isDisconnected || session.isReconnecting {
+            session.reconnect()
         }
     }
 
@@ -107,10 +167,9 @@ final class AppModel {
             }
         case .active:
             endBackgroundTask()
-            if let session, session.isDisconnected,
-               let id = activeServerID, let server = servers.first(where: { $0.id == id }) {
+            if let session, session.isDisconnected, activeServerID != nil {
                 log.add("Foreground: reconnecting")
-                connect(server)
+                session.reconnect()
             }
         default:
             break

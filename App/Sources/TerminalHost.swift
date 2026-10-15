@@ -22,11 +22,83 @@ extension UIColor {
     }
 }
 
+/// SwiftTerm's view with touch scrolling moved to two fingers.
+///
+/// SwiftTerm uses one-finger drags for text selection and, when the program
+/// in the pane turns on mouse reporting, for mouse drags. Neither scrolls.
+/// Here a two-finger drag always scrolls: the local scrollback normally, or
+/// mouse-wheel events in a full-screen program (vim, htop), which has no
+/// scrollback of its own.
+final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
+    private var wheelPan: UIPanGestureRecognizer?
+    private var wheelRemainder: CGFloat = 0
+
+    override init(frame: CGRect, font: UIFont?) {
+        super.init(frame: frame, font: font)
+        // UIScrollView's own pan scrolls the scrollback, with momentum.
+        panGestureRecognizer.minimumNumberOfTouches = 2
+        panGestureRecognizer.maximumNumberOfTouches = 2
+        let wheel = UIPanGestureRecognizer(target: self, action: #selector(wheelPanned(_:)))
+        wheel.minimumNumberOfTouches = 2
+        wheel.maximumNumberOfTouches = 2
+        wheel.delegate = self
+        wheelPan = wheel
+        addGestureRecognizer(wheel)
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    /// SwiftTerm adds its selection and mouse pans lazily; keep them to one finger.
+    override func addGestureRecognizer(_ gesture: UIGestureRecognizer) {
+        if let pan = gesture as? UIPanGestureRecognizer, pan !== wheelPan, pan !== panGestureRecognizer {
+            pan.maximumNumberOfTouches = 1
+        }
+        super.addGestureRecognizer(gesture)
+    }
+
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+        g === wheelPan && other === panGestureRecognizer
+    }
+
+    /// In the alternate screen, turn two-finger drags into wheel events.
+    @objc private func wheelPanned(_ gesture: UIPanGestureRecognizer) {
+        let terminal = getTerminal()
+        guard terminal.isCurrentBufferAlternate else { return }
+        switch gesture.state {
+        case .began:
+            wheelRemainder = 0
+        case .changed:
+            let lineHeight = max(font.lineHeight, 1)
+            wheelRemainder += gesture.translation(in: self).y
+            gesture.setTranslation(.zero, in: self)
+            let lines = Int(wheelRemainder / lineHeight)
+            guard lines != 0 else { return }
+            wheelRemainder -= CGFloat(lines) * lineHeight
+            let location = gesture.location(in: self)
+            let col = max(0, min(terminal.cols - 1, Int(location.x / max(bounds.width / CGFloat(terminal.cols), 1))))
+            let row = max(0, min(terminal.rows - 1, Int(location.y / lineHeight)))
+            // Finger down = content down = scroll up (wheel button 4).
+            let button = lines > 0 ? 4 : 5
+            for _ in 0..<abs(lines) {
+                if terminal.mouseMode != .off {
+                    let flags = terminal.encodeButton(button: button, release: false, shift: false, meta: false, control: false)
+                    terminal.sendEvent(buttonFlags: flags, x: col, y: row)
+                } else {
+                    // No mouse support: arrow keys, as most terminals do.
+                    send(Array((button == 4 ? "\u{1b}OA" : "\u{1b}OB").utf8))
+                }
+            }
+        default:
+            break
+        }
+    }
+}
+
 /// Owns one SwiftTerm `TerminalView` for the life of a window, so output is
 /// never lost and pages switch instantly (SPEC §4).
 @MainActor
 final class TerminalHost: NSObject {
-    let view: TerminalView
+    let view: ETTerminalView
     var onInput: (([UInt8]) -> Void)?
     var onSizeChange: ((Int, Int) -> Void)?
     private let log: DebugLog
@@ -35,8 +107,8 @@ final class TerminalHost: NSObject {
 
     init(log: DebugLog) {
         self.log = log
-        view = TerminalView(frame: UIScreen.main.bounds,
-                            font: UIFont.monospacedSystemFont(ofSize: Self.fontSize, weight: .regular))
+        view = ETTerminalView(frame: UIScreen.main.bounds,
+                              font: UIFont.monospacedSystemFont(ofSize: Self.fontSize, weight: .regular))
         super.init()
         view.terminalDelegate = self
         view.nativeBackgroundColor = Theme.background
@@ -50,6 +122,15 @@ final class TerminalHost: NSObject {
         view.autocapitalizationType = .none
         view.smartQuotesType = .no
         view.smartDashesType = .no
+        // E.T. draws its own key row (KeyRow) instead of SwiftTerm's.
+        view.inputAccessoryView = nil
+    }
+
+    var terminal: Terminal { view.getTerminal() }
+
+    /// Sends bytes as if typed, honoring SwiftTerm's sticky Ctrl.
+    func type(_ bytes: [UInt8]) {
+        view.send(bytes)
     }
 
     func feed(_ bytes: [UInt8]) {

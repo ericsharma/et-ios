@@ -236,7 +236,7 @@ struct SessionView: View {
                 Menu {
                     Button("Debug log") { showLog = true }
                     if session.isDisconnected {
-                        Button("Reconnect") { model.connect(session.server) }
+                        Button("Reconnect") { session.reconnect() }
                     }
                     Button("Servers", role: .destructive) { model.closeSession() }
                 } label: {
@@ -255,6 +255,10 @@ struct SessionView: View {
 
     @ViewBuilder private var content: some View {
         switch session.state {
+        case .connecting where !session.windows.isEmpty && session.approvalURL == nil:
+            terminalArea
+        case .failed where !session.windows.isEmpty:
+            terminalArea
         case .connecting(let message):
             if let url = session.approvalURL {
                 ApprovalView(host: session.server.displayName, banner: session.authBanner ?? "", url: url)
@@ -265,7 +269,7 @@ struct SessionView: View {
             centered {
                 Image(systemName: "exclamationmark.triangle").font(.largeTitle).foregroundStyle(Theme.active)
                 Text(message).multilineTextAlignment(.center)
-                Button("Retry") { model.connect(session.server) }.buttonStyle(.borderedProminent)
+                Button("Retry") { session.reconnect() }.buttonStyle(.borderedProminent)
                 Button("Debug log") { showLog = true }
             }
         case .choosingSession(let sessions):
@@ -296,15 +300,55 @@ struct SessionView: View {
                 }
             }
         case .connected, .restoring, .disconnected:
-            WindowPager(session: session)
-                .overlay {
-                    if session.state == .disconnected {
-                        Color.black.opacity(0.3).overlay {
-                            Button("Reconnect") { model.connect(session.server) }.buttonStyle(.borderedProminent)
-                        }
-                    }
-                }
+            terminalArea
         }
+    }
+
+    /// Pages, key row and compose bar. While not connected, the last screen
+    /// stays visible, dimmed, with a status banner (SPEC §5.7).
+    private var terminalArea: some View {
+        VStack(spacing: 6) {
+            WindowPager(session: session)
+                .overlay { if session.state != .connected { Color.black.opacity(0.3) } }
+                .overlay(alignment: .top) { statusBanner }
+                .allowsHitTesting(session.state == .connected)
+            if let page = session.currentWindow, session.state == .connected {
+                if !HardwareKeyboard.shared.isConnected {
+                    KeyRow(session: session, page: page)
+                }
+                ComposeBar(session: session, page: page)
+                    .padding(.bottom, 6)
+            }
+        }
+    }
+
+    @ViewBuilder private var statusBanner: some View {
+        switch session.state {
+        case .connected:
+            EmptyView()
+        case .failed(let message):
+            banner(color: .red) {
+                Text(message).font(.footnote)
+                Button("Retry") { session.reconnect() }.buttonStyle(.borderedProminent).controlSize(.small)
+            }
+        case .disconnected where !session.isReconnecting:
+            banner(color: .gray) {
+                Text("Disconnected").font(.footnote)
+                Button("Reconnect") { session.reconnect() }.buttonStyle(.borderedProminent).controlSize(.small)
+            }
+        case .restoring(let done, let total):
+            banner(color: .orange) { ProgressView().controlSize(.small); Text("Restoring \(done)/\(total)").font(.footnote) }
+        default:
+            banner(color: .orange) { ProgressView().controlSize(.small); Text("Reconnecting…").font(.footnote) }
+        }
+    }
+
+    private func banner<C: View>(color: Color, @ViewBuilder _ content: () -> C) -> some View {
+        HStack(spacing: 10, content: content)
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .background(color.opacity(0.85), in: Capsule())
+            .padding(.top, 10)
+            .allowsHitTesting(true)
     }
 
     private func centered<C: View>(@ViewBuilder _ content: () -> C) -> some View {
@@ -325,6 +369,10 @@ struct SessionView: View {
 
 struct WindowTabs: View {
     @Bindable var session: SessionController
+    @State private var newWindow = false
+    @State private var renaming: WindowPage?
+    @State private var newName = ""
+    @State private var closing: WindowPage?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -347,9 +395,35 @@ struct WindowTabs: View {
                         }
                         .buttonStyle(.plain)
                         .id(page.id)
+                        .contextMenu {
+                            Button("Rename…") { newName = page.name; renaming = page }
+                            Button("New window…") { newWindow = true }
+                            Button("Close window…", role: .destructive) { closing = page }
+                        }
                     }
+                    Button { newWindow = true } label: {
+                        Image(systemName: "plus").font(.caption.weight(.semibold))
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .overlay(Capsule().stroke(Color.secondary.opacity(0.3)))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(session.state != .connected)
                 }
                 .padding(.horizontal, 12)
+            }
+            .sheet(isPresented: $newWindow) {
+                NavigationStack { NewWindowSheet(session: session) }
+            }
+            .alert("Rename window", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+                TextField("Name", text: $newName)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                Button("Rename") { if let page = renaming { session.renameWindow(page, to: newName) } }
+                Button("Cancel", role: .cancel) {}
+            }
+            .confirmationDialog("Close \(closing?.name ?? "")?", isPresented: Binding(get: { closing != nil }, set: { if !$0 { closing = nil } }), titleVisibility: .visible) {
+                Button("Close window", role: .destructive) { if let page = closing { session.closeWindow(page) } }
+            } message: {
+                Text("This kills the window and everything running in it, on the server.")
             }
             .onChange(of: session.currentWindowID) { _, id in
                 withAnimation { proxy.scrollTo(id, anchor: .center) }

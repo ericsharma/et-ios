@@ -11,6 +11,8 @@ final class WindowPage: Identifiable {
     var index: Int
     var name: String
     var pane: PaneID
+    /// The pane's foreground program, e.g. "bash", "ssh", "claude".
+    var currentCommand: String
     var hasActivity = false
     var hasBell = false
     @ObservationIgnored let terminal: TerminalHost
@@ -22,6 +24,7 @@ final class WindowPage: Identifiable {
         index = info.index
         name = info.name
         pane = info.activePane
+        currentCommand = info.currentCommand
         self.terminal = terminal
     }
 }
@@ -53,6 +56,10 @@ final class SessionController {
     private(set) var authBanner: String?
     /// The first https link in `authBanner`.
     private(set) var approvalURL: URL?
+    /// True between an unexpected disconnect and the next successful attach.
+    private(set) var isReconnecting = false
+    /// Key-row presets the user picked, by window name (SPEC §5.4).
+    private var presetChoices: [String: KeyPreset] = [:]
 
     @ObservationIgnored private let identity: SSHIdentity
     @ObservationIgnored private let log: DebugLog
@@ -69,6 +76,12 @@ final class SessionController {
     @ObservationIgnored private var pendingReload: Task<Void, Never>?
     @ObservationIgnored private var loggedFirstInput = false
     @ObservationIgnored private var restoreLines = 2000
+    /// Set by `disconnect()` so the end of the control client isn't treated
+    /// as a lost connection.
+    @ObservationIgnored private var intentionalDisconnect = false
+    @ObservationIgnored private var reconnectStarted: Date?
+    @ObservationIgnored private var reconnectAttempt = 0
+    @ObservationIgnored private var reconnectTask: Task<Void, Never>?
 
     init(server: ServerConfig, identity: SSHIdentity, log: DebugLog,
          onServerChanged: @escaping (ServerConfig) -> Void) {
@@ -76,6 +89,9 @@ final class SessionController {
         self.identity = identity
         self.log = log
         self.onServerChanged = onServerChanged
+        if let saved = UserDefaults.standard.dictionary(forKey: presetKey) as? [String: String] {
+            presetChoices = saved.compactMapValues(KeyPreset.init(rawValue:))
+        }
     }
 
     var isDisconnected: Bool {
@@ -92,11 +108,46 @@ final class SessionController {
     // MARK: - Connect
 
     func connect() {
+        intentionalDisconnect = false
         tasks.append(Task { await self.run() })
     }
 
+    /// Drops the current connection (if any) and connects again, keeping the
+    /// window pages so nothing flashes; their content is restored in place.
+    func reconnect() {
+        reconnectTask?.cancel()
+        closeConnection()
+        intentionalDisconnect = false
+        tasks.append(Task { await self.run() })
+    }
+
+    /// Backoff after an unexpected disconnect (SPEC §7): 0.5, 1, 2, 4 s,
+    /// then every 8 s; give up after 2 minutes.
+    private func scheduleReconnect() {
+        let started = reconnectStarted ?? Date()
+        reconnectStarted = started
+        guard Date().timeIntervalSince(started) < 120 else {
+            isReconnecting = false
+            reconnectStarted = nil
+            reconnectAttempt = 0
+            state = .failed("Lost the connection to \(server.host) and couldn't get it back.")
+            return
+        }
+        isReconnecting = true
+        let delays = [0.5, 1, 2, 4]
+        let delay = reconnectAttempt < delays.count ? delays[reconnectAttempt] : 8
+        reconnectAttempt += 1
+        log.add("Reconnecting in \(delay) s (attempt \(reconnectAttempt))")
+        reconnectTask?.cancel()
+        reconnectTask = Task {
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled else { return }
+            self.reconnect()
+        }
+    }
+
     private func run() async {
-        state = .connecting("Connecting to \(server.host)…")
+        state = .connecting(isReconnecting ? "Reconnecting…" : "Connecting to \(server.host)…")
         log.add("Connecting to \(server.user)@\(server.host):\(server.port)")
         do {
             let connection = try await SSHConnection.connect(
@@ -119,6 +170,8 @@ final class SessionController {
                 // Never create a session silently; a wrong socket would look
                 // exactly like this. The picker offers "New session".
                 state = .choosingSession([])
+            } else if let current = sessionName, sessions.contains(where: { $0.name == current }) {
+                await attach(.attach(current), name: current)
             } else if sessions.count == 1 {
                 await attach(.attach(sessions[0].name), name: sessions[0].name)
             } else if let last = server.lastSession, sessions.contains(where: { $0.name == last }) {
@@ -165,6 +218,9 @@ final class SessionController {
             try await serializedReload(restoreAll: true)
             if client === self.client {
                 state = .connected
+                isReconnecting = false
+                reconnectStarted = nil
+                reconnectAttempt = 0
                 log.add("Ready: \(windows.count) windows")
             }
         } catch {
@@ -172,7 +228,19 @@ final class SessionController {
         }
     }
 
+    /// Closes the connection on purpose (app in background, user left).
     func disconnect() {
+        intentionalDisconnect = true
+        reconnectTask?.cancel()
+        isReconnecting = false
+        reconnectStarted = nil
+        reconnectAttempt = 0
+        closeConnection()
+        if !isDisconnected { state = .disconnected }
+        log.add("Disconnected")
+    }
+
+    private func closeConnection() {
         for task in tasks { task.cancel() }
         tasks.removeAll()
         let client = client
@@ -183,8 +251,6 @@ final class SessionController {
             await client?.close()
             await connection?.close()
         }
-        if !isDisconnected { state = .disconnected }
-        log.add("Disconnected")
     }
 
     private func connectionEnded() {
@@ -192,16 +258,32 @@ final class SessionController {
         log.add("Control client ended")
         client = nil
         state = .disconnected
+        if !intentionalDisconnect { scheduleReconnect() }
     }
 
     private func fail(_ error: Error) {
         log.add("Error: \(error)")
+        if isReconnecting, !intentionalDisconnect, Self.isTransient(error) {
+            state = .disconnected
+            scheduleReconnect()
+            return
+        }
+        isReconnecting = false
         var message = Self.describe(error, server: server)
         if let banner = authBanner, approvalURL == nil {
             message += "\n\nThe server said:\n" + banner
         }
         approvalURL = nil
         state = .failed(message)
+    }
+
+    /// Network trouble worth retrying, as opposed to auth or host-key problems.
+    static func isTransient(_ error: Error) -> Bool {
+        switch error {
+        case SSHConnectionError.unreachable, SSHConnectionError.timedOut, TmuxError.disconnected: true
+        case is SSHConnectionError: false
+        default: true
+        }
     }
 
     static func describe(_ error: Error, server: ServerConfig) -> String {
@@ -288,6 +370,7 @@ final class SessionController {
             if let page = windows.first(where: { $0.id == info.id }) {
                 page.index = info.index
                 page.name = info.name
+                page.currentCommand = info.currentCommand
                 if page.pane != info.activePane {
                     page.pane = info.activePane
                     toRestore.append(page)
@@ -424,6 +507,56 @@ final class SessionController {
         page.hasBell = false
     }
 
+    // MARK: - Presets
+
+    private var presetKey: String { "presets.\(server.id.uuidString)" }
+
+    func preset(for page: WindowPage) -> KeyPreset {
+        if let chosen = presetChoices[page.name] { return chosen }
+        // A window running claude over ssh shows "ssh", so the name matters too.
+        let looksLikeClaude = page.currentCommand == "claude" || page.name.localizedCaseInsensitiveContains("claude")
+        return looksLikeClaude ? .claude : .shell
+    }
+
+    func setPreset(_ preset: KeyPreset, for page: WindowPage) {
+        presetChoices[page.name] = preset
+        UserDefaults.standard.set(presetChoices.mapValues(\.rawValue), forKey: presetKey)
+    }
+
+    // MARK: - Windows (new, rename, close)
+
+    /// SPEC §6.4: create the window without switching the server's current
+    /// window, then type each command into its shell.
+    func createWindow(name: String, commands: [String]) {
+        guard let client, !name.isEmpty else { return }
+        Task {
+            do {
+                let reply = try await client.command(TmuxCommand.newWindow(name: name))
+                guard let (window, pane) = TmuxCommand.parseNewWindow(reply) else { return }
+                log.add("Created window \(name) \(window)")
+                for line in commands {
+                    for c in TmuxCommand.sendKeys(pane: pane, bytes: Array(line.utf8) + [0x0D]) {
+                        await client.post(c)
+                    }
+                }
+                try await serializedReload()
+                currentWindowID = window
+            } catch {
+                log.add("New window failed: \(error)")
+            }
+        }
+    }
+
+    func renameWindow(_ page: WindowPage, to name: String) {
+        guard let client, !name.isEmpty else { return }
+        Task { await client.post(TmuxCommand.renameWindow(page.id, to: name)) }
+    }
+
+    func closeWindow(_ page: WindowPage) {
+        guard let client else { return }
+        Task { await client.post(TmuxCommand.killWindow(page.id)) }
+    }
+
     // MARK: - Input and size
 
     func send(_ bytes: [UInt8], to page: WindowPage) {
@@ -439,9 +572,18 @@ final class SessionController {
         Task { for c in commands { await client.post(c) } }
     }
 
-    func sendText(_ text: String, pressEnter: Bool) {
-        guard let page = currentWindow else { return }
-        send(Array(text.utf8) + (pressEnter ? [0x0D] : []), to: page)
+    /// Sends compose-bar text (SPEC §6.2). Multi-line text goes to Claude
+    /// windows as a bracketed paste, so Claude gets one message instead of
+    /// one per line; in shells each line runs.
+    func sendComposed(_ text: String, to page: WindowPage, pressEnter: Bool) {
+        var bytes: [UInt8]
+        if text.contains("\n") && preset(for: page) == .claude {
+            bytes = Array("\u{1b}[200~".utf8) + Array(text.utf8) + Array("\u{1b}[201~".utf8)
+        } else {
+            bytes = Array(text.replacingOccurrences(of: "\n", with: "\r").utf8)
+        }
+        if pressEnter { bytes.append(0x0D) }
+        send(bytes, to: page)
     }
 
     /// Debounced 150 ms (SPEC §2.5).
