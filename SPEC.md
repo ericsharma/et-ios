@@ -30,7 +30,7 @@ Current windows in session `0`. The names follow a pattern: one shell window and
 3 gmktec           (ssh)
 4 gmktec-claude    (ssh → claude on gmktec)
 5 mac-mini         (ssh)
-6 mac-mini-claude  (claude)
+6 mac-mini-claude  (ssh → claude on mac-mini)
 ```
 
 The app must use this pattern. See §5.3 (host grouping) and §6.4 (Claude windows).
@@ -397,6 +397,6 @@ Do not test against session `0` on trigkey with destructive commands (`kill-wind
 ## 12. Open questions
 
 1. ~~App name~~ Decided: **E.T.** (2026-10-14).
-2. Bundle ID prefix (for example `xyz.ericsharma.attach`)?
-3. Where does the source live: a new private GitHub repo `ericsharma/attach-ios`?
-4. `mac-mini-claude` runs `claude` on trigkey, not over ssh to the Mac mini. Intentional, or should the new-window flow always ssh first for non-trigkey hosts? (The spec assumes: always ssh first.)
+2. ~~Bundle ID~~ Decided: `xyz.ericsharma.et`.
+3. ~~Repo~~ Decided: private repo `ericsharma/et-ios`, local `~/tmux-ios`.
+4. ~~ssh first?~~ Decided: yes. New windows for non-trigkey hosts always ssh first, as `gmktec-claude` and `mac-mini-claude` already do.
