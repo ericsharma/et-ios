@@ -13,6 +13,28 @@ final class Push: NSObject {
     /// Window name from a tapped notification; the session opens it.
     var pendingWindowName: String?
 
+    /// What a tapped notification points at (sent by et-notify).
+    struct OpenRequest {
+        var server: UUID?
+        var session: String?
+        var window: String?
+    }
+
+    /// Set by AppModel; until then a tap is kept in `pendingOpen`.
+    var onOpen: ((OpenRequest) -> Void)? {
+        didSet {
+            if let onOpen, let request = pendingOpen {
+                pendingOpen = nil
+                onOpen(request)
+            }
+        }
+    }
+    private var pendingOpen: OpenRequest?
+
+    fileprivate func open(_ request: OpenRequest) {
+        if let onOpen { onOpen(request) } else { pendingOpen = request }
+    }
+
     /// Sandbox for Xcode builds, production for TestFlight / App Store.
     static var environment: String {
         #if DEBUG
@@ -44,8 +66,12 @@ extension Push: UNUserNotificationCenterDelegate {
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        let window = response.notification.request.content.userInfo["window"] as? String
-        await MainActor.run { Push.shared.pendingWindowName = window }
+        let info = response.notification.request.content.userInfo
+        let request = Push.OpenRequest(
+            server: (info["server"] as? String).flatMap(UUID.init(uuidString:)),
+            session: info["session"] as? String,
+            window: info["window"] as? String)
+        await MainActor.run { Push.shared.open(request) }
     }
 }
 

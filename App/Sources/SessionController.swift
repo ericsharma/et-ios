@@ -563,7 +563,7 @@ final class SessionController {
     private func registerPushToken() async {
         guard let connection, let token = Push.shared.token else { return }
         let id = UIDevice.current.identifierForVendor?.uuidString ?? "unknown"
-        let json = #"{"token":"\#(token)","environment":"\#(Push.environment)","bundle":"xyz.ericsharma.et","name":"\#(UIDevice.current.name)"}"#
+        let json = #"{"token":"\#(token)","environment":"\#(Push.environment)","bundle":"xyz.ericsharma.et","server":"\#(server.id.uuidString)","name":"\#(UIDevice.current.name)"}"#
         let command = "mkdir -p ~/.config/et/devices && printf '%s\\n' '\(json.replacingOccurrences(of: "'", with: ""))' > ~/.config/et/devices/\(id).json"
         do {
             let result = try await connection.run(command)

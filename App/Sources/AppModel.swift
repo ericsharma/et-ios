@@ -47,6 +47,35 @@ final class AppModel {
             identityError = String(describing: error)
             log.add("Client key error: \(error)")
         }
+        // SPEC §7: on launch, connect to the server used last (unless a
+        // tapped notification already chose one above).
+        if session == nil, let id = UserDefaults.standard.string(forKey: "lastServerID").flatMap(UUID.init(uuidString:)),
+           let server = servers.first(where: { $0.id == id }) {
+            connect(server)
+        }
+        // Last: a tap that launched the app is delivered now, with the key
+        // loaded and the session (if any) already starting.
+        Push.shared.onOpen = { [weak self] request in self?.open(request) }
+    }
+
+    /// A tapped notification: connect to its server and session if needed,
+    /// then open its window.
+    private func open(_ request: Push.OpenRequest) {
+        log.add("Notification: \(request.window ?? "?") in \(request.session ?? "?")")
+        Push.shared.pendingWindowName = request.window
+        guard var server = servers.first(where: { $0.id == request.server })
+                ?? session?.server ?? servers.first else { return }
+        if let session, session.server.id == server.id,
+           request.session == nil || session.sessionName == request.session {
+            if session.isDisconnected { session.reconnect() }
+            session.openPendingWindow()
+            return
+        }
+        if let name = request.session {
+            server.lastSession = name
+            save(server)
+        }
+        connect(server)
     }
 
     var publicKey: String {
@@ -131,6 +160,7 @@ final class AppModel {
         guard let identity else { return }
         session?.disconnect()
         activeServerID = server.id
+        UserDefaults.standard.set(server.id.uuidString, forKey: "lastServerID")
         let session = SessionController(server: server, identity: identity, log: log) { [weak self] updated in
             self?.save(updated)
         }
@@ -143,6 +173,7 @@ final class AppModel {
         session?.disconnect()
         session = nil
         activeServerID = nil
+        UserDefaults.standard.removeObject(forKey: "lastServerID")
     }
 
     private func endBackgroundTask() {
