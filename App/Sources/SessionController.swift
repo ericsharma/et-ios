@@ -209,8 +209,8 @@ final class SessionController {
             "\(server.host) answered but the SSH login didn't finish in time. If it asked you to approve the login, retry and approve within 5 minutes."
         case SSHConnectionError.hostKeyChanged(_, let presented):
             "\(server.host)'s host key changed (now \(presented.fingerprint)). Not connecting. If this is expected, delete and re-add the server."
-        case SSHConnectionError.tmuxNotFound:
-            "tmux not found on \(server.host). Set its path in the server settings."
+        case SSHConnectionError.tmuxNotFound(let output):
+            "tmux not found on \(server.host). Set its path in the server settings.\n\nDiscovery output:\n\(output)"
         case TmuxError.disconnected:
             "The tmux session ended."
         default:

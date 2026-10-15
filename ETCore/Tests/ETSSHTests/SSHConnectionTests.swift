@@ -101,7 +101,11 @@ struct SSHConnectionTests {
         var wrong = sshd.config
         wrong.tmuxPath = "/nonexistent/tmux"
         let c2 = try await SSHConnection.connect(wrong, identity: sshd.identity) { _ in true }
-        await #expect(throws: SSHConnectionError.tmuxNotFound) { try await c2.findTmux() }
+        await #expect {
+            try await c2.findTmux()
+        } throws: { error in
+            if case SSHConnectionError.tmuxNotFound = error { true } else { false }
+        }
         await c2.close()
     }
 

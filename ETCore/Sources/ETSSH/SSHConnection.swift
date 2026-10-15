@@ -15,7 +15,8 @@ public enum SSHConnectionError: Error, Sendable, Equatable {
     case hostKeyRejected
     /// The server's key differs from the pinned one. Never connect.
     case hostKeyChanged(pinned: HostKey, presented: HostKey)
-    case tmuxNotFound
+    /// `output` is what the discovery script printed, for the debug log.
+    case tmuxNotFound(output: String)
     case commandFailed(command: String, exitCode: Int, output: String)
 }
 
@@ -127,7 +128,9 @@ public actor SSHConnection {
     /// the exit code. Wrapped in `sh -c` so it works whatever the login shell is.
     public func run(_ command: String) async throws -> (output: String, exitCode: Int) {
         let script = "\(command) 2>&1; echo \"\(Self.exitMarker)$?\""
-        let buffer = try await client.executeCommand("sh -c \(shQuote(script))")
+        // Absolute path: some servers (Tailscale SSH) run commands with a
+        // minimal PATH.
+        let buffer = try await client.executeCommand("/bin/sh -c \(shQuote(script))")
         var output = String(buffer: buffer)
         guard let range = output.range(of: Self.exitMarker, options: .backwards) else {
             return (output, -1)
@@ -159,7 +162,9 @@ public actor SSHConnection {
             "if [ -n \"$p\" ] && [ -x \"$p\" ]; then echo \"$p\"; \"$p\" -V; exit 0; fi; done; exit 127"
         let (output, code) = try await run(script)
         let lines = output.split(separator: "\n").map(String.init)
-        guard code == 0, lines.count >= 2 else { throw SSHConnectionError.tmuxNotFound }
+        guard code == 0, lines.count >= 2 else {
+            throw SSHConnectionError.tmuxNotFound(output: "exit \(code): \(output)")
+        }
         return TmuxInstall(path: lines[lines.count - 2], version: lines[lines.count - 1])
     }
 
