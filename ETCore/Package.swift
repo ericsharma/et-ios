@@ -25,6 +25,5 @@ let package = Package(
             dependencies: ["ETCore"],
             resources: [.copy("Fixtures")]
         ),
-        .testTarget(name: "ETSSHTests", dependencies: ["ETSSH"]),
     ]
 )

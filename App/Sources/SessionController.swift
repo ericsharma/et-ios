@@ -24,8 +24,6 @@ final class WindowPage: Identifiable {
     var hasBell = false
     /// Keyboard dictation started here; showing "Edit first / Into terminal".
     var dictationPrompt = false
-    /// Set briefly when this window rings its bell (in-app banner).
-    var lastBell: Date?
     @ObservationIgnored let terminal: TerminalHost
     /// Output that arrived while history was being restored (SPEC §2.4).
     @ObservationIgnored var buffered: [[UInt8]]? = nil
