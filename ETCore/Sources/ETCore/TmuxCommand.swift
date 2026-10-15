@@ -51,7 +51,9 @@ public enum TmuxCommand {
 
     public static func paneState(pane: PaneID) -> String {
         "display-message -p -t \(pane) " +
-            quote("#{cursor_x} #{cursor_y} #{alternate_on} #{pane_width} #{pane_height}")
+            quote("#{cursor_x} #{cursor_y} #{alternate_on} #{pane_width} #{pane_height} " +
+                  "#{cursor_flag} #{keypad_cursor_flag} #{keypad_flag} #{mouse_standard_flag} " +
+                  "#{mouse_button_flag} #{mouse_any_flag} #{mouse_sgr_flag}")
     }
 
     public static func refreshClientSize(columns: Int, rows: Int) -> String {
@@ -133,6 +135,15 @@ public struct PaneState: Sendable, Equatable {
     public var alternateScreen: Bool
     public var width: Int
     public var height: Int
+    /// Terminal modes the program set; replayed after a repaint, which
+    /// starts from a reset terminal.
+    public var cursorVisible = true
+    public var applicationCursor = false
+    public var applicationKeypad = false
+    public var mouseStandard = false
+    public var mouseButton = false
+    public var mouseAny = false
+    public var mouseSGR = false
 
     public init(cursorX: Int, cursorY: Int, alternateScreen: Bool, width: Int, height: Int) {
         self.cursorX = cursorX
@@ -145,7 +156,30 @@ public struct PaneState: Sendable, Equatable {
     public init?(_ reply: ControlReply) {
         guard let line = reply.textLines.first else { return nil }
         let f = line.split(separator: " ").compactMap { Int($0) }
-        guard f.count == 5 else { return nil }
+        guard f.count >= 5 else { return nil }
         self.init(cursorX: f[0], cursorY: f[1], alternateScreen: f[2] == 1, width: f[3], height: f[4])
+        if f.count >= 12 {
+            cursorVisible = f[5] == 1
+            applicationCursor = f[6] == 1
+            applicationKeypad = f[7] == 1
+            mouseStandard = f[8] == 1
+            mouseButton = f[9] == 1
+            mouseAny = f[10] == 1
+            mouseSGR = f[11] == 1
+        }
+    }
+
+    /// Escape sequences that put a freshly reset terminal into these modes.
+    public var modeSequences: String {
+        var s = ""
+        func set(_ on: Bool, _ mode: Int) { if on { s += "\u{1b}[?\(mode)h" } }
+        set(applicationCursor, 1)
+        set(mouseStandard, 1000)
+        set(mouseButton, 1002)
+        set(mouseAny, 1003)
+        set(mouseSGR, 1006)
+        if applicationKeypad { s += "\u{1b}=" }
+        if !cursorVisible { s += "\u{1b}[?25l" }
+        return s
     }
 }

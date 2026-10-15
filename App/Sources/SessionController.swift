@@ -29,6 +29,10 @@ final class WindowPage: Identifiable {
     @ObservationIgnored let terminal: TerminalHost
     /// Output that arrived while history was being restored (SPEC §2.4).
     @ObservationIgnored var buffered: [[UInt8]]? = nil
+    /// tmux resized this window since we last copied its screen; our copy
+    /// may have drifted (see SessionController.repaint).
+    @ObservationIgnored var needsRepaint = false
+    @ObservationIgnored var repaintTask: Task<Void, Never>?
 
     init(info: WindowInfo, terminal: TerminalHost) {
         id = info.id
@@ -61,6 +65,7 @@ final class SessionController {
         didSet {
             guard currentWindowID != oldValue else { return }
             clearBadges()
+            if let page = currentWindow, page.needsRepaint { scheduleRepaint(page, after: 0) }
             for page in windows where page.id != currentWindowID { page.terminal.dismissDictationPrompt() }
             // Keep the keyboard up across a switch if it was up.
             if let old = windows.first(where: { $0.id == oldValue }), old.terminal.view.isFirstResponder {
@@ -467,9 +472,21 @@ final class SessionController {
         }
     }
 
+    /// Re-copies a window's screen from tmux after a resize (debounced).
+    private func scheduleRepaint(_ page: WindowPage, after delay: Double) {
+        page.repaintTask?.cancel()
+        page.repaintTask = Task {
+            if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+            guard !Task.isCancelled, state == .connected, page.needsRepaint else { return }
+            page.needsRepaint = false
+            do { try await restore(page) } catch { log.add("Repaint failed: \(error)") }
+        }
+    }
+
     /// Replays a pane's history and screen into its terminal (SPEC §2.4).
     private func restore(_ page: WindowPage) async throws {
         guard let client else { return }
+        page.needsRepaint = false
         page.buffered = []
         defer {
             for chunk in page.buffered ?? [] { page.terminal.feed(chunk) }
@@ -493,6 +510,9 @@ final class SessionController {
             bytes += Self.join(history.lines)
         }
         bytes += Array("\u{1b}[0m\u{1b}[\(paneState.cursorY + 1);\(paneState.cursorX + 1)H".utf8)
+        // The reset cleared the program's modes (arrow-key mode, mouse
+        // reporting, hidden cursor); put them back.
+        bytes += Array(paneState.modeSequences.utf8)
         page.terminal.reset(with: bytes)
     }
 
@@ -525,8 +545,14 @@ final class SessionController {
         case .windowAdd, .windowClose, .unlinkedWindowClose, .windowPaneChanged, .sessionChanged:
             log.add("event: \(event)")
             scheduleReload()
-        case .layoutChange:
-            break
+        case .layoutChange(let id, _, _, _):
+            // tmux resized the window; the program in it redraws for the new
+            // size, but tmux never sends us its screen, so ours drifts. Copy
+            // tmux's screen once things settle (now for the visible window,
+            // on switch for the rest).
+            guard let page = windows.first(where: { $0.id == id }) else { return }
+            page.needsRepaint = true
+            if page.id == currentWindowID { scheduleRepaint(page, after: 0.4) }
         case .exit(let reason):
             log.add("tmux %exit \(reason ?? "")")
         default:
