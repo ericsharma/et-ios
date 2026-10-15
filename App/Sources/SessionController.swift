@@ -56,7 +56,10 @@ final class SessionController {
     private(set) var sessionName: String?
     private(set) var windows: [WindowPage] = []
     var currentWindowID: WindowID? {
-        didSet { clearBadges() }
+        didSet {
+            clearBadges()
+            for page in windows where page.id != currentWindowID { page.terminal.dismissDictationPrompt() }
+        }
     }
     /// Set while asking the user to trust a new host key.
     private(set) var pendingHostKey: HostKey?
@@ -396,8 +399,8 @@ final class SessionController {
                 page.terminal.onSizeChange = { [weak self] cols, rows in
                     self?.terminalResized(cols: cols, rows: rows)
                 }
-                page.terminal.onDictationPrompt = { [weak page] show in
-                    page?.dictationPrompt = show
+                page.terminal.onDictationPrompt = { [weak page] text in
+                    page?.dictationPrompt = text != nil
                 }
                 page.terminal.onEditDictation = { [weak self, weak page] text in
                     guard let self, let page else { return }

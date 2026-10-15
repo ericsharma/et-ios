@@ -219,22 +219,19 @@ struct ComposeSheet: View {
     }
 }
 
-/// Floating question shown when keyboard dictation starts in a terminal.
-/// It doesn't take the keyboard, so dictation keeps running while it shows.
-struct DictationChoice: View {
+/// Shown after keyboard dictation: tap Edit to move the dictated text into
+/// the editor. Ignoring it leaves the text in the terminal.
+struct DictationEditButton: View {
     let page: WindowPage
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "mic.fill").foregroundStyle(.red)
-            Button("Edit first") { page.terminal.chooseDictation(edit: true) }
-                .buttonStyle(.borderedProminent)
-            Button("Into terminal") { page.terminal.chooseDictation(edit: false) }
-                .buttonStyle(.bordered)
+        Button { page.terminal.editDictation() } label: {
+            Label("Edit", systemImage: "square.and.pencil")
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 16).padding(.vertical, 10)
         }
-        .font(.subheadline.weight(.semibold))
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: Capsule())
+        .buttonStyle(.borderedProminent)
+        .clipShape(Capsule())
         .shadow(radius: 8)
     }
 }

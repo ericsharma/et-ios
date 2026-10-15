@@ -34,10 +34,13 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
     private var wheelRemainder: CGFloat = 0
     /// Called when keyboard dictation starts (true) or stops (false) while
     /// this terminal has the keyboard.
-    var onDictationChange: ((Bool) -> Void)?
+    /// iOS delivers the final dictation result after streaming it live.
+    /// `true` before that final insert, `false` after it.
+    var onDictationResult: ((Bool) -> Void)?
+    /// Any tap in the terminal (used to dismiss the Edit prompt).
+    var onTap: (() -> Void)?
     /// Diagnostics for text input; goes to the debug log.
     var onInputDebug: ((String) -> Void)?
-    private var isDictating = false
 
     override init(frame: CGRect, font: UIFont?) {
         _ = Self.installInputHooks
@@ -51,43 +54,31 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
         wheel.delegate = self
         wheelPan = wheel
         addGestureRecognizer(wheel)
-        // iOS has no public "dictation started" event. While dictation runs,
-        // the keyboard's input mode reports the language "dictation".
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(inputModeChanged),
-            name: UITextInputMode.currentInputModeDidChangeNotification, object: nil)
+        let tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
+        tap.cancelsTouchesInView = false
+        tap.delegate = self
+        addGestureRecognizer(tap)
     }
 
-    @objc private func inputModeChanged() {
-        let language = textInputMode?.primaryLanguage ?? "nil"
-        onInputDebug?("inputMode → \(language) (firstResponder: \(isFirstResponder))")
-        setDictating(isFirstResponder && language == "dictation")
-    }
+    @objc private func tapped() { onTap?() }
 
-    private func setDictating(_ dictating: Bool) {
-        guard dictating != isDictating else { return }
-        isDictating = dictating
-        onDictationChange?(dictating)
-    }
+
 
     // Diagnostics: which UITextInput calls does iOS 26 dictation make?
     // Only insertText is open in SwiftTerm, so the rest are hooked at runtime
     // on this subclass (see installInputHooks).
 
     override func insertText(_ text: String) {
-        onInputDebug?("insertText len=\(text.count) lang=\(textInputMode?.primaryLanguage ?? "nil")")
+        if text.count > 1 { onInputDebug?("insertText len=\(text.count)") }
         super.insertText(text)
     }
 
     fileprivate func inputHook(_ name: String) {
         onInputDebug?(name)
         switch name {
-        case "insertDictationResultPlaceholder", "insertDictationResult:":
-            setDictating(true)
-        case "dictationRecordingDidEnd", "dictationRecognitionFailed":
-            setDictating(false)
-        default:
-            break
+        case "insertDictationResult:": onDictationResult?(true)
+        case "insertDictationResult:done": onDictationResult?(false)
+        default: break
         }
     }
 
@@ -123,7 +114,9 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
                 as @convention(block) (AnyObject) -> AnyObject?
         }
         hook("insertDictationResult:", Void1.self) { f, sel in
-            { (obj: AnyObject, a: AnyObject?) in note(obj, "insertDictationResult:"); f(obj, sel, a) }
+            { (obj: AnyObject, a: AnyObject?) in
+                note(obj, "insertDictationResult:"); f(obj, sel, a); note(obj, "insertDictationResult:done")
+            }
                 as @convention(block) (AnyObject, AnyObject?) -> Void
         }
         hook("setMarkedText:selectedRange:", Marked.self) { f, sel in
@@ -154,7 +147,7 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
     }
 
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-        g === wheelPan && other === panGestureRecognizer
+        (g === wheelPan && other === panGestureRecognizer) || g is UITapGestureRecognizer
     }
 
     /// In the alternate screen, turn two-finger drags into wheel events.
@@ -198,22 +191,17 @@ final class TerminalHost: NSObject {
     let view: ETTerminalView
     var onInput: (([UInt8]) -> Void)?
     var onSizeChange: ((Int, Int) -> Void)?
-    /// Dictation started: ask "edit first or into terminal?" (true), or the
-    /// question is no longer needed (false).
-    var onDictationPrompt: ((Bool) -> Void)?
-    /// Dictation finished in "edit first" mode: open the editor with this text.
+    /// Show (text) or hide (nil) the "Edit" prompt after dictation.
+    var onDictationPrompt: ((String?) -> Void)?
+    /// The user tapped Edit: open the editor with this text.
     var onEditDictation: ((String) -> Void)?
     private let log: DebugLog
 
-    /// While dictation runs and the user hasn't chosen, or chose to edit,
-    /// typed bytes are held here instead of going to tmux.
-    private enum Dictation {
-        case idle
-        case undecided(buffer: [UInt8], ended: Bool)
-        case editing(buffer: [UInt8])
-        case passthrough
-    }
-    private var dictation: Dictation = .idle
+    /// Bytes of iOS's final dictation insert, which repeats text that was
+    /// already streamed live into the terminal. Swallowed, kept for Edit.
+    private var capturing: [UInt8]?
+    /// The dictated text the Edit prompt offers, while it's showing.
+    private var promptText: String?
 
     static var fontSize: CGFloat = UIDevice.current.userInterfaceIdiom == .pad ? 14 : 13
 
@@ -236,42 +224,40 @@ final class TerminalHost: NSObject {
         view.smartDashesType = .no
         // E.T. draws its own key row (KeyRow) instead of SwiftTerm's.
         view.inputAccessoryView = nil
-        view.onDictationChange = { [weak self] active in self?.dictationChanged(active) }
+        view.onDictationResult = { [weak self] starting in self?.dictationResult(starting) }
+        view.onTap = { [weak self] in self?.dismissDictationPrompt() }
         view.onInputDebug = { [weak self] line in self?.log.add("input: \(line)") }
     }
 
     // MARK: - Dictation choice
 
-    private func dictationChanged(_ active: Bool) {
-        log.add("Keyboard dictation \(active ? "started" : "ended")")
-        switch (active, dictation) {
-        case (true, _):
-            dictation = .undecided(buffer: [], ended: false)
-            onDictationPrompt?(true)
-        case (false, .undecided(let buffer, _)):
-            dictation = .undecided(buffer: buffer, ended: true)
-        case (false, .editing(let buffer)):
-            dictation = .idle
-            onEditDictation?(Self.text(from: buffer))
-        case (false, _):
-            dictation = .idle
+    private func dictationResult(_ starting: Bool) {
+        if starting {
+            dismissDictationPrompt()
+            capturing = []
+        } else if let bytes = capturing {
+            capturing = nil
+            let text = Self.text(from: bytes)
+            guard !text.isEmpty else { return }
+            promptText = text
+            onDictationPrompt?(text)
         }
     }
 
-    /// The user's answer to "edit first or into terminal?".
-    func chooseDictation(edit: Bool) {
-        onDictationPrompt?(false)
-        guard case .undecided(let buffer, let ended) = dictation else { return }
-        if edit {
-            // Open the editor now with what was dictated. Don't wait for an
-            // "ended" signal: on iOS 26 it can arrive before the prompt, and
-            // waiting would hold every keystroke (the keyboard looks frozen).
-            dictation = .idle
-            onEditDictation?(Self.text(from: buffer))
-        } else {
-            dictation = ended ? .idle : .passthrough
-            if !buffer.isEmpty { onInput?(buffer) }
-        }
+    /// Edit tapped: erase the live copy from the input line, then edit.
+    func editDictation() {
+        guard let text = promptText else { return }
+        dismissDictationPrompt()
+        onInput?(Array(repeating: 0x7F, count: text.count))
+        onEditDictation?(text)
+    }
+
+    /// Ignored (typed, tapped, dictated again, switched window): the text
+    /// simply stays in the terminal.
+    func dismissDictationPrompt() {
+        guard promptText != nil else { return }
+        promptText = nil
+        onDictationPrompt?(nil)
     }
 
     /// Turns held keystrokes into text, applying the backspaces dictation
@@ -312,16 +298,12 @@ final class TerminalHost: NSObject {
 
 extension TerminalHost: @preconcurrency TerminalViewDelegate {
     func send(source: TerminalView, data: ArraySlice<UInt8>) {
-        switch dictation {
-        case .undecided(var buffer, let ended):
-            buffer += data
-            dictation = .undecided(buffer: buffer, ended: ended)
-        case .editing(var buffer):
-            buffer += data
-            dictation = .editing(buffer: buffer)
-        case .idle, .passthrough:
-            onInput?(Array(data))
+        if capturing != nil {
+            capturing! += data
+            return
         }
+        dismissDictationPrompt()
+        onInput?(Array(data))
     }
 
     func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {

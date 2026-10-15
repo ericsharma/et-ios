@@ -320,7 +320,7 @@ struct SessionView: View {
         }
         .overlay(alignment: .bottom) {
             if let page = session.currentWindow, page.dictationPrompt {
-                DictationChoice(page: page)
+                DictationEditButton(page: page)
                     .padding(.bottom, 56)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
