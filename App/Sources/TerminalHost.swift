@@ -35,9 +35,12 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
     /// Called when keyboard dictation starts (true) or stops (false) while
     /// this terminal has the keyboard.
     var onDictationChange: ((Bool) -> Void)?
+    /// Diagnostics for text input; goes to the debug log.
+    var onInputDebug: ((String) -> Void)?
     private var isDictating = false
 
     override init(frame: CGRect, font: UIFont?) {
+        _ = Self.installInputHooks
         super.init(frame: frame, font: font)
         // UIScrollView's own pan scrolls the scrollback, with momentum.
         panGestureRecognizer.minimumNumberOfTouches = 2
@@ -56,11 +59,89 @@ final class ETTerminalView: TerminalView, UIGestureRecognizerDelegate {
     }
 
     @objc private func inputModeChanged() {
-        let dictating = isFirstResponder && textInputMode?.primaryLanguage == "dictation"
+        let language = textInputMode?.primaryLanguage ?? "nil"
+        onInputDebug?("inputMode → \(language) (firstResponder: \(isFirstResponder))")
+        setDictating(isFirstResponder && language == "dictation")
+    }
+
+    private func setDictating(_ dictating: Bool) {
         guard dictating != isDictating else { return }
         isDictating = dictating
         onDictationChange?(dictating)
     }
+
+    // Diagnostics: which UITextInput calls does iOS 26 dictation make?
+    // Only insertText is open in SwiftTerm, so the rest are hooked at runtime
+    // on this subclass (see installInputHooks).
+
+    override func insertText(_ text: String) {
+        onInputDebug?("insertText len=\(text.count) lang=\(textInputMode?.primaryLanguage ?? "nil")")
+        super.insertText(text)
+    }
+
+    fileprivate func inputHook(_ name: String) {
+        onInputDebug?(name)
+        switch name {
+        case "insertDictationResultPlaceholder", "insertDictationResult:":
+            setDictating(true)
+        case "dictationRecordingDidEnd", "dictationRecognitionFailed":
+            setDictating(false)
+        default:
+            break
+        }
+    }
+
+    /// Adds logging overrides to ETTerminalView for SwiftTerm's non-open
+    /// UITextInput methods. Each calls TerminalView's implementation.
+    private static let installInputHooks: Void = {
+        func hook<F>(_ name: String, _ type: F.Type, _ make: (F, Selector) -> Any) {
+            let sel = NSSelectorFromString(name)
+            guard let method = class_getInstanceMethod(TerminalView.self, sel) else { return }
+            let original = unsafeBitCast(method_getImplementation(method), to: F.self)
+            class_addMethod(ETTerminalView.self, sel, imp_implementationWithBlock(make(original, sel)),
+                            method_getTypeEncoding(method))
+        }
+        func note(_ obj: AnyObject, _ name: String) {
+            // UIKit calls these on the main thread.
+            nonisolated(unsafe) let view = obj as? ETTerminalView
+            MainActor.assumeIsolated { view?.inputHook(name) }
+        }
+        typealias Void0 = @convention(c) (AnyObject, Selector) -> Void
+        typealias Obj0 = @convention(c) (AnyObject, Selector) -> AnyObject?
+        typealias Void1 = @convention(c) (AnyObject, Selector, AnyObject?) -> Void
+        typealias Marked = @convention(c) (AnyObject, Selector, AnyObject?, NSRange) -> Void
+        typealias Remove = @convention(c) (AnyObject, Selector, AnyObject?, Bool) -> Void
+        typealias Replace = @convention(c) (AnyObject, Selector, AnyObject?, AnyObject?) -> Void
+
+        for name in ["unmarkText", "dictationRecordingDidEnd", "dictationRecognitionFailed"] {
+            hook(name, Void0.self) { f, sel in
+                { (obj: AnyObject) in note(obj, name); f(obj, sel) } as @convention(block) (AnyObject) -> Void
+            }
+        }
+        hook("insertDictationResultPlaceholder", Obj0.self) { f, sel in
+            { (obj: AnyObject) -> AnyObject? in note(obj, "insertDictationResultPlaceholder"); return f(obj, sel) }
+                as @convention(block) (AnyObject) -> AnyObject?
+        }
+        hook("insertDictationResult:", Void1.self) { f, sel in
+            { (obj: AnyObject, a: AnyObject?) in note(obj, "insertDictationResult:"); f(obj, sel, a) }
+                as @convention(block) (AnyObject, AnyObject?) -> Void
+        }
+        hook("setMarkedText:selectedRange:", Marked.self) { f, sel in
+            { (obj: AnyObject, a: AnyObject?, r: NSRange) in
+                note(obj, "setMarkedText len=\((a as? String)?.count ?? -1)"); f(obj, sel, a, r)
+            } as @convention(block) (AnyObject, AnyObject?, NSRange) -> Void
+        }
+        hook("removeDictationResultPlaceholder:willInsertResult:", Remove.self) { f, sel in
+            { (obj: AnyObject, a: AnyObject?, b: Bool) in
+                note(obj, "removeDictationResultPlaceholder willInsert=\(b)"); f(obj, sel, a, b)
+            } as @convention(block) (AnyObject, AnyObject?, Bool) -> Void
+        }
+        hook("replaceRange:withText:", Replace.self) { f, sel in
+            { (obj: AnyObject, a: AnyObject?, t: AnyObject?) in
+                note(obj, "replaceRange len=\((t as? String)?.count ?? -1)"); f(obj, sel, a, t)
+            } as @convention(block) (AnyObject, AnyObject?, AnyObject?) -> Void
+        }
+    }()
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
@@ -156,6 +237,7 @@ final class TerminalHost: NSObject {
         // E.T. draws its own key row (KeyRow) instead of SwiftTerm's.
         view.inputAccessoryView = nil
         view.onDictationChange = { [weak self] active in self?.dictationChanged(active) }
+        view.onInputDebug = { [weak self] line in self?.log.add("input: \(line)") }
     }
 
     // MARK: - Dictation choice
