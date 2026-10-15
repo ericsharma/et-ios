@@ -47,10 +47,17 @@ extension TerminalHost {
 }
 
 /// Talks to the text view from the toolbar.
-@MainActor
+@MainActor @Observable
 final class SelectModeModel {
-    weak var textView: SelectTextView?
-    var screenStart = 0
+    @ObservationIgnored weak var textView: SelectTextView?
+    @ObservationIgnored var screenStart = 0
+    /// Which end of the selection the volume buttons move.
+    var movingStart = false
+
+    /// Volume up/down: move the chosen end one word forward/back.
+    func nudge(forward: Bool) {
+        textView?.moveEnd(start: movingStart, forward: forward)
+    }
 
     var selectedText: String {
         guard let tv = textView, tv.selectedRange.length > 0 else { return "" }
@@ -78,16 +85,27 @@ struct SelectModeView: View {
     let session: SessionController
     let request: SelectModeRequest
     @State private var model = SelectModeModel()
+    @State private var volume = VolumeButtons()
     @State private var frozen: TerminalText?
     @State private var copied: String?
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Label("Select", systemImage: "text.cursor").font(.subheadline.weight(.semibold))
-                Text("tap word · double-tap line · triple-tap block · long-press + drag")
-                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7)
-                Spacer()
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Label("Select", systemImage: "text.cursor").font(.subheadline.weight(.semibold))
+                    Spacer()
+                    // Which end the volume buttons move.
+                    Picker("Volume buttons move", selection: $model.movingStart) {
+                        Text("Start").tag(true)
+                        Text("End").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 140)
+                    Image(systemName: "speaker.wave.2").font(.caption).foregroundStyle(.secondary)
+                }
+                Text("tap word · double-tap line · triple-tap block · long-press + drag · volume ± moves the \(model.movingStart ? "start" : "end")")
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.6)
             }
             .padding(.horizontal, 12).padding(.vertical, 6)
             .background(Theme.surface)
@@ -106,7 +124,11 @@ struct SelectModeView: View {
                     .background(.ultraThinMaterial, in: Capsule()).padding(.top, 40)
             }
         }
+        .background { HiddenVolumeView(buttons: volume).frame(width: 1, height: 1) }
+        .onDisappear { volume.stop() }
         .onAppear {
+            volume.onPress = { [model] up in model.nudge(forward: up) }
+            volume.start()
             _ = request.page.terminal.view.resignFirstResponder()
             let text = request.page.terminal.frozenText()
             model.screenStart = text.screenStart
@@ -307,6 +329,61 @@ final class SelectTextView: UITextView {
             range = NSRange(location: range.location, length: NSMaxRange(below) - range.location)
         }
         select(range)
+    }
+
+    // MARK: - Moving an end by words (volume buttons)
+
+    private func isSpace(_ ns: NSString, _ i: Int) -> Bool {
+        guard let scalar = UnicodeScalar(ns.character(at: i)) else { return false }
+        return CharacterSet.whitespacesAndNewlines.contains(scalar)
+    }
+
+    /// Moves the start or end of the selection one shell word forward or
+    /// back. With no selection, selects the first word in view.
+    func moveEnd(start movingStart: Bool, forward: Bool) {
+        let ns = text as NSString
+        guard ns.length > 0 else { return }
+        var range = selectedRange
+        if range.length == 0 {
+            let top = closestPosition(to: CGPoint(x: textContainerInset.left + 2, y: contentOffset.y + textContainerInset.top + 4))
+            var i = top.map { offset(from: beginningOfDocument, to: $0) } ?? 0
+            while i < ns.length - 1, isSpace(ns, i) { i += 1 }
+            var e = i
+            while e < ns.length - 1, !isSpace(ns, e + 1) { e += 1 }
+            select(NSRange(location: i, length: e - i + 1))
+            return
+        }
+        var lo = range.location, hi = NSMaxRange(range)  // hi is exclusive
+        if movingStart {
+            if forward {
+                // To the start of the next word, keeping at least one character.
+                var i = lo
+                while i < hi - 1, !isSpace(ns, i) { i += 1 }
+                while i < hi - 1, isSpace(ns, i) { i += 1 }
+                lo = i
+            } else {
+                var i = lo
+                while i > 0, isSpace(ns, i - 1) { i -= 1 }
+                while i > 0, !isSpace(ns, i - 1) { i -= 1 }
+                lo = i
+            }
+        } else {
+            if forward {
+                var i = hi
+                while i < ns.length, isSpace(ns, i) { i += 1 }
+                while i < ns.length, !isSpace(ns, i) { i += 1 }
+                hi = i
+            } else {
+                var i = hi
+                while i > lo + 1, isSpace(ns, i - 1) { i -= 1 }
+                while i > lo + 1, !isSpace(ns, i - 1) { i -= 1 }
+                while i > lo + 1, isSpace(ns, i - 1) { i -= 1 }
+                hi = i
+            }
+        }
+        range = NSRange(location: lo, length: max(1, hi - lo))
+        select(range)
+        scrollRangeToVisible(NSRange(location: movingStart ? lo : max(lo, hi - 1), length: 1))
     }
 
     /// The logical line around `i`, without its newline.

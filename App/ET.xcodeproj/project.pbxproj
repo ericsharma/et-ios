@@ -17,6 +17,7 @@
 		6F005C5539A7B64474934977 /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = ACB31B6DE076A6AEE0E31967 /* ETCore */; };
 		7B7A1AB52E7AAEB0D5283959 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB367F7DC192EBCCA06508BC /* AppModel.swift */; };
 		7E75886C82FBA663C296E12F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 65A00CC919987D56EC6D81C2 /* Assets.xcassets */; };
+		92D2F2431FD1402AC2FB77A5 /* VolumeButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6643B444DEC1C52098247355 /* VolumeButtons.swift */; };
 		9883DC46C85AE06C00277FC1 /* ETSSH in Frameworks */ = {isa = PBXBuildFile; productRef = A3FE42A77BFB03B651F1C8C3 /* ETSSH */; };
 		B3B645CBAE52AC315F4D26D1 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 78E36ABFF9A6F111E6BC39DD /* SwiftTerm */; };
 		B9EF4532C1A648569D5AD074 /* TerminalHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */; };
@@ -32,6 +33,7 @@
 		36A4263F016A81FE6C5B2B5E /* Overview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Overview.swift; sourceTree = "<group>"; };
 		5E147244B49816415D5E26BA /* Templates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Templates.swift; sourceTree = "<group>"; };
 		65A00CC919987D56EC6D81C2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		6643B444DEC1C52098247355 /* VolumeButtons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeButtons.swift; sourceTree = "<group>"; };
 		929A6DF5668934E4FF4835DA /* ETCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ETCore; path = ../ETCore; sourceTree = SOURCE_ROOT; };
 		9FE7D921D5CAA4506B3FD10C /* SelectMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectMode.swift; sourceTree = "<group>"; };
 		AAC2C774B86C691F339F5290 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
@@ -77,6 +79,7 @@
 				0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */,
 				AAC2C774B86C691F339F5290 /* Views.swift */,
 				175E8D2F9B6999615A8AAF59 /* VoiceInput.swift */,
+				6643B444DEC1C52098247355 /* VolumeButtons.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -197,6 +200,7 @@
 				B9EF4532C1A648569D5AD074 /* TerminalHost.swift in Sources */,
 				45D6BA62083244C784927078 /* Views.swift in Sources */,
 				1CF2C07C262A0FFE2738D263 /* VoiceInput.swift in Sources */,
+				92D2F2431FD1402AC2FB77A5 /* VolumeButtons.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
