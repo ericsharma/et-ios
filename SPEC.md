@@ -81,7 +81,11 @@ Order: the visible window first, then its neighbors, then the rest in the backgr
 
 ### 2.5 Window size
 
-With tmux's default `window-size latest`, windows take the size of whichever client was used last. Typing on the phone resizes windows to fit the phone; typing on a laptop resizes them back. The app never changes the server's `window-size` option.
+With tmux's default `window-size latest`, a window takes the size of the client that last typed in it, and commands from a control client (E.T.'s typing is `send-keys`) don't count. A window last used on the laptop would stay laptop-wide on the phone, and programs would draw past the phone's edge.
+
+So E.T. **claims** the window it shows with `resize-window -x <cols> -y <rows>` (window-size becomes manual for that window) and **releases** it with `set-option -uw window-size` when you switch away, when it disconnects, or, if it died without releasing, on the next attach (claimed window IDs are remembered per server). A window open on both devices fits whichever one is showing it. The global `window-size` option is never changed.
+
+After any resize, tmux does not send the redrawn screen to a control client, so E.T. re-copies the window's screen from tmux once the resize settles (visible window) or when switching to it (others), then replays the program's terminal modes.
 
 Send `refresh-client -C` on attach, rotation, font-size change, and iPad window resize, debounced by 150 ms.
 
