@@ -96,11 +96,6 @@ final class SessionController {
                 await self?.askToTrust(key) ?? false
             }
             self.connection = connection
-            if let key = connection.newlyTrustedHostKey {
-                server.hostKey = key
-                onServerChanged(server)
-                log.add("Pinned host key \(key.fingerprint)")
-            }
             state = .connecting("Finding tmux…")
             let tmux = try await connection.findTmux()
             self.tmux = tmux
@@ -195,6 +190,8 @@ final class SessionController {
             "\(server.host) didn't accept this app's key. Add it to ~/.ssh/authorized_keys for \(server.user)."
         case SSHConnectionError.hostKeyRejected:
             "Host key not trusted."
+        case SSHConnectionError.timedOut:
+            "\(server.host) answered but the SSH login didn't finish in time. Retry, or share the debug log."
         case SSHConnectionError.hostKeyChanged(_, let presented):
             "\(server.host)'s host key changed (now \(presented.fingerprint)). Not connecting. If this is expected, delete and re-add the server."
         case SSHConnectionError.tmuxNotFound:
@@ -210,7 +207,17 @@ final class SessionController {
 
     private func askToTrust(_ key: HostKey) async -> Bool {
         pendingHostKey = key
-        return await withCheckedContinuation { hostKeyAnswer = $0 }
+        let trusted = await withCheckedContinuation { hostKeyAnswer = $0 }
+        if trusted {
+            // Save now, so a later failure (for example the key not yet in
+            // authorized_keys) doesn't ask again on the next attempt.
+            server.hostKey = key
+            onServerChanged(server)
+            log.add("Pinned host key \(key.fingerprint)")
+        } else {
+            log.add("Host key \(key.fingerprint) not trusted")
+        }
+        return trusted
     }
 
     func answerHostKey(trust: Bool) {

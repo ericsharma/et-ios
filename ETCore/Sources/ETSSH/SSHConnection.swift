@@ -9,6 +9,8 @@ public enum SSHConnectionError: Error, Sendable, Equatable {
     case unreachable(String)
     /// The server did not accept the app's key.
     case authenticationFailed
+    /// Connected, but the SSH handshake or login did not finish in time.
+    case timedOut
     /// The user declined a new host key.
     case hostKeyRejected
     /// The server's key differs from the pinned one. Never connect.
@@ -54,7 +56,19 @@ public actor SSHConnection {
         trustNewHostKey: @escaping HostKeyTrustHandler,
         timeout: Duration = .seconds(10)
     ) async throws -> SSHConnection {
-        let validator = PinningHostKeyValidator(pinned: config.hostKey, trust: trustNewHostKey)
+        var config = config
+        var newlyTrusted: HostKey?
+        if config.hostKey == nil {
+            // Citadel gives the whole login a fixed 10 s, which includes host
+            // key validation. Fetch the key in a separate short connection and
+            // ask the user with no clock running, then log in with it pinned.
+            let presented = try await fetchHostKey(config, timeout: timeout)
+            guard await trustNewHostKey(presented) else { throw SSHConnectionError.hostKeyRejected }
+            config.hostKey = presented
+            newlyTrusted = presented
+        }
+
+        let validator = PinningHostKeyValidator(pinned: config.hostKey!)
         let auth = PublicKeyAuthentication(user: config.user, key: identity.privateKey)
         do {
             let client = try await SSHClient.connect(
@@ -65,15 +79,35 @@ public actor SSHConnection {
                 reconnect: .never,
                 connectTimeout: .seconds(timeout.components.seconds)
             )
-            return SSHConnection(config: config, client: client, newlyTrustedHostKey: validator.outcome?.trustedKey)
+            return SSHConnection(config: config, client: client, newlyTrustedHostKey: newlyTrusted)
         } catch {
-            switch validator.outcome {
-            case .changed(let presented): throw SSHConnectionError.hostKeyChanged(pinned: config.hostKey!, presented: presented)
-            case .rejected: throw SSHConnectionError.hostKeyRejected
-            case .matched, .trusted: throw SSHConnectionError.authenticationFailed
-            case nil: throw SSHConnectionError.unreachable(String(describing: error))
+            if let presented = validator.mismatch {
+                throw SSHConnectionError.hostKeyChanged(pinned: config.hostKey!, presented: presented)
             }
+            if auth.wasRejected { throw SSHConnectionError.authenticationFailed }
+            if validator.matched { throw SSHConnectionError.timedOut }
+            throw SSHConnectionError.unreachable(String(describing: error))
         }
+    }
+
+    /// Opens a connection only to read the server's host key, then drops it.
+    static func fetchHostKey(_ config: ServerConfig, timeout: Duration) async throws -> HostKey {
+        let recorder = HostKeyRecorder()
+        do {
+            let client = try await SSHClient.connect(
+                host: config.host,
+                port: config.port,
+                authenticationMethod: .custom(PublicKeyAuthentication(user: config.user, key: SSHIdentity.software().privateKey)),
+                hostKeyValidator: .custom(recorder),
+                reconnect: .never,
+                connectTimeout: .seconds(timeout.components.seconds)
+            )
+            try? await client.close()
+        } catch {}
+        guard let key = recorder.key else {
+            throw SSHConnectionError.unreachable("no host key from \(config.host):\(config.port)")
+        }
+        return key
     }
 
     public func close() async {
@@ -180,21 +214,27 @@ final class PublicKeyAuthentication: NIOSSHClientUserAuthenticationDelegate, @un
     private let key: NIOSSHPrivateKey
     private let lock = NSLock()
     private var offered = false
+    private var rejected = false
 
     init(user: String, key: NIOSSHPrivateKey) {
         self.user = user
         self.key = key
     }
 
+    /// True when the server was offered the key and asked for another method.
+    var wasRejected: Bool { lock.withLock { rejected } }
+
     func nextAuthenticationType(
         availableMethods: NIOSSHAvailableUserAuthenticationMethods,
         nextChallengePromise: EventLoopPromise<NIOSSHUserAuthenticationOffer?>
     ) {
         let first = lock.withLock { () -> Bool in
+            if offered { rejected = true }
             defer { offered = true }
             return !offered
         }
         guard first, availableMethods.contains(.publicKey) else {
+            lock.withLock { rejected = true }
             nextChallengePromise.fail(SSHConnectionError.authenticationFailed)
             return
         }
@@ -203,56 +243,41 @@ final class PublicKeyAuthentication: NIOSSHClientUserAuthenticationDelegate, @un
     }
 }
 
-/// Trust on first use, then pin (SPEC.md §9).
+/// Accepts only the pinned host key (SPEC.md §9).
 final class PinningHostKeyValidator: NIOSSHClientServerAuthenticationDelegate, @unchecked Sendable {
-    enum Outcome {
-        case matched
-        case trusted(HostKey)
-        case rejected
-        case changed(HostKey)
-
-        var trustedKey: HostKey? {
-            if case .trusted(let key) = self { key } else { nil }
-        }
-    }
-
-    private let pinned: HostKey?
-    private let trust: HostKeyTrustHandler
+    private let pinned: HostKey
     private let lock = NSLock()
-    private var _outcome: Outcome?
+    private var _matched = false
+    private var _mismatch: HostKey?
 
-    var outcome: Outcome? { lock.withLock { _outcome } }
-
-    init(pinned: HostKey?, trust: @escaping HostKeyTrustHandler) {
+    init(pinned: HostKey) {
         self.pinned = pinned
-        self.trust = trust
     }
+
+    var matched: Bool { lock.withLock { _matched } }
+    /// The key the server presented, if it differs from the pinned one.
+    var mismatch: HostKey? { lock.withLock { _mismatch } }
 
     func validateHostKey(hostKey: NIOSSHPublicKey, validationCompletePromise: EventLoopPromise<Void>) {
         let presented = HostKey(hostKey)
-        if let pinned {
-            if pinned == presented {
-                record(.matched)
-                validationCompletePromise.succeed(())
-            } else {
-                record(.changed(presented))
-                validationCompletePromise.fail(SSHConnectionError.hostKeyChanged(pinned: pinned, presented: presented))
-            }
-            return
-        }
-        let trust = trust
-        Task {
-            if await trust(presented) {
-                self.record(.trusted(presented))
-                validationCompletePromise.succeed(())
-            } else {
-                self.record(.rejected)
-                validationCompletePromise.fail(SSHConnectionError.hostKeyRejected)
-            }
+        if presented == pinned {
+            lock.withLock { _matched = true }
+            validationCompletePromise.succeed(())
+        } else {
+            lock.withLock { _mismatch = presented }
+            validationCompletePromise.fail(SSHConnectionError.hostKeyChanged(pinned: pinned, presented: presented))
         }
     }
+}
 
-    private func record(_ outcome: Outcome) {
-        lock.withLock { _outcome = outcome }
+/// Records the host key and stops the handshake. Used for trust on first use.
+final class HostKeyRecorder: NIOSSHClientServerAuthenticationDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _key: HostKey?
+    var key: HostKey? { lock.withLock { _key } }
+
+    func validateHostKey(hostKey: NIOSSHPublicKey, validationCompletePromise: EventLoopPromise<Void>) {
+        lock.withLock { _key = HostKey(hostKey) }
+        validationCompletePromise.fail(SSHConnectionError.hostKeyRejected)
     }
 }
