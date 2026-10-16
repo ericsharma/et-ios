@@ -300,18 +300,20 @@ final class Vocabulary {
             modelStatus = "Ready · \(phrases.count) names"
             return
         }
-        if UserDefaults.standard.string(forKey: Self.crashedKey) == version {
+        // Keyed by app build too, so a fixed build tries again.
+        let attempt = version + "@" + (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "")
+        if UserDefaults.standard.string(forKey: Self.crashedKey) == attempt {
             modelStatus = "Skipped: building it crashed E.T. last time"
             return
         }
         modelStatus = "Building (\(phrases.count) names)…"
-        UserDefaults.standard.set(version, forKey: Self.buildingKey)
+        UserDefaults.standard.set(attempt, forKey: Self.buildingKey)
         defer { UserDefaults.standard.removeObject(forKey: Self.buildingKey) }
         let asset = Self.modelDir.appendingPathComponent("data-\(version).bin")
         do {
             try await Self.exportModelData(phrases: phrases, locale: locale, version: version, to: asset)
             guard !Task.isCancelled else { return }
-            try await SFSpeechLanguageModel.prepareCustomLanguageModel(for: asset, configuration: config)
+            try await Self.prepare(asset: asset, configuration: config)
             try? FileManager.default.removeItem(at: asset)
             // Drop older models.
             for file in (try? FileManager.default.contentsOfDirectory(at: Self.modelDir, includingPropertiesForKeys: nil)) ?? []
@@ -338,6 +340,18 @@ final class Vocabulary {
             }
         }
         try await data.export(to: asset)
+    }
+
+    /// The call without a client identifier only exists from iOS 26 (the
+    /// SDK header doesn't say so); on iOS 18 it's an unknown selector and
+    /// crashes. Older systems use the original, now-deprecated call.
+    private static func prepare(asset: URL, configuration: SFSpeechLanguageModel.Configuration) async throws {
+        if #available(iOS 26, *) {
+            try await SFSpeechLanguageModel.prepareCustomLanguageModel(for: asset, configuration: configuration)
+        } else {
+            try await SFSpeechLanguageModel.prepareCustomLanguageModel(
+                for: asset, clientIdentifier: "xyz.ericsharma.et", configuration: configuration)
+        }
     }
 
     /// After the first speech permission grant.
