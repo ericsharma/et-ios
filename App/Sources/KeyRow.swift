@@ -71,7 +71,6 @@ struct KeyRow: View {
     @Bindable var session: SessionController
     let page: WindowPage
     let voice: VoiceInput
-    @State private var showKeys = false
     @State private var photo: PhotosPickerItem?
     @State private var ctrlState: CtrlState = .off
 
@@ -86,6 +85,7 @@ struct KeyRow: View {
             // Both sides have the same width, so the mic stays centered.
             HStack(spacing: 8) {
             barButton(systemName: "square.and.pencil", active: false) {
+                session.keyWheelOpen = false
                 session.composeRequest = ComposeRequest(page: page, text: "")
             }
             barButton(systemName: "text.cursor", active: false) {
@@ -93,8 +93,8 @@ struct KeyRow: View {
             }
             .accessibilityLabel("Select mode")
             if !HardwareKeyboard.shared.isConnected {
-            barButton(systemName: showKeys ? "xmark" : "ellipsis", active: showKeys || ctrlState != .off) {
-                withAnimation(.snappy) { showKeys.toggle() }
+            barButton(systemName: session.keyWheelOpen ? "xmark" : "ellipsis", active: session.keyWheelOpen || ctrlState != .off) {
+                session.keyWheelOpen.toggle()
             }
             .contextMenu {
                 Picker("Keys", selection: Binding(
@@ -104,7 +104,7 @@ struct KeyRow: View {
                 }
             }
             .overlay(alignment: .bottom) {
-                if showKeys {
+                if session.keyWheelOpen {
                     KeyWheel(keys: preset.keys, ctrlState: ctrlState, tap: tap, longPress: longPress)
                         .offset(y: -52)
                         .transition(.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
@@ -124,7 +124,10 @@ struct KeyRow: View {
                 // "allow paste" prompt a custom button would trigger.
                 PasteButton(payloadType: String.self) { strings in
                     let text = strings.joined(separator: "\n")
-                    Task { @MainActor in session.paste(text, to: page) }
+                    Task { @MainActor in
+                        session.keyWheelOpen = false
+                        session.paste(text, to: page)
+                    }
                 }
                 .labelStyle(.iconOnly)
                 .buttonBorderShape(.roundedRectangle(radius: 10))
@@ -138,14 +141,17 @@ struct KeyRow: View {
                     .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
+            .simultaneousGesture(TapGesture().onEnded { session.keyWheelOpen = false })
             .accessibilityLabel("Send a screenshot or photo")
             .onChange(of: photo) { _, item in
                 guard let item else { return }
+                session.keyWheelOpen = false
                 photo = nil
                 Task { await upload(item) }
             }
             Button {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                session.keyWheelOpen = false
                 session.send([0x0D], to: page)
             } label: {
                 Label("Send", systemImage: "return")
@@ -171,6 +177,12 @@ struct KeyRow: View {
             }
         }
         .sensoryFeedback(.selection, trigger: ctrlState)
+        .animation(.snappy, value: session.keyWheelOpen)
+        // Bringing up the keyboard or using the mic closes the key wheel.
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            session.keyWheelOpen = false
+        }
+        .onChange(of: voice.state) { session.keyWheelOpen = false }
     }
 
     /// Screenshots stay PNG; other photos (HEIC etc.) become JPEG, which
@@ -397,8 +409,11 @@ struct MicButton: View {
     }
 
     static func toggle(session: SessionController, page: WindowPage, voice: VoiceInput) async {
+        session.keyWheelOpen = false
         switch voice.state {
         case .idle:
+            // A new recording replaces the last one's Edit offer.
+            page.terminal.dismissDictationPrompt()
             await voice.start(contextualStrings: session.dictationVocabulary)
         case .listening:
             let text = await voice.stop()

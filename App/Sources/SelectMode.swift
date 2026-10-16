@@ -410,10 +410,25 @@ final class SelectTextView: UITextView {
             return
         }
         var lo = range.location, hi = NSMaxRange(range)  // hi is exclusive
+        // A line break has no visible highlight, so an end never stops on
+        // one: a single press crosses into the next/previous line.
+        func isBreak(_ i: Int) -> Bool { i >= 0 && i < ns.length && ns.character(at: i) == 10 }
         if movingStart {
-            lo = forward ? min(lo + 1, hi - 1) : max(lo - 1, 0)
+            if forward {
+                lo = min(lo + 1, hi - 1)
+                while isBreak(lo), lo < hi - 1 { lo += 1 }
+            } else {
+                lo = max(lo - 1, 0)
+                while isBreak(lo), lo > 0 { lo -= 1 }
+            }
         } else {
-            hi = forward ? min(hi + 1, ns.length) : max(hi - 1, lo + 1)
+            if forward {
+                hi = min(hi + 1, ns.length)
+                while isBreak(hi - 1), hi < ns.length { hi += 1 }
+            } else {
+                hi = max(hi - 1, lo + 1)
+                while isBreak(hi - 1), hi > lo + 1 { hi -= 1 }
+            }
         }
         // Keep composed characters (emoji, accents) whole.
         let fixed = ns.rangeOfComposedCharacterSequences(for: NSRange(location: lo, length: hi - lo))

@@ -62,6 +62,7 @@ final class SessionController {
     var currentWindowID: WindowID? {
         didSet {
             guard currentWindowID != oldValue else { return }
+            keyWheelOpen = false
             // Switching windows closes select mode (its selection is
             // already on the clipboard, ready to paste in the new window).
             if let mode = selectMode, mode.page.id != currentWindowID {
@@ -87,13 +88,23 @@ final class SessionController {
     /// The first https link in `authBanner`.
     private(set) var approvalURL: URL?
     /// Set to open the compose editor.
-    var composeRequest: ComposeRequest?
-    var showNewWindow = false
-    var showOverview = false
+    var composeRequest: ComposeRequest? {
+        didSet { if composeRequest != nil { keyWheelOpen = false } }
+    }
+    var showNewWindow = false {
+        didSet { if showNewWindow { keyWheelOpen = false } }
+    }
+    var showOverview = false {
+        didSet { if showOverview { keyWheelOpen = false } }
+    }
     /// Select mode for a window, while open.
     var selectMode: SelectModeRequest?
+    /// The key row's ⋯ key wheel. Any other action closes it; only taps on
+    /// its own keys keep it open.
+    var keyWheelOpen = false
 
     func enterSelectMode(_ page: WindowPage, initial: String?) {
+        keyWheelOpen = false
         selectMode = SelectModeRequest(page: page, initialSelection: initial)
     }
     /// The window whose bell just rang, for the in-app banner.
@@ -457,6 +468,7 @@ final class SessionController {
                     self?.terminalResized(cols: cols, rows: rows)
                 }
                 page.terminal.onSwipe = { [weak self] next in self?.switchWindow(next: next) }
+                page.terminal.onTap = { [weak self] in self?.keyWheelOpen = false }
                 page.terminal.onBell = { [weak self, weak page] in
                     guard let self, let page else { return }
                     self.bellRang(in: page)
@@ -877,6 +889,9 @@ final class SessionController {
     // MARK: - Input and size
 
     func send(_ bytes: [UInt8], to page: WindowPage) {
+        // Anything typed after dictation means the dictated text is no
+        // longer at the end of the input line, so Edit can't take it back.
+        page.terminal.dismissDictationPrompt()
         guard let client else {
             log.add("Input dropped: not connected")
             return
@@ -892,6 +907,7 @@ final class SessionController {
     /// E.T.'s mic finished: type the text into the window (no Enter), then
     /// offer Edit, same as after keyboard dictation.
     func sendDictated(_ text: String, to page: WindowPage) {
+        page.terminal.dismissDictationPrompt()
         guard !text.isEmpty else { return }
         send(Array(text.utf8), to: page)
         page.terminal.offerEdit(text)

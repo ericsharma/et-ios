@@ -177,6 +177,8 @@ final class TerminalHost: NSObject {
     var onBell: (() -> Void)?
     /// The user tapped Edit: open the editor with this text.
     var onEditDictation: ((String) -> Void)?
+    /// Any tap in the terminal.
+    var onTap: (() -> Void)?
     private let log: DebugLog
 
     /// The dictated text the Edit prompt offers, while it's showing.
@@ -204,7 +206,10 @@ final class TerminalHost: NSObject {
         // E.T. draws its own key row (KeyRow) instead of SwiftTerm's.
         view.inputAccessoryView = nil
         view.onDictationResult = { [weak self] text in self?.dictationFinished(text) }
-        view.onTap = { [weak self] in self?.dismissDictationPrompt() }
+        view.onTap = { [weak self] in
+            self?.dismissDictationPrompt()
+            self?.onTap?()
+        }
         view.onTwoFingerSwipe = { [weak self] next in self?.onSwipe?(next) }
     }
 
