@@ -353,11 +353,11 @@ struct SessionView: View {
             return
         }
         guard let page = session.currentWindow else { return }
-        if let next = NextStep.extract(from: page.terminal.frozenText().text) {
-            Speaker.shared.speak(next)
-        } else {
-            notice = "No \u{201C}Next:\u{201D} line in \(page.name)"
-            Task {
+        Task {
+            if let next = await session.nextStep(in: page) {
+                Speaker.shared.speak(next)
+            } else {
+                notice = "No \u{201C}Next:\u{201D} line in \(page.name)"
                 try? await Task.sleep(for: .seconds(2))
                 notice = nil
             }

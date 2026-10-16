@@ -928,6 +928,23 @@ final class SessionController {
     }
 
     /// Hints for the speech recognizer: window names and common commands.
+    /// The window's last "Next:" paragraph, for the speaker button. Reads
+    /// the pane from tmux (screen plus recent history, wrapped lines
+    /// joined), which is right even if our copy of a full-screen program
+    /// drifted; falls back to our copy. A miss logs the screen's tail.
+    func nextStep(in page: WindowPage) async -> String? {
+        var tmuxText: String?
+        if let client {
+            tmuxText = try? await client.command("capture-pane -p -J -t \(page.pane) -S -300").textLines.joined(separator: "\n")
+        }
+        if let text = tmuxText, let next = NextStep.extract(from: text) { return next }
+        let local = page.terminal.frozenText().text
+        if let next = NextStep.extract(from: local) { return next }
+        let tail = (tmuxText ?? local).split(separator: "\n", omittingEmptySubsequences: false).suffix(15)
+        log.add("No Next: in \(page.name) (\(tmuxText == nil ? "local copy" : "tmux")). Last lines:\n" + tail.joined(separator: "\n"))
+        return nil
+    }
+
     /// Window names and the last ~400 lines of each window, for dictation
     /// names (Vocabulary).
     func refreshVocabularyFromScreens() {
