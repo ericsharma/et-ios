@@ -404,6 +404,9 @@ struct SessionView: View {
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 Speaker.shared.speak(summary)
             } catch is CancellationError {
+            } catch SummaryError.notConfigured {
+                // First hold: go straight to the setup screen.
+                showReadAloud = true
             } catch {
                 guard !Task.isCancelled else { return }
                 showNotice(error.localizedDescription)
