@@ -8,6 +8,9 @@ cd "$(dirname "$0")/../App"
 ../scripts/unlock-signing
 
 BUILD=$(date -u +%Y%m%d%H%M)
+# Shown in the app's header; "-dirty" if built with uncommitted changes.
+COMMIT=$(git rev-parse --short HEAD)
+git diff --quiet HEAD -- . || COMMIT="$COMMIT-dirty"
 ARCHIVE=../.build-app/ET-$BUILD.xcarchive
 AUTH="-allowProvisioningUpdates -authenticationKeyPath $ASC_KEY_PATH -authenticationKeyID $ASC_KEY_ID -authenticationKeyIssuerID $ASC_ISSUER_ID"
 
@@ -18,7 +21,7 @@ xcodebuild -project ET.xcodeproj -scheme ET -configuration Release \
   -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" \
   -derivedDataPath ../.build-app -clonedSourcePackagesDirPath ../.spm \
   -skipPackagePluginValidation -skipMacroValidation $AUTH \
-  CURRENT_PROJECT_VERSION="$BUILD" archive > ../.build-app/archive.log 2>&1 \
+  CURRENT_PROJECT_VERSION="$BUILD" ET_GIT_COMMIT="$COMMIT" archive > ../.build-app/archive.log 2>&1 \
   || { grep -E 'error:' ../.build-app/archive.log | sort -u; exit 1; }
 
 echo "Exporting signed .ipa…"
@@ -35,4 +38,4 @@ xcrun altool --upload-app --type ios --file "$EXPORT/ET.ipa" \
   --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" > ../.build-app/upload.log 2>&1 \
   || { tail -15 ../.build-app/upload.log; echo "Upload FAILED."; exit 1; }
 tail -3 ../.build-app/upload.log
-echo "Uploaded build $BUILD. It appears in TestFlight after Apple finishes processing (usually 5–15 min)."
+echo "Uploaded build $BUILD (commit $COMMIT). It appears in TestFlight after Apple finishes processing (usually 5–15 min)."

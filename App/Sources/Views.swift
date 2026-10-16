@@ -749,20 +749,18 @@ struct ShortcutKeys: View {
 }
 
 enum AppInfo {
-    /// "E.T. 0.1 (202610151757)", shown in the ⋯ menu.
-    /// "b 10-15 18:28" from build 202610151828 (UTC), for the header.
+    /// The git commit the build was made from, e.g. "673d1e7", for the
+    /// header ("dev" for local builds).
     static var shortBuild: String {
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
-        guard build.count == 12 else { return "b \(build)" }
-        let c = Array(build)
-        return "b \(String(c[4...5]))-\(String(c[6...7])) \(String(c[8...9])):\(String(c[10...11]))"
+        Bundle.main.infoDictionary?["ETGitCommit"] as? String ?? "dev"
     }
 
+    /// "E.T. 0.1 (202610151757) · 673d1e7", shown in the ⋯ menu.
     static var buildLabel: String {
         let info = Bundle.main.infoDictionary
         let version = info?["CFBundleShortVersionString"] as? String ?? "?"
         let build = info?["CFBundleVersion"] as? String ?? "?"
-        return "E.T. \(version) (\(build))"
+        return "E.T. \(version) (\(build)) · \(shortBuild)"
     }
 }
 
