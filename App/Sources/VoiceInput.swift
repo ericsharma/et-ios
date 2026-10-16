@@ -1,6 +1,7 @@
 import AVFoundation
 import Observation
 import Speech
+import UIKit
 
 /// One-tap dictation with on-device speech recognition (SPEC §6.3). Audio
 /// never leaves the device. Partial text is published live; `stop()`
@@ -84,6 +85,8 @@ final class VoiceInput {
         }
         self.engine = engine
         state = .listening
+        // Long dictation shouldn't let the screen auto-lock and cut it off.
+        UIApplication.shared.isIdleTimerDisabled = true
         startRecognition()
 
         // Cap a forgotten mic.
@@ -178,6 +181,7 @@ final class VoiceInput {
         recognizer = nil
         generation += 1
         state = .idle
+        UIApplication.shared.isIdleTimerDisabled = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
