@@ -315,6 +315,11 @@ struct SessionView: View {
                 Text(session.server.displayName + (session.sessionName.map { " · \($0)" } ?? ""))
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
+                Text("Hi Isabel 👋")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
+                    .lineLimit(1)
+                    .layoutPriority(1)
                 if case .restoring(let done, let total) = session.state {
                     Text("Restoring \(done)/\(total)").font(.caption).foregroundStyle(.secondary)
                 }
