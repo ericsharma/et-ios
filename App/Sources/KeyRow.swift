@@ -461,6 +461,7 @@ struct MicButton: View {
 
     static func toggle(session: SessionController, page: WindowPage, voice: VoiceInput) async {
         session.keyWheelOpen = false
+        Speaker.shared.stop()
         switch voice.state {
         case .idle:
             // A new recording replaces the last one's Edit offer.

@@ -203,6 +203,8 @@ struct SessionView: View {
     @Bindable var session: SessionController
     @State private var showLog = false
     @State private var showVocabulary = false
+    /// Brief message under the header (e.g. no "Next:" to read).
+    @State private var notice: String?
     @State private var newSessionName = ""
     @State private var voice = VoiceInput()
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -298,6 +300,11 @@ struct SessionView: View {
                 Text(AppInfo.shortBuild)
                     .font(.caption2.monospaced())
                     .foregroundStyle(.tertiary)
+                Button(action: speakNext) {
+                    Image(systemName: Speaker.shared.isSpeaking ? "stop.circle" : "speaker.wave.2").font(.title3)
+                }
+                .disabled(session.currentWindow == nil)
+                .accessibilityLabel(Speaker.shared.isSpeaking ? "Stop reading" : "Read the Next: line")
                 Button { session.showOverview = true } label: {
                     Image(systemName: "square.grid.2x2").font(.title3)
                 }
@@ -327,6 +334,24 @@ struct SessionView: View {
         .padding(.top, 4)
         .padding(.bottom, 6)
         .background(Theme.surface)
+    }
+
+    /// Reads the current window's last "Next:" line aloud; tap again to stop.
+    private func speakNext() {
+        if Speaker.shared.isSpeaking {
+            Speaker.shared.stop()
+            return
+        }
+        guard let page = session.currentWindow else { return }
+        if let next = NextStep.extract(from: page.terminal.frozenText().text) {
+            Speaker.shared.speak(next)
+        } else {
+            notice = "No \u{201C}Next:\u{201D} line in \(page.name)"
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                notice = nil
+            }
+        }
     }
 
     private func toggleSidebar() {
@@ -466,6 +491,17 @@ struct SessionView: View {
             }
         }
         .animation(.snappy, value: session.uploadStatus)
+        .overlay(alignment: .top) {
+            if let notice {
+                Label(notice, systemImage: "speaker.slash")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy, value: notice)
         .onChange(of: Push.shared.pendingWindowName) { session.openPendingWindow() }
         .alert("Dictation", isPresented: Binding(get: { voice.error != nil }, set: { if !$0 { voice.error = nil } })) {
             Button("OK", role: .cancel) {}
