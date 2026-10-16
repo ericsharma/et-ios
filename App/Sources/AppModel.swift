@@ -4,6 +4,14 @@ import Network
 import Observation
 import SwiftUI
 
+/// A file opened in E.T. from AirDrop, Files or the share sheet, waiting
+/// for the user to pick a window.
+struct IncomingFile: Identifiable {
+    let id = UUID()
+    let name: String
+    let data: Data
+}
+
 /// App-wide state: saved servers, the client key, and the live session.
 @MainActor @Observable
 final class AppModel {
@@ -13,6 +21,8 @@ final class AppModel {
     private(set) var identityError: String?
     let log = DebugLog()
     private(set) var session: SessionController?
+    /// A file opened in E.T., until it's sent to a window.
+    var incomingFile: IncomingFile?
     /// The server to reconnect to when the app comes back to the foreground.
     private var activeServerID: UUID?
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
@@ -57,6 +67,23 @@ final class AppModel {
         // Last: a tap that launched the app is delivered now, with the key
         // loaded and the session (if any) already starting.
         Push.shared.onOpen = { [weak self] request in self?.open(request) }
+    }
+
+    /// A file opened in E.T. ("Open in…"): kept until the user picks a
+    /// window for it.
+    func receive(_ url: URL) {
+        guard url.isFileURL else { return }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let data = try Data(contentsOf: url)
+            incomingFile = IncomingFile(name: url.lastPathComponent, data: data)
+            log.add("Opened file \(url.lastPathComponent) (\(data.count) bytes)")
+            // iOS copied it into our Inbox; the upload keeps its own copy.
+            if url.path.contains("/Inbox/") { try? FileManager.default.removeItem(at: url) }
+        } catch {
+            log.add("Couldn't read opened file: \(error)")
+        }
     }
 
     /// A tapped notification: connect to its server and session if needed,

@@ -30,6 +30,12 @@ struct ServerListView: View {
                     Button("Add server") { adding = true }
                 }
             }
+            if let file = model.incomingFile {
+                Section {
+                    Label("Connect to a server to send \(file.name) to a window.", systemImage: "doc")
+                    Button("Discard", role: .destructive) { model.incomingFile = nil }
+                }
+            }
             Section("Servers") {
                 ForEach(model.servers) { server in
                     Button { model.connect(server) } label: {
@@ -261,6 +267,10 @@ struct SessionView: View {
             Button("Cancel", role: .cancel) { session.answerHostKey(trust: false) }
         } message: { key in
             Text("First connection to \(session.server.host).\n\n\(key.algorithm)\n\(key.fingerprint)\n\nCheck it on the server with: ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub")
+        }
+        .sheet(item: Binding(get: { session.state == .connected ? model.incomingFile : nil },
+                             set: { if $0 == nil { model.incomingFile = nil } })) { file in
+            SendFileSheet(session: session, file: file) { model.incomingFile = nil }
         }
         .sheet(isPresented: $showVocabulary) {
             NavigationStack {
@@ -753,5 +763,44 @@ enum AppInfo {
         let version = info?["CFBundleShortVersionString"] as? String ?? "?"
         let build = info?["CFBundleVersion"] as? String ?? "?"
         return "E.T. \(version) (\(build))"
+    }
+}
+
+/// "Open in E.T.": pick the window a file goes to. E.T. uploads it and
+/// types its path there (no Enter).
+struct SendFileSheet: View {
+    let session: SessionController
+    let file: IncomingFile
+    let done: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(session.windows) { page in
+                        Button {
+                            session.currentWindowID = page.id
+                            session.uploadFile(file.data, name: file.name, kind: "file", to: page)
+                            done()
+                        } label: {
+                            HStack {
+                                Text(page.name)
+                                Spacer()
+                                Text(page.currentCommand).font(.caption.monospaced()).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Send to window")
+                } footer: {
+                    Text("The file is uploaded to the server (and on to the host that window is ssh'd into), and its path is typed into the window, ready to send.")
+                }
+            }
+            .navigationTitle(file.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: done) }
+            }
+        }
     }
 }

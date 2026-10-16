@@ -57,7 +57,16 @@ final class Vocabulary {
         return dir
     }()
 
+    /// Set while a model build runs. Still set at launch means the last
+    /// build crashed the app; that model version is then skipped.
+    private static let buildingKey = "speechModelBuilding"
+    private static let crashedKey = "speechModelCrashed"
+
     private init() {
+        if let crashed = UserDefaults.standard.string(forKey: Self.buildingKey) {
+            UserDefaults.standard.set(crashed, forKey: Self.crashedKey)
+            UserDefaults.standard.removeObject(forKey: Self.buildingKey)
+        }
         if let data = try? Data(contentsOf: Self.customURL),
            let saved = try? JSONDecoder().decode([VocabTerm].self, from: data) {
             custom = saved
@@ -291,7 +300,13 @@ final class Vocabulary {
             modelStatus = "Ready · \(phrases.count) names"
             return
         }
+        if UserDefaults.standard.string(forKey: Self.crashedKey) == version {
+            modelStatus = "Skipped: building it crashed E.T. last time"
+            return
+        }
         modelStatus = "Building (\(phrases.count) names)…"
+        UserDefaults.standard.set(version, forKey: Self.buildingKey)
+        defer { UserDefaults.standard.removeObject(forKey: Self.buildingKey) }
         let asset = Self.modelDir.appendingPathComponent("data-\(version).bin")
         do {
             try await Self.exportModelData(phrases: phrases, locale: locale, version: version, to: asset)

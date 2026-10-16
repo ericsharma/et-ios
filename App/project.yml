@@ -44,6 +44,14 @@ targets:
         NSSpeechRecognitionUsageDescription: E.T. turns your dictation into text on this device. Audio never leaves the device.
         NSLocalNetworkUsageDescription: E.T. connects over SSH to servers on your local network.
         ITSAppUsesNonExemptEncryption: false
+        # "Open in E.T." for any file (AirDrop, Files, share sheet): E.T.
+        # uploads it and types its path into a window.
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Any file
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.data, public.content]
+        LSSupportsOpeningDocumentsInPlace: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: xyz.ericsharma.et

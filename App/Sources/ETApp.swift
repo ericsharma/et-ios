@@ -12,6 +12,7 @@ struct ETApp: App {
                 .environment(model)
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
+                .onOpenURL { model.receive($0) }
         }
         .onChange(of: scenePhase) { _, phase in
             model.scenePhaseChanged(phase)

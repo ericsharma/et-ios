@@ -691,13 +691,21 @@ final class SessionController {
     /// file is forwarded there over the window's own ssh destination, since
     /// the program in the window reads it locally.
     func uploadImage(_ data: Data, fileExtension: String, to page: WindowPage) {
+        uploadFile(data, name: "image.\(fileExtension)", kind: "image", to: page)
+    }
+
+    /// Uploads a file to the server (and on to the host the window has
+    /// ssh'd into), then types its path into the window. `kind` is for the
+    /// status line ("image", "file").
+    func uploadFile(_ data: Data, name original: String, kind: String, to page: WindowPage) {
         guard let connection, let client else { return }
         Task {
-            uploadStatus = "Uploading image…"
+            uploadStatus = "Uploading \(kind)…"
             do {
                 let stamp = Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false))
                     .replacingOccurrences(of: ":", with: "")
-                let name = "et-\(stamp).\(fileExtension)"
+                let safe = String(original.map { $0.isLetter || $0.isNumber || "._-".contains($0) ? $0 : "_" })
+                let name = "et-\(stamp)-\(safe)"
                 let home = try await connection.run("printf '%s' \"$HOME\"").output
                 let dir = home + "/.cache/et-uploads"
                 _ = try await connection.run("mkdir -p \(TmuxCommand.quote(dir))")
@@ -721,7 +729,9 @@ final class SessionController {
                 }
                 // Type the path (no Enter), so the user can add a question.
                 send(Array((finalPath + " ").utf8), to: page)
-                if uploadStatus?.hasPrefix("Couldn't") != true { uploadStatus = "Image path typed into \(page.name)" }
+                if uploadStatus?.hasPrefix("Couldn't") != true {
+                    uploadStatus = "\(kind.prefix(1).uppercased() + kind.dropFirst()) path typed into \(page.name)"
+                }
             } catch {
                 log.add("Upload failed: \(error)")
                 uploadStatus = "Upload failed: \(error)"
