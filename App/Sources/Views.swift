@@ -58,6 +58,7 @@ struct ServerListView: View {
             Section {
                 NavigationLink("This device's key") { KeyView() }
                 NavigationLink("Dictation words") { VocabularyView(session: nil) }
+                NavigationLink("Read aloud") { ReadAloudSettingsView(session: nil) }
                 NavigationLink("Debug log") { DebugLogView() }
             } footer: {
                 Text(AppInfo.buildLabel).font(.caption.monospaced())
@@ -211,6 +212,10 @@ struct SessionView: View {
     @State private var showVocabulary = false
     /// Brief message under the header (e.g. no "Next:" to read).
     @State private var notice: String?
+    @State private var showReadAloud = false
+    /// A running "hold the speaker" summary, and when it started.
+    @State private var summaryTask: Task<Void, Never>?
+    @State private var summaryStarted: Date?
     @State private var newSessionName = ""
     @State private var voice = VoiceInput()
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -272,6 +277,13 @@ struct SessionView: View {
                              set: { if $0 == nil { model.incomingFile = nil } })) { file in
             SendFileSheet(session: session, file: file) { model.incomingFile = nil }
         }
+        .sheet(isPresented: $showReadAloud) {
+            NavigationStack {
+                ReadAloudSettingsView(session: session).toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { showReadAloud = false } }
+                }
+            }
+        }
         .sheet(isPresented: $showVocabulary) {
             NavigationStack {
                 VocabularyView(session: session).toolbar {
@@ -310,11 +322,7 @@ struct SessionView: View {
                 Text(AppInfo.shortBuild)
                     .font(.caption2.monospaced())
                     .foregroundStyle(.tertiary)
-                Button(action: speakNext) {
-                    Image(systemName: Speaker.shared.isSpeaking ? "stop.circle" : "speaker.wave.2").font(.title3)
-                }
-                .disabled(session.currentWindow == nil)
-                .accessibilityLabel(Speaker.shared.isSpeaking ? "Stop reading" : "Read the Next: line")
+                speakerButton
                 Button { session.showOverview = true } label: {
                     Image(systemName: "square.grid.2x2").font(.title3)
                 }
@@ -326,6 +334,7 @@ struct SessionView: View {
                     Button("New window…", systemImage: "plus") { session.showNewWindow = true }
                         .disabled(session.state != .connected)
                     Button("Dictation words", systemImage: "character.book.closed") { showVocabulary = true }
+                    Button("Read aloud", systemImage: "speaker.wave.2") { showReadAloud = true }
                     Button("Debug log", systemImage: "doc.text") { showLog = true }
                     if session.isDisconnected {
                         Button("Reconnect", systemImage: "arrow.clockwise") { session.reconnect() }
@@ -346,6 +355,70 @@ struct SessionView: View {
         .background(Theme.surface)
     }
 
+    /// Tap: read the last "Next:" line. Hold: summarize Claude's whole
+    /// last reply on the summary model, then read that. Tap again to stop
+    /// or cancel.
+    private var speakerButton: some View {
+        let busy = summaryTask != nil
+        return Group {
+            if busy {
+                ProgressView().frame(width: 24, height: 24)
+            } else {
+                Image(systemName: Speaker.shared.isSpeaking ? "stop.circle" : "speaker.wave.2").font(.title3)
+            }
+        }
+        .foregroundStyle(session.currentWindow == nil ? Color.secondary : Theme.accent)
+        .contentShape(Rectangle())
+        .onTapGesture { speakerTapped() }
+        .onLongPressGesture(minimumDuration: 0.4) { summarizeReply() }
+        .accessibilityElement()
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(busy ? "Cancel summary" : Speaker.shared.isSpeaking ? "Stop reading" : "Read the Next: line")
+        .accessibilityAction { speakerTapped() }
+        .accessibilityAction(named: "Summarize last reply") { summarizeReply() }
+    }
+
+    private func speakerTapped() {
+        if let task = summaryTask {
+            task.cancel()
+            summaryTask = nil
+            summaryStarted = nil
+            return
+        }
+        speakNext()
+    }
+
+    private func summarizeReply() {
+        guard summaryTask == nil, let page = session.currentWindow else { return }
+        Speaker.shared.stop()
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        summaryStarted = Date()
+        summaryTask = Task {
+            defer {
+                summaryTask = nil
+                summaryStarted = nil
+            }
+            do {
+                let summary = try await session.summarizeLastReply(in: page)
+                guard !Task.isCancelled else { return }
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                Speaker.shared.speak(summary)
+            } catch is CancellationError {
+            } catch {
+                guard !Task.isCancelled else { return }
+                showNotice(error.localizedDescription)
+            }
+        }
+    }
+
+    private func showNotice(_ text: String) {
+        notice = text
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            if notice == text { notice = nil }
+        }
+    }
+
     /// Reads the current window's last "Next:" line aloud; tap again to stop.
     private func speakNext() {
         if Speaker.shared.isSpeaking {
@@ -357,9 +430,7 @@ struct SessionView: View {
             if let next = await session.nextStep(in: page) {
                 Speaker.shared.speak(next)
             } else {
-                notice = "No \u{201C}Next:\u{201D} line in \(page.name)"
-                try? await Task.sleep(for: .seconds(2))
-                notice = nil
+                showNotice("No \u{201C}Next:\u{201D} line in \(page.name) · hold for a summary")
             }
         }
     }
@@ -379,6 +450,7 @@ struct SessionView: View {
                 .disabled(session.windows.isEmpty)
             Menu {
                 Button("Dictation words", systemImage: "character.book.closed") { showVocabulary = true }
+                Button("Read aloud", systemImage: "speaker.wave.2") { showReadAloud = true }
                 Button("Debug log", systemImage: "doc.text") { showLog = true }
                 if session.isDisconnected { Button("Reconnect", systemImage: "arrow.clockwise") { session.reconnect() } }
                 Button("Servers", systemImage: "server.rack", role: .destructive) { model.closeSession() }
@@ -512,6 +584,21 @@ struct SessionView: View {
             }
         }
         .animation(.snappy, value: notice)
+        .overlay(alignment: .top) {
+            if let started = summaryStarted {
+                TimelineView(.periodic(from: started, by: 1)) { context in
+                    Label("Summarizing Claude's reply… \(Int(context.date.timeIntervalSince(started))) s · tap 🔊 to cancel",
+                          systemImage: "text.badge.checkmark")
+                        .font(.subheadline.weight(.semibold))
+                        .monospacedDigit()
+                        .padding(.horizontal, 16).padding(.vertical, 10)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(.top, 8)
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy, value: summaryStarted)
         .onChange(of: Push.shared.pendingWindowName) { session.openPendingWindow() }
         .alert("Dictation", isPresented: Binding(get: { voice.error != nil }, set: { if !$0 { voice.error = nil } })) {
             Button("OK", role: .cancel) {}

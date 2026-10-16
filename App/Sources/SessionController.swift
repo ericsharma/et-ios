@@ -945,6 +945,60 @@ final class SessionController {
         return nil
     }
 
+    /// Claude's whole last reply in the window, summarized for listening.
+    func summarizeLastReply(in page: WindowPage) async throws -> String {
+        guard SummarySettings.isConfigured else { throw SummaryError.notConfigured }
+        guard let client else { throw SummaryError.notConnected }
+        let text = (try? await client.command("capture-pane -p -J -t \(page.pane) -S -300").textLines.joined(separator: "\n"))
+            ?? page.terminal.frozenText().text
+        guard let reply = ClaudeReply.extract(from: text) else { throw SummaryError.noReply }
+        return try await summarize(reply)
+    }
+
+    /// Asks the summary model (SummarySettings) via curl on the tmux server.
+    func summarize(_ text: String) async throws -> String {
+        guard SummarySettings.isConfigured else { throw SummaryError.notConfigured }
+        guard let connection else { throw SummaryError.notConnected }
+        var body: [String: Any] = [
+            "messages": [["role": "system", "content": SummarySettings.prompt], ["role": "user", "content": text]],
+            "max_tokens": 200,
+            "temperature": 0.3,
+            // llama-server / Qwen: answer directly, no thinking pass.
+            "chat_template_kwargs": ["enable_thinking": false],
+        ]
+        if !SummarySettings.model.isEmpty { body["model"] = SummarySettings.model }
+        let payload = try JSONSerialization.data(withJSONObject: body).base64EncodedString()
+        var script = "set --; "
+        if !SummarySettings.keyFile.isEmpty {
+            script += "f=\(TmuxCommand.quote(SummarySettings.keyFile)); k=$(sed -n 's/^[A-Za-z_]*KEY=//p' \"$f\" | head -1); " +
+                "[ -n \"$k\" ] || k=$(cat \"$f\"); [ -n \"$k\" ] && set -- -H \"Authorization: Bearer $k\"; "
+        }
+        script += "printf %s \(TmuxCommand.quote(payload)) | base64 -d | curl -sS -m 120 -H 'Content-Type: application/json' \"$@\" " +
+            "-d @- \(TmuxCommand.quote(SummarySettings.url))"
+        let started = Date()
+        let (output, code) = try await connection.run(script)
+        try Task.checkCancellation()
+        guard code == 0, let data = output.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            log.add("Summary failed (exit \(code)): \(output.prefix(300))")
+            throw SummaryError.failed(code == 0 ? "Unexpected answer from the summary model" : "Summary model unreachable: \(output.prefix(120))")
+        }
+        if let error = json["error"] as? [String: Any] {
+            throw SummaryError.failed("Summary model: \(error["message"] as? String ?? "error")")
+        }
+        guard let choices = json["choices"] as? [[String: Any]],
+              let message = choices.first?["message"] as? [String: Any],
+              var summary = message["content"] as? String else {
+            throw SummaryError.failed("Unexpected answer from the summary model")
+        }
+        // Some models still emit a thinking block.
+        if let end = summary.range(of: "</think>") { summary = String(summary[end.upperBound...]) }
+        summary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        log.add("Summary in \(String(format: "%.1f", Date().timeIntervalSince(started))) s (\(text.count) chars in)")
+        guard !summary.isEmpty else { throw SummaryError.failed("The summary model returned nothing") }
+        return summary
+    }
+
     /// Window names and the last ~400 lines of each window, for dictation
     /// names (Vocabulary).
     func refreshVocabularyFromScreens() {
