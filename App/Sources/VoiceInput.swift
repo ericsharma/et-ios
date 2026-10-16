@@ -31,6 +31,7 @@ final class VoiceInput {
     @ObservationIgnored private var current = ""
     @ObservationIgnored private var recognizer: SFSpeechRecognizer?
     @ObservationIgnored private var contextualStrings: [String] = []
+    @ObservationIgnored private var languageModel: SFSpeechLanguageModel.Configuration?
     @ObservationIgnored private var engine: AVAudioEngine?
     /// The request the audio tap feeds; swapped when a recognition restarts.
     @ObservationIgnored private let sink = RequestSink()
@@ -40,7 +41,13 @@ final class VoiceInput {
     @ObservationIgnored private var finalResult: CheckedContinuation<Void, Never>?
     @ObservationIgnored private var safetyStop: Task<Void, Never>?
 
-    func start(contextualStrings: [String]) async {
+    /// The language dictation uses (the custom name model is built for it).
+    static var locale: Locale {
+        SFSpeechRecognizer(locale: Locale.current) != nil ? Locale.current : Locale(identifier: "en-US")
+    }
+
+    /// `languageModel`: the custom name model (Vocabulary), if built.
+    func start(contextualStrings: [String], languageModel: SFSpeechLanguageModel.Configuration?) async {
         guard state == .idle else { return }
         error = nil
         text = ""
@@ -50,13 +57,15 @@ final class VoiceInput {
             error = "E.T. needs Microphone and Speech Recognition access. Turn them on in Settings → E.T."
             return
         }
-        guard let recognizer = SFSpeechRecognizer(locale: Locale.current) ?? SFSpeechRecognizer(locale: Locale(identifier: "en-US")),
+        guard let recognizer = SFSpeechRecognizer(locale: Self.locale),
               recognizer.supportsOnDeviceRecognition else {
             error = "On-device dictation isn't available for this language. Use the keyboard's mic instead."
             return
         }
         self.recognizer = recognizer
         self.contextualStrings = contextualStrings
+        self.languageModel = languageModel
+        Vocabulary.shared.permissionGranted()
 
         let engine = AVAudioEngine()
         do {
@@ -93,6 +102,7 @@ final class VoiceInput {
         request.shouldReportPartialResults = true
         request.addsPunctuation = true
         request.contextualStrings = contextualStrings
+        if let languageModel { request.customizedLanguageModel = languageModel }
         sink.set(request)
         generation += 1
         let generation = generation

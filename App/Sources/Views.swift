@@ -51,6 +51,7 @@ struct ServerListView: View {
             }
             Section {
                 NavigationLink("This device's key") { KeyView() }
+                NavigationLink("Dictation words") { VocabularyView(session: nil) }
                 NavigationLink("Debug log") { DebugLogView() }
             } footer: {
                 Text(AppInfo.buildLabel).font(.caption.monospaced())
@@ -201,6 +202,7 @@ struct SessionView: View {
     @Environment(AppModel.self) private var model
     @Bindable var session: SessionController
     @State private var showLog = false
+    @State private var showVocabulary = false
     @State private var newSessionName = ""
     @State private var voice = VoiceInput()
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -258,6 +260,13 @@ struct SessionView: View {
         } message: { key in
             Text("First connection to \(session.server.host).\n\n\(key.algorithm)\n\(key.fingerprint)\n\nCheck it on the server with: ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub")
         }
+        .sheet(isPresented: $showVocabulary) {
+            NavigationStack {
+                VocabularyView(session: session).toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { showVocabulary = false } }
+                }
+            }
+        }
         .sheet(isPresented: $showLog) {
             NavigationStack {
                 DebugLogView().toolbar {
@@ -299,6 +308,7 @@ struct SessionView: View {
                         .disabled(session.windows.isEmpty)
                     Button("New window…", systemImage: "plus") { session.showNewWindow = true }
                         .disabled(session.state != .connected)
+                    Button("Dictation words", systemImage: "character.book.closed") { showVocabulary = true }
                     Button("Debug log", systemImage: "doc.text") { showLog = true }
                     if session.isDisconnected {
                         Button("Reconnect", systemImage: "arrow.clockwise") { session.reconnect() }
@@ -333,6 +343,7 @@ struct SessionView: View {
             Button { session.showOverview = true } label: { Image(systemName: "square.grid.2x2") }
                 .disabled(session.windows.isEmpty)
             Menu {
+                Button("Dictation words", systemImage: "character.book.closed") { showVocabulary = true }
                 Button("Debug log", systemImage: "doc.text") { showLog = true }
                 if session.isDisconnected { Button("Reconnect", systemImage: "arrow.clockwise") { session.reconnect() } }
                 Button("Servers", systemImage: "server.rack", role: .destructive) { model.closeSession() }

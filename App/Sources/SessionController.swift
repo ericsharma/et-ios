@@ -115,7 +115,7 @@ final class SessionController {
     private var presetChoices: [String: KeyPreset] = [:]
 
     @ObservationIgnored private let identity: SSHIdentity
-    @ObservationIgnored private let log: DebugLog
+    @ObservationIgnored let log: DebugLog
     @ObservationIgnored private let onServerChanged: (ServerConfig) -> Void
     @ObservationIgnored private var hostKeyAnswer: CheckedContinuation<Bool, Never>?
     @ObservationIgnored private var connection: SSHConnection?
@@ -283,6 +283,7 @@ final class SessionController {
                 detachStaleClients()
                 startHeartbeat()
                 openPendingWindow()
+                Task { await discoverVocabulary() }
                 Task { await registerPushToken() }
             }
         } catch {
@@ -914,9 +915,52 @@ final class SessionController {
     }
 
     /// Hints for the speech recognizer: window names and common commands.
-    var dictationVocabulary: [String] {
-        windows.map(\.name) + [server.host, "tmux", "ssh", "sudo", "git", "grep", "claude",
-                                "systemctl", "journalctl", "nixos-rebuild", "docker", "vim", "ls", "cd"]
+    /// Window names and the last ~400 lines of each window, for dictation
+    /// names (Vocabulary).
+    func refreshVocabularyFromScreens() {
+        let screens = windows.map { page in
+            page.terminal.frozenText().text.split(separator: "\n", omittingEmptySubsequences: false)
+                .suffix(400).joined(separator: "\n")
+        }
+        Vocabulary.shared.refreshFromScreens(windowNames: windows.map(\.name) + [server.host], screens: screens)
+    }
+
+    /// Finds git repos and their files for dictation (Vocabulary): on the
+    /// tmux host (pane directories first), and on each host a window has
+    /// ssh'd to, reached from the tmux host with its own keys.
+    func discoverVocabulary() async {
+        guard let connection, let client else { return }
+        Vocabulary.shared.setDiscoveryStatus("Searching \(server.displayName)…")
+        do {
+            let format = TmuxCommand.quote("#{pane_pid} #{pane_current_path}")
+            let reply = try await client.command("list-panes -s -F \(format)")
+            var pids: [Int] = []
+            var dirs: [String] = []
+            for line in reply.textLines {
+                let parts = line.split(separator: " ", maxSplits: 1).map(String.init)
+                if let pid = parts.first.flatMap({ Int($0) }) { pids.append(pid) }
+                if parts.count == 2, !dirs.contains(parts[1]) { dirs.append(parts[1]) }
+            }
+            var destinations: [(label: String, args: [String])] = []
+            if !pids.isEmpty {
+                let ssh = try await connection.run(VocabDiscovery.sshScript(pids: pids)).output
+                for line in ssh.split(separator: "\n") where line.hasPrefix("S ") {
+                    if let dest = VocabDiscovery.destination(fromSSH: String(line.dropFirst(2))),
+                       !destinations.contains(where: { $0.label == dest.label }) {
+                        destinations.append(dest)
+                    }
+                }
+            }
+            let script = VocabDiscovery.searchScript(localDirs: dirs, destinations: Array(destinations.prefix(6)))
+            let output = try await connection.run(script).output
+            let host = server.displayName
+            let repos = VocabDiscovery.parse(output, localLabel: host)
+            Vocabulary.shared.setRepos(repos, hosts: [host] + destinations.prefix(6).map(\.label))
+            log.add("Dictation names: \(repos.count) repos on \(([host] + destinations.map(\.label)).joined(separator: ", "))")
+        } catch {
+            Vocabulary.shared.setDiscoveryStatus("Search failed: \(error.localizedDescription)")
+            log.add("Dictation name search failed: \(error)")
+        }
     }
 
     /// Pastes clipboard text into the window. When the program asked for

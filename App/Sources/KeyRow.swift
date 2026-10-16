@@ -414,9 +414,13 @@ struct MicButton: View {
         case .idle:
             // A new recording replaces the last one's Edit offer.
             page.terminal.dismissDictationPrompt()
-            await voice.start(contextualStrings: session.dictationVocabulary)
+            session.refreshVocabularyFromScreens()
+            await voice.start(contextualStrings: Vocabulary.shared.contextualStrings,
+                              languageModel: Vocabulary.shared.languageModel)
         case .listening:
-            let text = await voice.stop()
+            let heard = await voice.stop()
+            let text = Vocabulary.shared.correct(heard, tagFiles: session.preset(for: page) == .claude)
+            if text != heard { session.log.add("Dictation names fixed: \(heard) → \(text)") }
             session.sendDictated(text, to: page)
         case .stopping:
             break

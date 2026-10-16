@@ -92,7 +92,7 @@ App/                       xcodegen project (project.yml)
   SessionController  one connection: attach, windows, restore/repaint, claims, heartbeat,
                      input, uploads, reconnect
   TerminalHost    one SwiftTerm view per window; two-finger gestures; dictation result hook
-  Views, KeyRow, Overview, SelectMode, Templates, VoiceInput, VolumeButtons, Push
+  Views, KeyRow, Overview, SelectMode, Templates, VoiceInput, Vocabulary, VocabMatcher, VolumeButtons, Push
 Vendor/Citadel             patched SSH library
 scripts/                   asc-token, asc.env, setup-signing, unlock-signing, testflight, make-icon.swift
 ```
@@ -124,6 +124,7 @@ All tmux traffic goes through `TmuxClient`. Every window keeps a live `TerminalV
 
 - **Typing:** keyboard → SwiftTerm → `send-keys -H`.
 - **Keyboard dictation:** goes straight in. When it ends, an **Edit** button offers to move the text into the editor (erasing it from the terminal); typing, tapping, or switching windows dismisses it.
+- **Dictation names** (`Vocabulary`, `VocabMatcher`): E.T.'s mic uses a custom on-device language model (`SFCustomLanguageModelData`) built from the user's list, git repos + tracked files found over SSH (tmux host, and hosts that panes ssh into, via BatchMode ssh from the tmux host), plus contextual hints from window names and unusual on-screen words. After recording, a matcher rewrites spoken forms ("key row dot swift", sound-alikes) to exact spellings; in Claude windows "at <file>" becomes `@path`. Keyboard dictation can't be customized.
 - **E.T. mic:** on-device recognition with a live bubble; keeps everything across pauses and long speech (finished stretches are kept and recognition restarts on the same audio). Stops on tap (10-minute cap). Text is typed in (no Enter), then the Edit offer.
 - **Editor** (✎, ⌘K): a sheet for writing or editing a whole message; Send (Enter) or Send without Enter. Multi-line text to Claude windows goes as a bracketed paste.
 - **Paste:** the system PasteButton (no permission prompt); bracketed paste when the program enabled it.
