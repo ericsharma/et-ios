@@ -184,7 +184,7 @@ enum SummaryError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notConfigured: "Set up summaries in ⋯ → Read aloud"
+        case .notConfigured: "No summary model set up: see ⋯ → Read aloud"
         case .notConnected: "Not connected"
         case .noReply: "No Claude reply found in this window"
         case .failed(let message): message
@@ -214,7 +214,7 @@ struct ReadAloudSettingsView: View {
             } header: {
                 Text("Summary model")
             } footer: {
-                Text("Any OpenAI-compatible chat endpoint (llama-server, Ollama, LM Studio…). E.T. calls it with curl on the tmux server, so it only has to be reachable from there, and the key never leaves the server. The key file can hold just the key, or a line like LLM_API_KEY=….")
+                Text("Leave empty to use the server's own settings: ~/.config/et/summary.env or /run/secrets/rendered/et-summary.env on the tmux server, with ET_SUMMARY_URL= and ET_SUMMARY_KEY= lines. Otherwise any OpenAI-compatible chat endpoint (llama-server, Ollama, LM Studio…). E.T. calls it with curl on the tmux server, so the key never leaves the server; a key file can hold just the key or a line like LLM_API_KEY=….")
             }
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
@@ -239,7 +239,7 @@ struct ReadAloudSettingsView: View {
                             trying = false
                         }
                     }
-                    .disabled(trying || endpoint.isEmpty)
+                    .disabled(trying)
                     if let trial { Text(trial).font(.callout) }
                 }
             }

@@ -947,7 +947,6 @@ final class SessionController {
 
     /// Claude's whole last reply in the window, summarized for listening.
     func summarizeLastReply(in page: WindowPage) async throws -> String {
-        guard SummarySettings.isConfigured else { throw SummaryError.notConfigured }
         guard let client else { throw SummaryError.notConnected }
         let text = (try? await client.command("capture-pane -p -J -t \(page.pane) -S -300").textLines.joined(separator: "\n"))
             ?? page.terminal.frozenText().text
@@ -957,7 +956,6 @@ final class SessionController {
 
     /// Asks the summary model (SummarySettings) via curl on the tmux server.
     func summarize(_ text: String) async throws -> String {
-        guard SummarySettings.isConfigured else { throw SummaryError.notConfigured }
         guard let connection else { throw SummaryError.notConnected }
         var body: [String: Any] = [
             "messages": [["role": "system", "content": SummarySettings.prompt], ["role": "user", "content": text]],
@@ -968,16 +966,28 @@ final class SessionController {
         ]
         if !SummarySettings.model.isEmpty { body["model"] = SummarySettings.model }
         let payload = try JSONSerialization.data(withJSONObject: body).base64EncodedString()
-        var script = "set --; "
-        if !SummarySettings.keyFile.isEmpty {
-            script += "f=\(TmuxCommand.quote(SummarySettings.keyFile)); k=$(sed -n 's/^[A-Za-z_]*KEY=//p' \"$f\" | head -1); " +
-                "[ -n \"$k\" ] || k=$(cat \"$f\"); [ -n \"$k\" ] && set -- -H \"Authorization: Bearer $k\"; "
+        var script = "set --; k=; "
+        if SummarySettings.isConfigured {
+            // Set in the app.
+            script += "u=\(TmuxCommand.quote(SummarySettings.url)); "
+            if !SummarySettings.keyFile.isEmpty {
+                script += "f=\(TmuxCommand.quote(SummarySettings.keyFile)); k=$(sed -n 's/^[A-Za-z_]*KEY=//p' \"$f\" | head -1); " +
+                    "[ -n \"$k\" ] || k=$(cat \"$f\"); "
+            }
+        } else {
+            // Not set in the app: the server's own file (ET_SUMMARY_URL,
+            // ET_SUMMARY_KEY), so the key never has to be typed on the phone.
+            script += "u=; for f in \"${XDG_CONFIG_HOME:-$HOME/.config}/et/summary.env\" /run/secrets/rendered/et-summary.env; do " +
+                "[ -r \"$f\" ] || continue; u=$(sed -n 's/^ET_SUMMARY_URL=//p' \"$f\" | head -1); " +
+                "k=$(sed -n 's/^ET_SUMMARY_KEY=//p' \"$f\" | head -1); break; done; " +
+                "[ -n \"$u\" ] || { echo ET_NO_SUMMARY_CONFIG; exit 3; }; "
         }
-        script += "printf %s \(TmuxCommand.quote(payload)) | base64 -d | curl -sS -m 120 -H 'Content-Type: application/json' \"$@\" " +
-            "-d @- \(TmuxCommand.quote(SummarySettings.url))"
+        script += "[ -n \"$k\" ] && set -- -H \"Authorization: Bearer $k\"; " +
+            "printf %s \(TmuxCommand.quote(payload)) | base64 -d | curl -sS -m 120 -H 'Content-Type: application/json' \"$@\" -d @- \"$u\""
         let started = Date()
         let (output, code) = try await connection.run(script)
         try Task.checkCancellation()
+        if code == 3, output.contains("ET_NO_SUMMARY_CONFIG") { throw SummaryError.notConfigured }
         guard code == 0, let data = output.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             log.add("Summary failed (exit \(code)): \(output.prefix(300))")
