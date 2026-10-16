@@ -473,7 +473,8 @@ struct SessionView: View {
             Text(voice.error ?? "")
         }
         .sheet(item: $session.composeRequest) { request in
-            ComposeSheet(session: session, page: request.page, text: request.text)
+            ComposeSheet(session: session, page: request.page, text: request.text,
+                         dictated: request.dictated ? request.text : nil)
         }
     }
 

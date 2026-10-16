@@ -81,6 +81,22 @@ final class Vocabulary {
         saveCustom()
     }
 
+    /// Names to offer after the user edited dictated text: replacements
+    /// that look like names (not plain rewording) and aren't saved yet.
+    func suggestions(original: String, edited: String) -> [VocabTerm] {
+        VocabMatcher.replacements(from: original, to: edited).compactMap { heard, spelling in
+            guard spelling.split(separator: " ").contains(where: { isUnusual(String($0)) }) else { return nil }
+            if let saved = custom.first(where: { $0.text == spelling }), saved.soundsLike.contains(heard) { return nil }
+            return VocabTerm(text: spelling, soundsLike: [heard])
+        }
+    }
+
+    /// Saves a name, merging its sounds-like with an existing entry.
+    func learn(_ term: VocabTerm) {
+        let previous = custom.first(where: { $0.text == term.text })?.soundsLike ?? []
+        add(term.text, soundsLike: (previous + term.soundsLike.filter { !previous.contains($0) }).joined(separator: ", "))
+    }
+
     func remove(_ term: VocabTerm) {
         custom.removeAll { $0 == term }
         saveCustom()
@@ -415,6 +431,9 @@ struct VocabularyView: View {
     @State private var newSoundsLike = ""
     @State private var trial = ""
     @State private var searching = false
+    /// Mic for "say it the way you do".
+    @State private var voice = VoiceInput()
+    @State private var lastHeard: String?
 
     var body: some View {
         List {
@@ -422,8 +441,28 @@ struct VocabularyView: View {
                 TextField("Exact spelling, e.g. nam-shub", text: $newText)
                     .font(.body.monospaced())
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
-                TextField("Sounds like (optional), e.g. nom shub", text: $newSoundsLike)
-                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                HStack {
+                    TextField("Sounds like (optional), e.g. nom shub", text: $newSoundsLike)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    Button { Task { await toggleMic() } } label: {
+                        Image(systemName: voice.state == .listening ? "stop.fill" : "mic.fill")
+                            .foregroundStyle(voice.state == .listening ? .white : Color(Theme.background))
+                            .frame(width: 34, height: 34)
+                            .background(voice.state == .listening ? Color.red : Theme.accent, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(voice.state == .stopping)
+                    .accessibilityLabel("Say the name")
+                }
+                if voice.state == .listening {
+                    Text(voice.text.isEmpty ? "Say the name, then tap stop" : voice.text)
+                        .font(.callout).foregroundStyle(.secondary)
+                } else if let lastHeard {
+                    Text(lastHeard).font(.caption).foregroundStyle(.secondary)
+                }
+                if let error = voice.error {
+                    Text(error).font(.caption).foregroundStyle(.red)
+                }
                 Button("Add") {
                     vocabulary.add(newText, soundsLike: newSoundsLike)
                     newText = ""
@@ -433,7 +472,7 @@ struct VocabularyView: View {
             } header: {
                 Text("Add a name")
             } footer: {
-                Text("Names E.T.'s mic should always spell exactly. Add \"sounds like\" when dictation keeps hearing something else.")
+                Text("Tap the mic and say the name the way you normally would; what dictation hears becomes \"sounds like\". Say it a few times for more variants.")
             }
             if !vocabulary.custom.isEmpty {
                 Section("Your names") {
@@ -485,5 +524,36 @@ struct VocabularyView: View {
             }
         }
         .navigationTitle("Dictation words")
+        .onDisappear { if voice.state == .listening { Task { _ = await voice.stop() } } }
+    }
+
+    /// Records one saying of the name. What was heard is added to "sounds
+    /// like" (and fills the spelling if it's still empty, to edit).
+    private func toggleMic() async {
+        switch voice.state {
+        case .idle:
+            lastHeard = nil
+            await voice.start(contextualStrings: vocabulary.contextualStrings, languageModel: vocabulary.languageModel)
+        case .listening:
+            var heard = await voice.stop().lowercased()
+            while let c = heard.last, ".,!?".contains(c) { heard.removeLast() }
+            heard = heard.trimmingCharacters(in: .whitespaces)
+            guard !heard.isEmpty else {
+                lastHeard = "Didn't catch anything; try again."
+                return
+            }
+            let spelling = newText.trimmingCharacters(in: .whitespaces)
+            if spelling.isEmpty { newText = heard }
+            if !spelling.isEmpty, heard == spelling.lowercased() {
+                lastHeard = "Heard \"\(heard)\": already right."
+                return
+            }
+            var alikes = newSoundsLike.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            if !alikes.contains(heard) { alikes.append(heard) }
+            newSoundsLike = alikes.filter { !$0.isEmpty }.joined(separator: ", ")
+            lastHeard = "Heard \"\(heard)\""
+        case .stopping:
+            break
+        }
     }
 }

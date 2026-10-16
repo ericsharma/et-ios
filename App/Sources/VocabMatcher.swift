@@ -171,6 +171,58 @@ struct VocabMatcher {
         return tokens
     }
 
+    // MARK: - Learning from edits
+
+    /// Words the user replaced while editing dictated text: each
+    /// (heard, spelling) pair is a candidate name, e.g. ("nom shub",
+    /// "nam-shub"). Word-level diff; only short replacements count.
+    static func replacements(from original: String, to edited: String) -> [(heard: String, spelling: String)] {
+        func split(_ text: String) -> [String] {
+            text.split(whereSeparator: \.isWhitespace).map { word in
+                var w = Substring(word)
+                while let c = w.last, ".,!?;:\"')”’".contains(c) { w = w.dropLast() }
+                while let c = w.first, "\"'(“‘".contains(c) { w = w.dropFirst() }
+                return String(w)
+            }.filter { !$0.isEmpty }
+        }
+        let a = split(original), b = split(edited)
+        let la = a.map { $0.lowercased() }, lb = b.map { $0.lowercased() }
+        // Longest common subsequence table.
+        var table = Array(repeating: Array(repeating: 0, count: b.count + 1), count: a.count + 1)
+        for i in stride(from: a.count - 1, through: 0, by: -1) {
+            for j in stride(from: b.count - 1, through: 0, by: -1) {
+                table[i][j] = la[i] == lb[j] ? table[i + 1][j + 1] + 1 : max(table[i + 1][j], table[i][j + 1])
+            }
+        }
+        var result: [(String, String)] = []
+        var removed: [String] = [], added: [String] = []
+        func flush() {
+            if !removed.isEmpty, !added.isEmpty, removed.count <= 6, added.count <= 3 {
+                let heard = removed.joined(separator: " ").lowercased()
+                let spelling = added.joined(separator: " ")
+                if heard != spelling.lowercased(), spelling.count >= 2 { result.append((heard, spelling)) }
+            }
+            removed = []
+            added = []
+        }
+        var i = 0, j = 0
+        while i < a.count || j < b.count {
+            if i < a.count, j < b.count, la[i] == lb[j] {
+                flush()
+                i += 1
+                j += 1
+            } else if j < b.count, i == a.count || table[i][j + 1] >= table[i + 1][j] {
+                added.append(b[j])
+                j += 1
+            } else {
+                removed.append(a[i])
+                i += 1
+            }
+        }
+        flush()
+        return result
+    }
+
     // MARK: - Spoken forms
 
     static let separatorWords: Set<String> = ["dot", "slash", "at", "dash", "underscore"]

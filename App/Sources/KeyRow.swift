@@ -322,19 +322,28 @@ struct ComposeSheet: View {
     @Bindable var session: SessionController
     let page: WindowPage
     @State var text: String
+    /// The dictated text as it arrived, to learn names the user fixes.
+    var dictated: String? = nil
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focused: Bool
+    @State private var suggestions: [VocabTerm] = []
+    @State private var learned: [String] = []
 
     var body: some View {
         let isClaude = session.preset(for: page) == .claude
         NavigationStack {
-            TextEditor(text: $text)
-                .font(.body)
-                .textInputAutocapitalization(isClaude ? .sentences : .never)
-                .autocorrectionDisabled(!isClaude)
-                .focused($focused)
-                .scrollContentBackground(.hidden)
-                .padding(.horizontal, 12)
+            VStack(spacing: 0) {
+                if !suggestions.isEmpty || !learned.isEmpty {
+                    learnBar
+                }
+                TextEditor(text: $text)
+                    .font(.body)
+                    .textInputAutocapitalization(isClaude ? .sentences : .never)
+                    .autocorrectionDisabled(!isClaude)
+                    .focused($focused)
+                    .scrollContentBackground(.hidden)
+                    .padding(.horizontal, 12)
+            }
                 .background(Theme.surface)
                 .navigationTitle(isClaude ? "Message to \(page.name)" : "Command for \(page.name)")
                 .navigationBarTitleDisplayMode(.inline)
@@ -354,6 +363,48 @@ struct ComposeSheet: View {
         }
         .presentationDetents([.medium, .large])
         .onAppear { focused = true }
+        .task(id: text) {
+            // Debounced: offer names once typing pauses.
+            guard let dictated else { return }
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            suggestions = Vocabulary.shared.suggestions(original: dictated, edited: text)
+                .filter { !learned.contains($0.text) }
+        }
+    }
+
+    /// "Learn: nom shub → nam-shub" chips for words the user corrected.
+    private var learnBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(learned, id: \.self) { name in
+                    Label("Learned \(name)", systemImage: "checkmark")
+                        .font(.caption.weight(.semibold)).foregroundStyle(.green)
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                }
+                ForEach(suggestions) { term in
+                    Button {
+                        Vocabulary.shared.learn(term)
+                        learned.append(term.text)
+                        suggestions.removeAll { $0.text == term.text }
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Learn ")
+                            Text(term.soundsLike.first ?? "").foregroundStyle(.secondary)
+                            Text("→")
+                            Text(term.text).font(.caption.monospaced().weight(.semibold))
+                        }
+                        .font(.caption)
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Theme.accent.opacity(0.25), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+        }
     }
 
     private func send(pressEnter: Bool) {

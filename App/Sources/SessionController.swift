@@ -9,6 +9,9 @@ struct ComposeRequest: Identifiable {
     let id = UUID()
     let page: WindowPage
     let text: String
+    /// The text came from dictation (the editor offers to learn names
+    /// the user corrects).
+    var dictated = false
 }
 
 /// One tmux window shown as a page.
@@ -479,7 +482,7 @@ final class SessionController {
                 }
                 page.terminal.onEditDictation = { [weak self, weak page] text in
                     guard let self, let page else { return }
-                    self.composeRequest = ComposeRequest(page: page, text: text)
+                    self.composeRequest = ComposeRequest(page: page, text: text, dictated: true)
                 }
                 pages.append(page)
                 toRestore.append(page)
