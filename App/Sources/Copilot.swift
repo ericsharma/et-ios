@@ -29,18 +29,17 @@ enum CopilotPrompts {
 
 /// Copilot mode (✨ on the key row): in place of the terminal, the
 /// window's exchanges with Claude from its transcript, as steps to tick.
-/// The ticked steps go to the summary model (Mac mini or Grok) for a
-/// summary, an answer, or a drafted next prompt to review and send.
+/// Swipe (or tap a tab) to another window and tick more there: the ticked
+/// steps from every window go to the summary model (Mac mini or Grok)
+/// together, for a summary, an answer, or a drafted next prompt to review
+/// and send into the current window.
 struct CopilotView: View {
     let session: SessionController
     let page: WindowPage
 
     @AppStorage(SummarySettings.providerKey) private var provider = SummarySettings.provider.rawValue
-    @State private var turns: [Transcript.Turn] = []
-    @State private var host = ""
-    @State private var loading = true
-    @State private var loadError: String?
-    @State private var selected: Set<String> = []
+    @State private var loading: WindowID?
+    @State private var loadErrors: [WindowID: String] = [:]
     @State private var expanded: Set<String> = []
     @State private var instruction = ""
     @State private var output: Output?
@@ -67,13 +66,36 @@ struct CopilotView: View {
             bottomPanel
         }
         .background(Color(Theme.background))
-        .task { await load() }
+        // Each visit: cached steps at once, then refreshed (ticks kept).
+        .task(id: page.id) { await load() }
         .onDisappear { task?.cancel() }
         .onChange(of: session.copilotDictation) { _, heard in
             guard let heard, !heard.isEmpty else { return }
             session.copilotDictation = nil
             instruction += (instruction.isEmpty ? "" : " ") + heard
         }
+    }
+
+    // This window's part of the store.
+    private var turns: [Transcript.Turn] { session.copilotWindows[page.id]?.turns ?? [] }
+    private var host: String { session.copilotWindows[page.id]?.host ?? "" }
+    private var isLoading: Bool { loading == page.id }
+    private var loadError: String? { loadErrors[page.id] }
+    private var selected: Set<String> {
+        get { session.copilotWindows[page.id]?.selected ?? [] }
+        nonmutating set { session.copilotWindows[page.id]?.selected = newValue }
+    }
+
+    /// Ticked steps in every window, in window order.
+    private var pool: [(page: WindowPage, window: SessionController.CopilotWindow)] {
+        session.windows.compactMap { p in
+            guard let w = session.copilotWindows[p.id], !w.selected.isEmpty else { return nil }
+            return (p, w)
+        }
+    }
+    private var poolCount: Int { pool.reduce(0) { $0 + $1.window.selected.count } }
+    private var elsewhere: [(page: WindowPage, window: SessionController.CopilotWindow)] {
+        pool.filter { $0.page.id != page.id }
     }
 
     private var modelLabel: String {
@@ -89,7 +111,7 @@ struct CopilotView: View {
             Image(systemName: "sparkles").foregroundStyle(Theme.accent)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Copilot · \(page.name)").font(.subheadline.weight(.semibold))
-                Text(loading ? "Reading transcript…" : "\(turns.count) exchanges on \(host)")
+                Text(isLoading ? "Reading transcript…" : "\(turns.count) exchanges on \(host) · swipe for other windows")
                     .font(.caption2).foregroundStyle(.secondary)
             }
             Spacer()
@@ -103,7 +125,7 @@ struct CopilotView: View {
             }
             .disabled(turns.isEmpty)
             Button { Task { await load() } } label: { Image(systemName: "arrow.clockwise") }
-                .disabled(loading)
+                .disabled(isLoading)
                 .accessibilityLabel("Reload")
             Button { session.copilotMode = false } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
                 .accessibilityLabel("Close Copilot")
@@ -116,7 +138,19 @@ struct CopilotView: View {
     // MARK: Turns
 
     @ViewBuilder private var turnList: some View {
-        if loading {
+        Group { turnListContent }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            // Swipe sideways to the next or previous window, as on the terminal.
+            .simultaneousGesture(DragGesture(minimumDistance: 40).onEnded { drag in
+                let dx = drag.translation.width, dy = drag.translation.height
+                guard abs(dx) > 80, abs(dx) > abs(dy) * 2 else { return }
+                session.switchWindow(next: dx < 0)
+            })
+    }
+
+    @ViewBuilder private var turnListContent: some View {
+        if isLoading && turns.isEmpty {
             ProgressView("Reading Claude's transcript…").frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let loadError {
             ContentUnavailableView {
@@ -140,6 +174,7 @@ struct CopilotView: View {
                     .padding(12)
                 }
                 .onAppear { proxy.scrollTo(turns.last?.id, anchor: .bottom) }
+                .onChange(of: page.id) { proxy.scrollTo(turns.last?.id, anchor: .bottom) }
             }
         }
     }
@@ -206,6 +241,7 @@ struct CopilotView: View {
 
     @ViewBuilder private var bottomPanel: some View {
         VStack(spacing: 10) {
+            if !elsewhere.isEmpty { poolBar }
             if let output { outputView(output) }
             if let started {
                 TimelineView(.periodic(from: started, by: 1)) { context in
@@ -236,7 +272,9 @@ struct CopilotView: View {
                     actionButton("Ask", "questionmark.bubble", .ask)
                     actionButton("Draft prompt", "square.and.pencil", .draft)
                 }
-                Text(selected.isEmpty ? "Tap the steps to include" : "\(selected.count) of \(turns.count) steps included")
+                Text(poolCount == 0 ? "Tap the steps to include"
+                     : pool.count > 1 ? "\(poolCount) steps from \(pool.count) windows included"
+                     : "\(poolCount) of \(turns.count) steps included")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -250,7 +288,24 @@ struct CopilotView: View {
         }
         .buttonStyle(.bordered)
         .controlSize(.regular)
-        .disabled(selected.isEmpty || loading)
+        .disabled(poolCount == 0)
+    }
+
+    /// Steps ticked in other windows, which go along too.
+    private var poolBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "square.stack.3d.up").foregroundStyle(Theme.accent)
+            Text("Also: " + elsewhere.map { "\($0.window.selected.count) from \($0.page.name)" }.joined(separator: ", "))
+                .font(.caption)
+                .lineLimit(2)
+            Spacer()
+            Button("Clear all") {
+                for id in session.copilotWindows.keys { session.copilotWindows[id]?.selected = [] }
+            }
+            .font(.caption)
+        }
+        .padding(8)
+        .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
     }
 
     @ViewBuilder private func outputView(_ output: Output) -> some View {
@@ -307,24 +362,25 @@ struct CopilotView: View {
     // MARK: Actions
 
     private func load() async {
-        loading = true
-        loadError = nil
+        let id = page.id
+        loading = id
+        loadErrors[id] = nil
         do {
             let result = try await session.transcript(for: page)
-            turns = result.turns
-            host = result.host
-            // Keep picks across reloads; start with the latest exchange.
-            selected = selected.intersection(turns.map(\.id))
-            if selected.isEmpty, let last = turns.last { selected = [last.id] }
+            // Keep picks across reloads. The first time, start with the
+            // latest exchange, unless steps are already ticked elsewhere.
+            var picks = (session.copilotWindows[id]?.selected ?? []).intersection(result.turns.map(\.id))
+            if session.copilotWindows[id] == nil, elsewhere.isEmpty, let last = result.turns.last { picks = [last.id] }
+            session.copilotWindows[id] = .init(host: result.host, turns: result.turns, selected: picks)
         } catch {
-            loadError = error.localizedDescription
+            loadErrors[id] = error.localizedDescription
         }
-        loading = false
+        if loading == id { loading = nil }
     }
 
     private func run(_ action: Action) {
-        let picked = turns.filter { selected.contains($0.id) }
-        guard !picked.isEmpty, task == nil else { return }
+        let groups = pool
+        guard !groups.isEmpty, task == nil else { return }
         let ask = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
         if action == .ask, ask.isEmpty {
             // Nothing to ask yet: type it, or tap the mic and say it.
@@ -336,7 +392,15 @@ struct CopilotView: View {
         editing = false
         // The Mac mini has a 32k context; Grok far more.
         let budget = SummarySettings.provider == .grok ? 120_000 : 60_000
-        var user = Transcript.render(picked, budget: budget)
+        // Several windows: one section each, so the model knows which
+        // machine and session each step came from.
+        var user = groups.count == 1 && groups[0].page.id == page.id
+            ? Transcript.render(groups[0].window.picked, budget: budget)
+            : groups.map { group in
+                "## Window \(group.page.name) (Claude on \(group.window.host))"
+                    + (group.page.id == page.id ? ", where the developer is now" : "") + "\n\n"
+                    + Transcript.render(group.window.picked, budget: budget / groups.count)
+            }.joined(separator: "\n\n")
         let system: String
         let maxTokens: Int
         switch action {
@@ -351,6 +415,7 @@ struct CopilotView: View {
         case .draft:
             system = CopilotPrompts.draft
             maxTokens = 1000
+            if groups.count > 1 { user += "\n\nThe message goes to the Claude in window \(page.name)." }
             user += "\n\n### Instruction\n\(ask.isEmpty ? "Write the most useful next prompt." : ask)"
         }
         started = Date()

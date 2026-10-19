@@ -686,6 +686,17 @@ final class SessionController {
     /// Copilot mode (✨): the current window's transcript replaces its
     /// terminal (CopilotView).
     var copilotMode = false
+    /// Copilot's per-window state: the transcript as loaded and the steps
+    /// ticked. Kept across window switches, so steps from several windows
+    /// (machines) can go to the model together.
+    struct CopilotWindow {
+        var host: String
+        var turns: [Transcript.Turn]
+        var selected: Set<String>
+        var picked: [Transcript.Turn] { turns.filter { selected.contains($0.id) } }
+    }
+    var copilotWindows: [WindowID: CopilotWindow] = [:]
+
     /// Dictated with the mic while Copilot is open; CopilotView adds it to
     /// its instruction box and clears it.
     var copilotDictation: String?

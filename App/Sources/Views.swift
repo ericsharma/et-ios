@@ -531,8 +531,7 @@ struct SessionView: View {
         VStack(spacing: 6) {
             Group {
                 if session.copilotMode, let page = session.currentWindow, session.state == .connected {
-                    // .id: a new window gets its own transcript.
-                    CopilotView(session: session, page: page).id(page.id)
+                    CopilotView(session: session, page: page)
                         .transition(.opacity)
                 } else {
                     WindowPager(session: session)
