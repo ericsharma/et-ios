@@ -407,7 +407,7 @@ struct SessionView: View {
                 let summary = try await session.summarizeLastReply(in: page)
                 guard !Task.isCancelled else { return }
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
-                Speaker.shared.speak(summary)
+                await session.say(summary)
             } catch is CancellationError {
             } catch SummaryError.notConfigured {
                 // First hold: go straight to the setup screen.
@@ -433,10 +433,13 @@ struct SessionView: View {
             Speaker.shared.stop()
             return
         }
-        guard let page = session.currentWindow else { return }
-        Task {
+        guard summaryTask == nil, let page = session.currentWindow else { return }
+        // Under summaryTask so the button spins while the voice is fetched
+        // (about a second) and a tap cancels it.
+        summaryTask = Task {
+            defer { summaryTask = nil }
             if let next = await session.nextStep(in: page) {
-                Speaker.shared.speak(next)
+                await session.say(next)
             } else {
                 showNotice("No \u{201C}Next:\u{201D} line in \(page.name) · hold for a summary")
             }

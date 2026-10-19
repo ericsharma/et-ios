@@ -1009,6 +1009,46 @@ final class SessionController {
         return summary
     }
 
+    /// Reads `text` aloud: the server's natural voice if there is one
+    /// (VoiceSettings), else the phone's own.
+    func say(_ text: String) async {
+        if VoiceSettings.natural, let audio = try? await speech(for: text) {
+            guard !Task.isCancelled else { return }
+            if Speaker.shared.play(audio) { return }
+        }
+        guard !Task.isCancelled else { return }
+        Speaker.shared.speak(text)
+    }
+
+    /// mp3 from the speech model at ET_TTS_URL in the server's summary.env,
+    /// via curl on the tmux server; nil if none is set up.
+    func speech(for text: String) async throws -> Data? {
+        guard let connection else { throw SummaryError.notConnected }
+        let body: [String: Any] = [
+            "model": "mlx-community/Kokoro-82M-bf16", "input": text,
+            "voice": VoiceSettings.voice, "response_format": "mp3",
+        ]
+        let payload = try JSONSerialization.data(withJSONObject: body).base64EncodedString()
+        let script = "set --; u=; k=; for f in \"${XDG_CONFIG_HOME:-$HOME/.config}/et/summary.env\" /run/secrets/rendered/et-summary.env; do " +
+            "[ -r \"$f\" ] || continue; u=$(sed -n 's/^ET_TTS_URL=//p' \"$f\" | head -1); " +
+            "k=$(sed -n 's/^ET_TTS_KEY=//p' \"$f\" | head -1); [ -n \"$k\" ] || k=$(sed -n 's/^ET_SUMMARY_KEY=//p' \"$f\" | head -1); " +
+            "[ -n \"$u\" ] && break; done; " +
+            "[ -n \"$u\" ] || { echo ET_NO_TTS_CONFIG; exit 3; }; " +
+            "[ -n \"$k\" ] && set -- -H \"Authorization: Bearer $k\"; t=$(mktemp) || exit 4; " +
+            "printf %s \(TmuxCommand.quote(payload)) | base64 -d | curl -sSf -m 60 -H 'Content-Type: application/json' \"$@\" -d @- -o \"$t\" \"$u\" " +
+            "&& base64 < \"$t\"; c=$?; rm -f \"$t\"; exit $c"
+        let started = Date()
+        let (output, code) = try await connection.run(script)
+        try Task.checkCancellation()
+        if code == 3, output.contains("ET_NO_TTS_CONFIG") { return nil }
+        guard code == 0, let audio = Data(base64Encoded: output, options: .ignoreUnknownCharacters), audio.count > 1000 else {
+            log.add("Speech failed (exit \(code)): \(output.prefix(300))")
+            throw SummaryError.failed("Voice model unreachable")
+        }
+        log.add("Speech in \(String(format: "%.1f", Date().timeIntervalSince(started))) s (\(audio.count / 1024) KB)")
+        return audio
+    }
+
     /// Window names and the last ~400 lines of each window, for dictation
     /// names (Vocabulary).
     func refreshVocabularyFromScreens() {

@@ -83,14 +83,16 @@ enum ClaudeReply {
     }
 }
 
-/// Reads text aloud with the on-device voice: the best installed English
-/// voice (Premium, then Enhanced, then the default).
+/// Reads text aloud: audio from the server's voice model (VoiceSettings),
+/// or the on-device voice, the best installed English one (Premium, then
+/// Enhanced, then the default).
 @MainActor @Observable
 final class Speaker: NSObject {
     static let shared = Speaker()
 
     private(set) var isSpeaking = false
     @ObservationIgnored private let synthesizer = AVSpeechSynthesizer()
+    @ObservationIgnored private var player: AVAudioPlayer?
 
     private override init() {
         super.init()
@@ -99,20 +101,41 @@ final class Speaker: NSObject {
 
     func speak(_ text: String) {
         stop()
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: .duckOthers)
-        try? AVAudioSession.sharedInstance().setActive(true)
+        activate()
         let utterance = AVSpeechUtterance(string: text)
         utterance.voice = Self.bestVoice()
         isSpeaking = true
         synthesizer.speak(utterance)
     }
 
+    /// Plays speech the server made (mp3). False if it can't be played.
+    func play(_ audio: Data) -> Bool {
+        stop()
+        guard let player = try? AVAudioPlayer(data: audio) else { return false }
+        activate()
+        player.delegate = self
+        self.player = player
+        isSpeaking = player.play()
+        if !isSpeaking { finished() }
+        return isSpeaking
+    }
+
     func stop() {
+        if let player {
+            player.stop()
+            finished()
+        }
         guard synthesizer.isSpeaking else { return }
         synthesizer.stopSpeaking(at: .immediate)
     }
 
+    private func activate() {
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: .duckOthers)
+        try? AVAudioSession.sharedInstance().setActive(true)
+    }
+
     private func finished() {
+        player = nil
         isSpeaking = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
@@ -138,6 +161,38 @@ extension Speaker: AVSpeechSynthesizerDelegate {
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         Task { @MainActor in self.finished() }
     }
+}
+
+extension Speaker: AVAudioPlayerDelegate {
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        let finishedPlayer = ObjectIdentifier(player)
+        Task { @MainActor in
+            if let current = self.player, ObjectIdentifier(current) == finishedPlayer { self.finished() }
+        }
+    }
+}
+
+/// The server's voice model: Kokoro (or any OpenAI-compatible
+/// /v1/audio/speech) at ET_TTS_URL in the tmux server's summary.env,
+/// called with curl there like the summary model.
+enum VoiceSettings {
+    static let naturalKey = "naturalVoice"
+    static let voiceKey = "naturalVoiceName"
+
+    static var natural: Bool { UserDefaults.standard.object(forKey: naturalKey) as? Bool ?? true }
+    static var voice: String { UserDefaults.standard.string(forKey: voiceKey) ?? "af_heart" }
+
+    /// Kokoro's best-rated English voices.
+    static let voices: [(id: String, name: String)] = [
+        ("af_heart", "Heart (US, female)"),
+        ("af_bella", "Bella (US, female)"),
+        ("af_nicole", "Nicole (US, female, soft)"),
+        ("am_michael", "Michael (US, male)"),
+        ("am_fenrir", "Fenrir (US, male)"),
+        ("bf_emma", "Emma (UK, female)"),
+        ("bm_george", "George (UK, male)"),
+        ("bm_fable", "Fable (UK, male)"),
+    ]
 }
 
 // MARK: - Summaries ("hold the speaker")
@@ -198,6 +253,8 @@ struct ReadAloudSettingsView: View {
     @AppStorage(SummarySettings.endpointKey) private var endpoint = ""
     @AppStorage(SummarySettings.keyFileKey) private var keyFile = ""
     @AppStorage(SummarySettings.modelKey) private var model = ""
+    @AppStorage(VoiceSettings.naturalKey) private var natural = true
+    @AppStorage(VoiceSettings.voiceKey) private var voice = "af_heart"
     @State private var trial: String?
     @State private var trying = false
 
@@ -219,6 +276,23 @@ struct ReadAloudSettingsView: View {
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .font(.body.monospaced())
+            Section {
+                Toggle("Natural voice", isOn: $natural)
+                if natural {
+                    Picker("Voice", selection: $voice) {
+                        ForEach(VoiceSettings.voices, id: \.id) { Text($0.name).tag($0.id) }
+                    }
+                    if let session {
+                        Button("Hear this voice") {
+                            Task { await session.say("Build 2061 is on TestFlight. Next, open E.T. and hold the speaker.") }
+                        }
+                    }
+                }
+            } header: {
+                Text("Voice")
+            } footer: {
+                Text("Natural voice uses the speech model at ET_TTS_URL in the tmux server's summary.env (Kokoro on the Mac mini; the key is ET_TTS_KEY, else ET_SUMMARY_KEY). Without one, or if it fails, E.T. uses the phone's best installed voice.")
+            }
             if let session {
                 Section {
                     Button(trying ? "Summarizing…" : "Try it") {
@@ -233,6 +307,7 @@ struct ReadAloudSettingsView: View {
                                   Next: install build 2059 on the iPad and open E.T.
                                 """)
                                 trial = "\(summary)\n\n(\(Int(Date().timeIntervalSince(start))) s)"
+                                await session.say(summary)
                             } catch {
                                 trial = error.localizedDescription
                             }
