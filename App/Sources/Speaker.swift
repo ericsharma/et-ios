@@ -204,11 +204,33 @@ enum SummarySettings {
     static let endpointKey = "summaryEndpoint"
     static let keyFileKey = "summaryKeyFile"
     static let modelKey = "summaryModel"
+    static let providerKey = "summaryProvider"
+
+    /// Which model summarizes. Mac mini and Grok come from the tmux
+    /// server's summary.env (ET_SUMMARY_* and ET_GROK_*), so no key is
+    /// typed on the phone; Custom is the endpoint typed here.
+    enum Provider: String, CaseIterable, Identifiable {
+        case local, grok, custom
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .local: "Mac mini (local)"
+            case .grok: "Grok (xAI subscription)"
+            case .custom: "Custom endpoint"
+            }
+        }
+        /// Variable prefix in summary.env.
+        var envPrefix: String { self == .grok ? "ET_GROK" : "ET_SUMMARY" }
+    }
 
     static var endpoint: String { value(endpointKey) }
     static var keyFile: String { value(keyFileKey) }
     static var model: String { value(modelKey) }
-    static var isConfigured: Bool { !endpoint.isEmpty }
+    /// Before the picker existed, a typed endpoint meant Custom.
+    static var provider: Provider {
+        Provider(rawValue: value(providerKey)) ?? (endpoint.isEmpty ? .local : .custom)
+    }
+    static var isConfigured: Bool { provider == .custom && !endpoint.isEmpty }
 
     /// The full URL: a bare host:port gets /v1/chat/completions.
     static var url: String {
@@ -239,7 +261,9 @@ enum SummaryError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notConfigured: "No summary model set up: see ⋯ → Read aloud"
+        case .notConfigured: SummarySettings.provider == .grok
+            ? "Grok isn't set up on the server (ET_GROK_URL in summary.env)"
+            : "No summary model set up: see ⋯ → Read aloud"
         case .notConnected: "Not connected"
         case .noReply: "No Claude reply found in this window"
         case .failed(let message): message
@@ -253,6 +277,7 @@ struct ReadAloudSettingsView: View {
     @AppStorage(SummarySettings.endpointKey) private var endpoint = ""
     @AppStorage(SummarySettings.keyFileKey) private var keyFile = ""
     @AppStorage(SummarySettings.modelKey) private var model = ""
+    @AppStorage(SummarySettings.providerKey) private var provider = SummarySettings.provider.rawValue
     @AppStorage(VoiceSettings.naturalKey) private var natural = true
     @AppStorage(VoiceSettings.voiceKey) private var voice = "af_heart"
     @State private var trial: String?
@@ -265,17 +290,28 @@ struct ReadAloudSettingsView: View {
                 Label("Hold the speaker: summarizes Claude's whole last reply, then reads the summary.", systemImage: "hand.point.up.left")
             }
             Section {
-                TextField("Endpoint, e.g. 192.168.0.5:8223", text: $endpoint)
-                TextField("API key file on the server (optional)", text: $keyFile)
-                TextField("Model (optional)", text: $model)
+                Picker("Model", selection: $provider) {
+                    ForEach(SummarySettings.Provider.allCases) { Text($0.title).tag($0.rawValue) }
+                }
             } header: {
                 Text("Summary model")
             } footer: {
-                Text("Leave empty to use the server's own settings: ~/.config/et/summary.env or /run/secrets/rendered/et-summary.env on the tmux server, with ET_SUMMARY_URL= and ET_SUMMARY_KEY= lines. Otherwise any OpenAI-compatible chat endpoint (llama-server, Ollama, LM Studio…). E.T. calls it with curl on the tmux server, so the key never leaves the server; a key file can hold just the key or a line like LLM_API_KEY=….")
+                Text("Mac mini and Grok use the tmux server's own settings: ~/.config/et/summary.env or /run/secrets/rendered/et-summary.env, with ET_SUMMARY_URL/ET_SUMMARY_KEY and ET_GROK_URL/ET_GROK_MODEL/ET_GROK_KEY_CMD lines. E.T. calls the model with curl on the tmux server, so keys never leave it.")
             }
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .font(.body.monospaced())
+            if provider == SummarySettings.Provider.custom.rawValue {
+                Section {
+                    TextField("Endpoint, e.g. 192.168.0.5:8223", text: $endpoint)
+                    TextField("API key file on the server (optional)", text: $keyFile)
+                    TextField("Model (optional)", text: $model)
+                } header: {
+                    Text("Custom endpoint")
+                } footer: {
+                    Text("Any OpenAI-compatible chat endpoint (llama-server, Ollama, LM Studio…). A key file can hold just the key or a line like LLM_API_KEY=….")
+                }
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .font(.body.monospaced())
+            }
             Section {
                 Toggle("Natural voice", isOn: $natural)
                 if natural {

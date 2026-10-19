@@ -957,16 +957,24 @@ final class SessionController {
     /// Asks the summary model (SummarySettings) via curl on the tmux server.
     func summarize(_ text: String) async throws -> String {
         guard let connection else { throw SummaryError.notConnected }
+        let provider = SummarySettings.provider
         var body: [String: Any] = [
             "messages": [["role": "system", "content": SummarySettings.prompt], ["role": "user", "content": text]],
-            "max_tokens": 200,
+            // Grok models may reason first, and that counts against the limit.
+            "max_tokens": provider == .grok ? 4000 : 200,
             "temperature": 0.3,
-            // llama-server / Qwen: answer directly, no thinking pass.
-            "chat_template_kwargs": ["enable_thinking": false],
         ]
-        if !SummarySettings.model.isEmpty { body["model"] = SummarySettings.model }
+        // llama-server / Qwen: answer directly, no thinking pass.
+        if provider != .grok { body["chat_template_kwargs"] = ["enable_thinking": false] }
+        if SummarySettings.isConfigured, !SummarySettings.model.isEmpty {
+            body["model"] = SummarySettings.model
+        } else if !SummarySettings.isConfigured {
+            // Filled in on the server from <prefix>_MODEL; llama-server
+            // takes an empty one.
+            body["model"] = "__ET_MODEL__"
+        }
         let payload = try JSONSerialization.data(withJSONObject: body).base64EncodedString()
-        var script = "set --; k=; "
+        var script = "set --; k=; m=; "
         if SummarySettings.isConfigured {
             // Set in the app.
             script += "u=\(TmuxCommand.quote(SummarySettings.url)); "
@@ -975,26 +983,44 @@ final class SessionController {
                     "[ -n \"$k\" ] || k=$(cat \"$f\"); "
             }
         } else {
-            // Not set in the app: the server's own file (ET_SUMMARY_URL,
-            // ET_SUMMARY_KEY), so the key never has to be typed on the phone.
-            script += "u=; for f in \"${XDG_CONFIG_HOME:-$HOME/.config}/et/summary.env\" /run/secrets/rendered/et-summary.env; do " +
-                "[ -r \"$f\" ] || continue; u=$(sed -n 's/^ET_SUMMARY_URL=//p' \"$f\" | head -1); " +
-                "k=$(sed -n 's/^ET_SUMMARY_KEY=//p' \"$f\" | head -1); break; done; " +
-                "[ -n \"$u\" ] || { echo ET_NO_SUMMARY_CONFIG; exit 3; }; "
+            // The server's own file (<prefix>_URL, _KEY or _KEY_CMD, _MODEL),
+            // so the key never has to be typed on the phone. _KEY_CMD prints
+            // a fresh token (Grok: Hermes's xAI sign-in).
+            let p = provider.envPrefix
+            script += "u=; c=; for f in \"${XDG_CONFIG_HOME:-$HOME/.config}/et/summary.env\" /run/secrets/rendered/et-summary.env; do " +
+                "[ -r \"$f\" ] || continue; u=$(sed -n 's/^\(p)_URL=//p' \"$f\" | head -1); " +
+                "k=$(sed -n 's/^\(p)_KEY=//p' \"$f\" | head -1); c=$(sed -n 's/^\(p)_KEY_CMD=//p' \"$f\" | head -1); " +
+                "m=$(sed -n 's/^\(p)_MODEL=//p' \"$f\" | head -1); break; done; " +
+                "[ -n \"$u\" ] || { echo ET_NO_SUMMARY_CONFIG; exit 3; }; " +
+                "if [ -n \"$c\" ]; then k=$(\"$c\" 2>/dev/null | tail -n 1); " +
+                "[ -n \"$k\" ] || { echo ET_KEY_CMD_FAILED; \"$c\" 2>&1 | tail -n 3; exit 4; }; fi; "
         }
+        // Model names are plain [A-Za-z0-9._-], safe inside sed.
         script += "[ -n \"$k\" ] && set -- -H \"Authorization: Bearer $k\"; " +
-            "printf %s \(TmuxCommand.quote(payload)) | base64 -d | curl -sS -m 120 -H 'Content-Type: application/json' \"$@\" -d @- \"$u\""
+            "printf %s \(TmuxCommand.quote(payload)) | base64 -d | " +
+            "sed \"s/__ET_MODEL__/$m/\" | " +
+            "curl -sS -m 120 -H 'Content-Type: application/json' \"$@\" -d @- \"$u\""
         let started = Date()
         let (output, code) = try await connection.run(script)
         try Task.checkCancellation()
         if code == 3, output.contains("ET_NO_SUMMARY_CONFIG") { throw SummaryError.notConfigured }
+        if code == 4, output.hasPrefix("ET_KEY_CMD_FAILED") {
+            log.add("Summary key command failed: \(output.suffix(300))")
+            throw SummaryError.failed(provider == .grok
+                ? "Grok sign-in failed: run hermes auth add xai-oauth on the server"
+                : "The summary key command failed")
+        }
         guard code == 0, let data = output.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             log.add("Summary failed (exit \(code)): \(output.prefix(300))")
             throw SummaryError.failed(code == 0 ? "Unexpected answer from the summary model" : "Summary model unreachable: \(output.prefix(120))")
         }
+        // OpenAI style: {"error": {"message": …}}; xAI: {"error": "…"}.
         if let error = json["error"] as? [String: Any] {
             throw SummaryError.failed("Summary model: \(error["message"] as? String ?? "error")")
+        }
+        if let error = json["error"] as? String {
+            throw SummaryError.failed("Summary model: \(error)")
         }
         guard let choices = json["choices"] as? [[String: Any]],
               let message = choices.first?["message"] as? [String: Any],
