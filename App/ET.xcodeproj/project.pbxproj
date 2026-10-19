@@ -23,6 +23,7 @@
 		B3B645CBAE52AC315F4D26D1 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 78E36ABFF9A6F111E6BC39DD /* SwiftTerm */; };
 		B9EF4532C1A648569D5AD074 /* TerminalHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */; };
 		C7D22526ADD3F1CB22E245DD /* Overview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36A4263F016A81FE6C5B2B5E /* Overview.swift */; };
+		D925AEB7EE1B1A2E8E25A3DF /* Copilot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23D00D38126433369DDB5E17 /* Copilot.swift */; };
 		E8AFF527A853BA6E7B3FB8B8 /* VocabMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADDE5B14C4968EB5B9AB03A5 /* VocabMatcher.swift */; };
 		EB28BC4D4608DBE3C2FD9D80 /* Vocabulary.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5E31C39DDE31580DBCAB4E /* Vocabulary.swift */; };
 		F8F1BACDD89A3936FDBA3DCA /* ETApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE328D04440F47561CB04404 /* ETApp.swift */; };
@@ -33,6 +34,7 @@
 		0B7EB4283A5F1B4E8DAE0DCE /* SessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionController.swift; sourceTree = "<group>"; };
 		0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHost.swift; sourceTree = "<group>"; };
 		175E8D2F9B6999615A8AAF59 /* VoiceInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInput.swift; sourceTree = "<group>"; };
+		23D00D38126433369DDB5E17 /* Copilot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Copilot.swift; sourceTree = "<group>"; };
 		36A4263F016A81FE6C5B2B5E /* Overview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Overview.swift; sourceTree = "<group>"; };
 		5E147244B49816415D5E26BA /* Templates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Templates.swift; sourceTree = "<group>"; };
 		65A00CC919987D56EC6D81C2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -75,6 +77,7 @@
 			isa = PBXGroup;
 			children = (
 				AB367F7DC192EBCCA06508BC /* AppModel.swift */,
+				23D00D38126433369DDB5E17 /* Copilot.swift */,
 				EE328D04440F47561CB04404 /* ETApp.swift */,
 				FFCBF94AC41590A9B15E7FAA /* KeyRow.swift */,
 				36A4263F016A81FE6C5B2B5E /* Overview.swift */,
@@ -199,6 +202,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7B7A1AB52E7AAEB0D5283959 /* AppModel.swift in Sources */,
+				D925AEB7EE1B1A2E8E25A3DF /* Copilot.swift in Sources */,
 				F8F1BACDD89A3936FDBA3DCA /* ETApp.swift in Sources */,
 				176CEB6F04458465BE3439DA /* KeyRow.swift in Sources */,
 				C7D22526ADD3F1CB22E245DD /* Overview.swift in Sources */,

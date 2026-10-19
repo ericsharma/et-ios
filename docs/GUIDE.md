@@ -15,6 +15,7 @@ The big mic sits in the middle; everything else is one tap on either side.
 | ⋯ Keys | Open the key wheel: esc, tab, ctrl, arrows, ^C and friends |
 | Mic | Tap to dictate, tap to stop; on-device only |
 | Speaker (top bar) | Tap: reads the window's last "Next:" line. Hold: summarizes Claude's whole last reply on your summary model (⋯ → Read aloud: Mac mini, Grok, or a custom endpoint), then reads it. Both use the Mac mini's natural voice (Kokoro, picked in ⋯ → Read aloud) when the server's summary.env has ET_TTS_URL, else the phone's voice. Tap again to stop or cancel |
+| ✨ Copilot (top bar) | Your exchanges with Claude in this window, read from Claude's transcript on the machine it runs on. Tick exchanges, then Summarize, Ask (type a question) or Draft prompt (optionally say what you want). Drafts open for editing; nothing reaches Claude until you tap Send. Model: the cpu menu (Mac mini or Grok) |
 | Paste | Appears when the clipboard has text; pastes in one tap, no prompt |
 | Image | Send a screenshot or photo; its path is typed into the window |
 | ⏎ | Press Enter |

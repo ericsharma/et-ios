@@ -956,12 +956,18 @@ final class SessionController {
 
     /// Asks the summary model (SummarySettings) via curl on the tmux server.
     func summarize(_ text: String) async throws -> String {
+        try await complete(system: SummarySettings.prompt, user: text, maxTokens: 200)
+    }
+
+    /// One chat completion on the summary model (SummarySettings), via curl
+    /// on the tmux server: summaries and the Copilot.
+    func complete(system: String, user text: String, maxTokens: Int) async throws -> String {
         guard let connection else { throw SummaryError.notConnected }
         let provider = SummarySettings.provider
         var body: [String: Any] = [
-            "messages": [["role": "system", "content": SummarySettings.prompt], ["role": "user", "content": text]],
+            "messages": [["role": "system", "content": system], ["role": "user", "content": text]],
             // Grok models may reason first, and that counts against the limit.
-            "max_tokens": provider == .grok ? 4000 : 200,
+            "max_tokens": provider == .grok ? max(4000, maxTokens * 4) : maxTokens,
             "temperature": 0.3,
         ]
         // llama-server / Qwen: answer directly, no thinking pass.
@@ -1033,6 +1039,34 @@ final class SessionController {
         log.add("Summary in \(String(format: "%.1f", Date().timeIntervalSince(started))) s (\(text.count) chars in)")
         guard !summary.isEmpty else { throw SummaryError.failed("The summary model returned nothing") }
         return summary
+    }
+
+    /// Claude's transcript for the window, from the machine Claude runs on
+    /// (the window's ssh host, else the tmux server). Picks the transcript
+    /// holding the last prompt on screen.
+    func transcript(for page: WindowPage) async throws -> (host: String, turns: [Transcript.Turn]) {
+        guard let connection, let client else { throw SummaryError.notConnected }
+        let screen = (try? await client.command("capture-pane -p -J -t \(page.pane) -S -300").textLines.joined(separator: "\n"))
+            ?? page.terminal.frozenText().text
+        let needle = ClaudeReply.lastPrompt(from: screen).flatMap(Transcript.needle(fromPrompt:))
+        let script = Transcript.fetchScript(needle: needle)
+        var host = server.displayName
+        var command = script
+        if page.currentCommand == "ssh", let destination = try await sshDestination(of: page, client: client) {
+            host = destination
+            command = "printf '%s\\n' \(TmuxCommand.quote(script)) | ssh -o BatchMode=yes -o ConnectTimeout=5 \(TmuxCommand.quote(destination)) sh"
+        }
+        let started = Date()
+        let (output, code) = try await connection.run(command)
+        if code == 3, output.contains("ET_NO_TRANSCRIPT") { throw SummaryError.failed("No Claude transcripts on \(host)") }
+        guard code == 0, let fetched = Transcript.decodeFetchOutput(output) else {
+            log.add("Transcript fetch failed on \(host) (exit \(code)): \(output.prefix(300))")
+            throw SummaryError.failed("Couldn't read Claude's transcript on \(host)")
+        }
+        let turns = Transcript.parse(lines: fetched.lines)
+        log.add("Transcript \(fetched.path) on \(host): \(turns.count) turns in \(String(format: "%.1f", Date().timeIntervalSince(started))) s" +
+            (needle == nil ? " (no prompt on screen; newest)" : ""))
+        return (host, turns)
     }
 
     /// Reads `text` aloud: the server's natural voice if there is one

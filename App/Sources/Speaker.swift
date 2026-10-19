@@ -77,6 +77,23 @@ enum ClaudeReply {
         return reply
     }
 
+    /// The user's last prompt above the input box: the last "❯ " line at
+    /// column 0 and its indented continuation lines.
+    static func lastPrompt(from text: String) -> String? {
+        var lines = text.components(separatedBy: "\n")
+        let rules = lines.indices.filter { isRule(lines[$0]) }
+        if rules.count >= 2 { lines = Array(lines[..<rules[rules.count - 2]]) }
+        guard let start = lines.lastIndex(where: { $0.hasPrefix("❯ ") || $0.hasPrefix("> ") }) else { return nil }
+        var parts = [String(lines[start].dropFirst(2))]
+        var i = start + 1
+        while i < lines.count, lines[i].hasPrefix("  "), !lines[i].trimmingCharacters(in: .whitespaces).isEmpty {
+            parts.append(lines[i].trimmingCharacters(in: .whitespaces))
+            i += 1
+        }
+        let prompt = parts.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        return prompt.isEmpty ? nil : prompt
+    }
+
     private static func isRule(_ line: String) -> Bool {
         let t = line.trimmingCharacters(in: .whitespaces)
         return t.count >= 10 && t.allSatisfy { $0 == "─" }
