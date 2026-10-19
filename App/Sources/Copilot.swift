@@ -27,13 +27,13 @@ enum CopilotPrompts {
     """
 }
 
-/// The Copilot: Claude's exchanges in a window (from its transcript), which
-/// the user picks and hands to the summary model for a summary, an answer,
-/// or a drafted next prompt to review and send into the window.
+/// Copilot mode (✨ on the key row): in place of the terminal, the
+/// window's exchanges with Claude from its transcript, as steps to tick.
+/// The ticked steps go to the summary model (Mac mini or Grok) for a
+/// summary, an answer, or a drafted next prompt to review and send.
 struct CopilotView: View {
     let session: SessionController
     let page: WindowPage
-    @Environment(\.dismiss) private var dismiss
 
     @AppStorage(SummarySettings.providerKey) private var provider = SummarySettings.provider.rawValue
     @State private var turns: [Transcript.Turn] = []
@@ -58,27 +58,13 @@ struct CopilotView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            topBar
+            Divider()
             turnList
             Divider()
             bottomPanel
         }
-        .navigationTitle(page.name)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
-            ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Picker("Model", selection: $provider) {
-                        ForEach(SummarySettings.Provider.allCases) { Text($0.title).tag($0.rawValue) }
-                    }
-                    Button("Reload", systemImage: "arrow.clockwise") { Task { await load() } }
-                } label: {
-                    Label(modelLabel, systemImage: "cpu")
-                        .labelStyle(.titleAndIcon)
-                        .font(.subheadline)
-                }
-            }
-        }
+        .background(Color(Theme.background))
         .task { await load() }
         .onDisappear { task?.cancel() }
     }
@@ -89,6 +75,35 @@ struct CopilotView: View {
         case .grok: "Grok"
         case .custom: "Custom"
         }
+    }
+
+    private var topBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "sparkles").foregroundStyle(Theme.accent)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Copilot · \(page.name)").font(.subheadline.weight(.semibold))
+                Text(loading ? "Reading transcript…" : "\(turns.count) exchanges on \(host)")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Menu {
+                Button("Latest") { select(last: 1) }
+                Button("Last 3") { select(last: 3) }
+                Button("All") { selected = Set(turns.map(\.id)) }
+                Button("None") { selected = [] }
+            } label: {
+                Label("Select", systemImage: "checklist").font(.subheadline)
+            }
+            .disabled(turns.isEmpty)
+            Button { Task { await load() } } label: { Image(systemName: "arrow.clockwise") }
+                .disabled(loading)
+                .accessibilityLabel("Reload")
+            Button { session.copilotMode = false } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                .accessibilityLabel("Close Copilot")
+        }
+        .font(.title3)
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(Theme.surface)
     }
 
     // MARK: Turns
@@ -111,8 +126,6 @@ struct CopilotView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 10) {
-                        Text("\(turns.count) exchanges on \(host) · tap to expand, tick to include")
-                            .font(.caption).foregroundStyle(.secondary)
                         ForEach(turns) { turn in
                             card(turn).id(turn.id)
                         }
@@ -124,47 +137,62 @@ struct CopilotView: View {
         }
     }
 
+    /// One step: tap anywhere to include it; the chevron shows the whole
+    /// reply (the transcript has it all, not just what fit on screen).
     private func card(_ turn: Transcript.Turn) -> some View {
         let isSelected = selected.contains(turn.id)
         let isExpanded = expanded.contains(turn.id)
-        return HStack(alignment: .top, spacing: 10) {
-            Button {
-                if isSelected { selected.remove(turn.id) } else { selected.insert(turn.id) }
-            } label: {
+        let number = (turns.firstIndex(of: turn) ?? 0) + 1
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
                     .foregroundStyle(isSelected ? Theme.accent : Color.secondary)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(isSelected ? "Included" : "Not included")
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text("You").font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
-                    Spacer()
-                    if let date = turn.timestamp {
-                        Text(date, format: .relative(presentation: .named)).font(.caption2).foregroundStyle(.secondary)
+                Text("Step \(number)").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                if let date = turn.timestamp {
+                    Text(date, format: .relative(presentation: .named)).font(.caption2).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if turn.reply.count > 280 || turn.prompt.count > 200 {
+                    Button {
+                        withAnimation(.snappy) {
+                            if isExpanded { expanded.remove(turn.id) } else { expanded.insert(turn.id) }
+                        }
+                    } label: {
+                        Label(isExpanded ? "Less" : "All \(turn.reply.count / 1000 + 1)k", systemImage: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.caption)
                     }
-                }
-                Text(turn.prompt).font(.callout).lineLimit(isExpanded ? nil : 3)
-                Text("Claude").font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.top, 2)
-                Text(turn.reply.isEmpty ? "(no reply yet)" : turn.reply)
-                    .font(.callout)
-                    .foregroundStyle(turn.reply.isEmpty ? .secondary : .primary)
-                    .lineLimit(isExpanded ? nil : 5)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation(.snappy) {
-                    if isExpanded { expanded.remove(turn.id) } else { expanded.insert(turn.id) }
+                    .buttonStyle(.bordered).controlSize(.mini)
                 }
             }
+            Text(turn.prompt)
+                .font(.callout.weight(.medium))
+                .lineLimit(isExpanded ? nil : 4)
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 10))
+            Text(turn.reply.isEmpty ? "(no reply yet)" : turn.reply)
+                .font(.callout)
+                .foregroundStyle(turn.reply.isEmpty ? .secondary : .primary)
+                .lineLimit(isExpanded ? nil : 6)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(12)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
         .overlay {
             RoundedRectangle(cornerRadius: 12).strokeBorder(isSelected ? Theme.accent : .clear, lineWidth: 1.5)
         }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if isSelected { selected.remove(turn.id) } else { selected.insert(turn.id) }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.6)
+        }
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private func select(last count: Int) {
+        selected = Set(turns.suffix(count).map(\.id))
     }
 
     // MARK: Bottom panel
@@ -183,6 +211,14 @@ struct CopilotView: View {
                     .font(.subheadline)
                 }
             } else if output.map({ if case .draft = $0 { true } else { false } }) != true {
+                Picker("Model", selection: $provider) {
+                    Text("Mac mini").tag(SummarySettings.Provider.local.rawValue)
+                    Text("Grok").tag(SummarySettings.Provider.grok.rawValue)
+                    if provider == SummarySettings.Provider.custom.rawValue {
+                        Text("Custom").tag(SummarySettings.Provider.custom.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
                 TextField("Instruction or question (optional)", text: $instruction, axis: .vertical)
                     .lineLimit(1...4)
                     .textFieldStyle(.roundedBorder)
@@ -193,7 +229,7 @@ struct CopilotView: View {
                         .disabled(instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     actionButton("Draft prompt", "square.and.pencil", .draft)
                 }
-                Text(selected.isEmpty ? "Tick at least one exchange" : "\(selected.count) of \(turns.count) exchanges included")
+                Text(selected.isEmpty ? "Tap the steps to include" : "\(selected.count) of \(turns.count) steps included")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -243,7 +279,7 @@ struct CopilotView: View {
                     Button {
                         session.sendComposed(text.trimmingCharacters(in: .whitespacesAndNewlines), to: page, pressEnter: true)
                         UINotificationFeedbackGenerator().notificationOccurred(.success)
-                        dismiss()
+                        session.copilotMode = false
                     } label: {
                         Label("Send to \(page.name)", systemImage: "paperplane.fill")
                     }

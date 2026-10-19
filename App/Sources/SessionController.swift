@@ -683,6 +683,10 @@ final class SessionController {
 
     // MARK: - Image upload
 
+    /// Copilot mode (✨): the current window's transcript replaces its
+    /// terminal (CopilotView).
+    var copilotMode = false
+
     /// Shown while an upload runs or after it finishes.
     private(set) var uploadStatus: String?
 

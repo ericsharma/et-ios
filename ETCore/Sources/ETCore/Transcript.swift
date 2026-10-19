@@ -28,7 +28,7 @@ public enum Transcript {
     /// (a piece of the user's last prompt on screen); without a match, the
     /// newest. grep keeps only prompts and Claude's text, which cuts a 5 MB
     /// file to ~85 KB; `parse` does the exact filtering.
-    public static func fetchScript(needle: String?, maxLines: Int = 600) -> String {
+    public static func fetchScript(needle: String?, maxLines: Int = 3000) -> String {
         let quotedNeedle = needle.map(shellQuote) ?? "''"
         return """
         n=\(quotedNeedle); best=; files=$(ls -t "$HOME"/.claude/projects/*/*.jsonl 2>/dev/null | head -n 20)

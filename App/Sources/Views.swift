@@ -213,7 +213,6 @@ struct SessionView: View {
     /// Brief message under the header (e.g. no "Next:" to read).
     @State private var notice: String?
     @State private var showReadAloud = false
-    @State private var showCopilot = false
     /// A running "hold the speaker" summary, and when it started.
     @State private var summaryTask: Task<Void, Never>?
     @State private var summaryStarted: Date?
@@ -278,11 +277,6 @@ struct SessionView: View {
                              set: { if $0 == nil { model.incomingFile = nil } })) { file in
             SendFileSheet(session: session, file: file) { model.incomingFile = nil }
         }
-        .sheet(isPresented: $showCopilot) {
-            if let page = session.currentWindow {
-                NavigationStack { CopilotView(session: session, page: page) }
-            }
-        }
         .sheet(isPresented: $showReadAloud) {
             NavigationStack {
                 ReadAloudSettingsView(session: session).toolbar {
@@ -334,11 +328,6 @@ struct SessionView: View {
                     .font(.caption2.monospaced())
                     .foregroundStyle(.tertiary)
                 speakerButton
-                Button { showCopilot = true } label: {
-                    Image(systemName: "sparkles").font(.title3)
-                }
-                .disabled(session.currentWindow == nil || session.state != .connected)
-                .accessibilityLabel("Copilot")
                 Button { session.showOverview = true } label: {
                     Image(systemName: "square.grid.2x2").font(.title3)
                 }
@@ -350,7 +339,7 @@ struct SessionView: View {
                     Button("New window…", systemImage: "plus") { session.showNewWindow = true }
                         .disabled(session.state != .connected)
                     Button("Dictation words", systemImage: "character.book.closed") { showVocabulary = true }
-                    Button("Copilot", systemImage: "sparkles") { showCopilot = true }
+                    Button(session.copilotMode ? "Close Copilot" : "Copilot", systemImage: "sparkles") { session.copilotMode.toggle() }
                         .disabled(session.currentWindow == nil || session.state != .connected)
                     Button("Read aloud", systemImage: "speaker.wave.2") { showReadAloud = true }
                     Button("Debug log", systemImage: "doc.text") { showLog = true }
@@ -474,7 +463,7 @@ struct SessionView: View {
                 .disabled(session.windows.isEmpty)
             Menu {
                 Button("Dictation words", systemImage: "character.book.closed") { showVocabulary = true }
-                Button("Copilot", systemImage: "sparkles") { showCopilot = true }
+                Button(session.copilotMode ? "Close Copilot" : "Copilot", systemImage: "sparkles") { session.copilotMode.toggle() }
                     .disabled(session.currentWindow == nil || session.state != .connected)
                 Button("Read aloud", systemImage: "speaker.wave.2") { showReadAloud = true }
                 Button("Debug log", systemImage: "doc.text") { showLog = true }
@@ -540,10 +529,19 @@ struct SessionView: View {
     /// stays visible, dimmed, with a status banner (SPEC §5.7).
     private var terminalArea: some View {
         VStack(spacing: 6) {
-            WindowPager(session: session)
+            Group {
+                if session.copilotMode, let page = session.currentWindow, session.state == .connected {
+                    // .id: a new window gets its own transcript.
+                    CopilotView(session: session, page: page).id(page.id)
+                        .transition(.opacity)
+                } else {
+                    WindowPager(session: session)
+                }
+            }
                 .overlay { if session.state != .connected { Color.black.opacity(0.3) } }
                 .overlay(alignment: .top) { statusBanner }
                 .allowsHitTesting(session.state == .connected)
+                .animation(.snappy, value: session.copilotMode)
             if let page = session.currentWindow, session.state == .connected {
                 KeyRow(session: session, page: page, voice: voice)
                     .padding(.bottom, 6)

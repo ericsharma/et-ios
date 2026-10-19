@@ -24,6 +24,9 @@ enum KeyPreset: String, CaseIterable, Identifiable {
 enum Key: Hashable {
     case esc, tab, shiftTab, ctrl, up, down, left, right, enter, ctrlC, ctrlD
     case text(String)
+    /// Not a key: opens the photo picker (in the wheel on iPhone, where ✨
+    /// takes the bar's photo button).
+    case photo
 
     var title: String {
         switch self {
@@ -39,6 +42,7 @@ enum Key: Hashable {
         case .ctrlC: "^C"
         case .ctrlD: "^D"
         case .text(let t): t
+        case .photo: "photo"
         }
     }
 
@@ -50,7 +54,7 @@ enum Key: Hashable {
         case .esc: [0x1B]
         case .tab: [0x09]
         case .shiftTab: Array("\u{1b}[Z".utf8)
-        case .ctrl: []
+        case .ctrl, .photo: []
         case .up: Array((csi + "A").utf8)
         case .down: Array((csi + "B").utf8)
         case .right: Array((csi + "C").utf8)
@@ -72,15 +76,21 @@ struct KeyRow: View {
     let page: WindowPage
     let voice: VoiceInput
     @State private var photo: PhotosPickerItem?
+    @State private var pickingPhoto = false
     @State private var ctrlState: CtrlState = .off
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     enum CtrlState { case off, once, locked }
 
-    /// Three 44-pt buttons and two 8-pt gaps.
-    static let sideWidth: CGFloat = 148
+    /// iPhone: three 44-pt buttons and two 8-pt gaps a side. iPad: four on
+    /// the right (photo and ✨ both fit), and the left matches so the mic
+    /// stays centered.
+    private var sideWidth: CGFloat { roomy ? 200 : 148 }
+    private var roomy: Bool { sizeClass == .regular }
 
     var body: some View {
         let preset = session.preset(for: page)
+        let wheelKeys = roomy ? preset.keys : [.photo] + preset.keys
         HStack(spacing: 0) {
             // Both sides have the same width, so the mic stays centered.
             HStack(spacing: 8) {
@@ -105,7 +115,7 @@ struct KeyRow: View {
             }
             .overlay(alignment: .bottom) {
                 if session.keyWheelOpen {
-                    KeyWheel(keys: preset.keys, ctrlState: ctrlState, tap: tap, longPress: longPress)
+                    KeyWheel(keys: wheelKeys, ctrlState: ctrlState, tap: tap, longPress: longPress)
                         .offset(y: -52)
                         .transition(.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
                 }
@@ -113,7 +123,7 @@ struct KeyRow: View {
             .zIndex(1)
             }
             }
-            .frame(width: Self.sideWidth, alignment: .leading)
+            .frame(width: sideWidth, alignment: .leading)
             .zIndex(1)
             Spacer(minLength: 4)
             MicButton(session: session, page: page, voice: voice)
@@ -134,21 +144,18 @@ struct KeyRow: View {
                 .tint(Theme.accent)
                 .frame(width: 44, height: 40)
             }
-            PhotosPicker(selection: $photo, matching: .images) {
-                Image(systemName: "photo")
-                    .font(.system(size: 18, weight: .medium))
-                    .frame(width: 44, height: 40)
-                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+            if roomy {
+                barButton(systemName: "photo", active: false) {
+                    session.keyWheelOpen = false
+                    pickingPhoto = true
+                }
+                .accessibilityLabel("Send a screenshot or photo")
             }
-            .buttonStyle(.plain)
-            .simultaneousGesture(TapGesture().onEnded { session.keyWheelOpen = false })
-            .accessibilityLabel("Send a screenshot or photo")
-            .onChange(of: photo) { _, item in
-                guard let item else { return }
+            barButton(systemName: "sparkles", active: session.copilotMode) {
                 session.keyWheelOpen = false
-                photo = nil
-                Task { await upload(item) }
+                session.copilotMode.toggle()
             }
+            .accessibilityLabel(session.copilotMode ? "Close Copilot" : "Copilot")
             Button {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 session.keyWheelOpen = false
@@ -163,9 +170,15 @@ struct KeyRow: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Send (Enter)")
             }
-            .frame(width: Self.sideWidth, alignment: .trailing)
+            .frame(width: sideWidth, alignment: .trailing)
         }
         .padding(.horizontal, 14)
+        .photosPicker(isPresented: $pickingPhoto, selection: $photo, matching: .images)
+        .onChange(of: photo) { _, item in
+            guard let item else { return }
+            photo = nil
+            Task { await upload(item) }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .terminalViewControlModifierReset)) { note in
             // SwiftTerm clears its sticky Ctrl after one key; mirror that,
             // unless Ctrl is locked.
@@ -208,6 +221,11 @@ struct KeyRow: View {
     }
 
     private func tap(_ key: Key) {
+        if key == .photo {
+            session.keyWheelOpen = false
+            pickingPhoto = true
+            return
+        }
         if key == .ctrl {
             setCtrl(ctrlState == .off ? .once : .off)
             return
@@ -271,7 +289,9 @@ struct KeyWheel: View {
     private func keyCap(_ key: Key) -> some View {
         let isCtrl = key == .ctrl
         let active = isCtrl && ctrlState != .off
-        return Text(key.title)
+        return Group {
+            if key == .photo { Image(systemName: "photo") } else { Text(key.title) }
+        }
             .font(.system(size: 16, weight: .semibold, design: .monospaced))
             .frame(width: 62, height: 40)
             .background(active ? Theme.accent.opacity(ctrlState == .locked ? 0.75 : 0.4) : Color.white.opacity(0.1),
