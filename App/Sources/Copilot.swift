@@ -47,6 +47,8 @@ struct CopilotView: View {
     @State private var task: Task<Void, Never>?
     @State private var started: Date?
     @FocusState private var editing: Bool
+    /// Ask was tapped with no question: the box asks for one.
+    @State private var askHint = false
 
     enum Action { case summarize, ask, draft }
 
@@ -67,6 +69,11 @@ struct CopilotView: View {
         .background(Color(Theme.background))
         .task { await load() }
         .onDisappear { task?.cancel() }
+        .onChange(of: session.copilotDictation) { _, heard in
+            guard let heard, !heard.isEmpty else { return }
+            session.copilotDictation = nil
+            instruction += (instruction.isEmpty ? "" : " ") + heard
+        }
     }
 
     private var modelLabel: String {
@@ -219,14 +226,14 @@ struct CopilotView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                TextField("Instruction or question (optional)", text: $instruction, axis: .vertical)
+                TextField(askHint ? "Your question about the ticked steps…" : "Instruction or question · or use the mic",
+                          text: $instruction, axis: .vertical)
                     .lineLimit(1...4)
                     .textFieldStyle(.roundedBorder)
                     .focused($editing)
                 HStack(spacing: 8) {
                     actionButton("Summarize", "text.badge.checkmark", .summarize)
                     actionButton("Ask", "questionmark.bubble", .ask)
-                        .disabled(instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     actionButton("Draft prompt", "square.and.pencil", .draft)
                 }
                 Text(selected.isEmpty ? "Tap the steps to include" : "\(selected.count) of \(turns.count) steps included")
@@ -318,8 +325,15 @@ struct CopilotView: View {
     private func run(_ action: Action) {
         let picked = turns.filter { selected.contains($0.id) }
         guard !picked.isEmpty, task == nil else { return }
-        editing = false
         let ask = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+        if action == .ask, ask.isEmpty {
+            // Nothing to ask yet: type it, or tap the mic and say it.
+            askHint = true
+            editing = true
+            return
+        }
+        askHint = false
+        editing = false
         // The Mac mini has a 32k context; Grok far more.
         let budget = SummarySettings.provider == .grok ? 120_000 : 60_000
         var user = Transcript.render(picked, budget: budget)

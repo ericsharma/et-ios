@@ -493,7 +493,12 @@ struct MicButton: View {
             let heard = await voice.stop()
             let text = Vocabulary.shared.correct(heard, tagFiles: session.preset(for: page) == .claude)
             if text != heard { session.log.add("Dictation names fixed: \(heard) → \(text)") }
-            session.sendDictated(text, to: page)
+            if session.copilotMode {
+                // Copilot is open: the words are its instruction, not a prompt.
+                session.copilotDictation = text
+            } else {
+                session.sendDictated(text, to: page)
+            }
         case .stopping:
             break
         }

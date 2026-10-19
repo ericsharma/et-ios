@@ -686,6 +686,9 @@ final class SessionController {
     /// Copilot mode (✨): the current window's transcript replaces its
     /// terminal (CopilotView).
     var copilotMode = false
+    /// Dictated with the mic while Copilot is open; CopilotView adds it to
+    /// its instruction box and clears it.
+    var copilotDictation: String?
 
     /// Shown while an upload runs or after it finishes.
     private(set) var uploadStatus: String?
