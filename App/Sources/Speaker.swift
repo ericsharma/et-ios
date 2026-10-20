@@ -236,6 +236,13 @@ enum SummarySettings {
             case .custom: "Custom endpoint"
             }
         }
+        var label: String {
+            switch self {
+            case .local: "Mac mini"
+            case .grok: "Grok"
+            case .custom: "custom endpoint"
+            }
+        }
         /// Variable prefix in summary.env.
         var envPrefix: String { self == .grok ? "ET_GROK" : "ET_SUMMARY" }
     }

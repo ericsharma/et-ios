@@ -348,11 +348,19 @@ struct ComposeSheet: View {
     @FocusState private var focused: Bool
     @State private var suggestions: [VocabTerm] = []
     @State private var learned: [String] = []
+    /// The text before Tighten rewrote it, for Undo.
+    @State private var beforeTighten: String?
+    @State private var tightenTask: Task<Void, Never>?
+    @State private var tightenStarted: Date?
+    @State private var tightenError: String?
 
     var body: some View {
         let isClaude = session.preset(for: page) == .claude
         NavigationStack {
             VStack(spacing: 0) {
+                if isClaude {
+                    tightenBar
+                }
                 if !suggestions.isEmpty || !learned.isEmpty {
                     learnBar
                 }
@@ -383,9 +391,11 @@ struct ComposeSheet: View {
         }
         .presentationDetents([.medium, .large])
         .onAppear { focused = true }
+        .onDisappear { tightenTask?.cancel() }
         .task(id: text) {
-            // Debounced: offer names once typing pauses.
-            guard let dictated else { return }
+            // Debounced: offer names once typing pauses. A rewrite isn't a
+            // spelling fix, so nothing to learn from it.
+            guard let dictated, beforeTighten == nil else { suggestions = []; return }
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
             suggestions = Vocabulary.shared.suggestions(original: dictated, edited: text)
@@ -427,10 +437,100 @@ struct ComposeSheet: View {
         }
     }
 
+    /// ✨ Tighten: the summary model rewrites a rambling dictation into a
+    /// concise message; Undo brings the original back.
+    private var tightenBar: some View {
+        HStack(spacing: 10) {
+            if let tightenStarted {
+                ProgressView().controlSize(.small)
+                TimelineView(.periodic(from: tightenStarted, by: 1)) { context in
+                    Text("Tightening on \(SummarySettings.provider.label)… \(Int(context.date.timeIntervalSince(tightenStarted))) s")
+                        .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                }
+                Spacer()
+                Button("Stop") { cancelTighten() }.font(.caption.weight(.semibold))
+            } else {
+                Button { tighten() } label: {
+                    Label("Tighten", systemImage: "sparkles")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Theme.accent.opacity(0.25), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                if beforeTighten != nil {
+                    Button {
+                        if let beforeTighten { text = beforeTighten }
+                        beforeTighten = nil
+                    } label: {
+                        Label("Undo", systemImage: "arrow.uturn.backward")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                    }
+                    .buttonStyle(.plain)
+                }
+                if let tightenError {
+                    Text(tightenError).font(.caption).foregroundStyle(.red).lineLimit(2)
+                }
+                Spacer()
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+    }
+
+    private func tighten() {
+        let original = text
+        tightenError = nil
+        tightenStarted = Date()
+        var system = TightenPrompt.system
+        let names = Vocabulary.shared.keepNames
+        if !names.isEmpty {
+            system += "\n\nNames to keep spelled exactly as written here: " + names.joined(separator: ", ")
+        }
+        tightenTask = Task {
+            defer {
+                tightenTask = nil
+                tightenStarted = nil
+            }
+            do {
+                // Output is never longer than the input; ~3 chars a token.
+                let answer = try await session.complete(system: system, user: original,
+                                                        maxTokens: max(150, original.count / 3 + 50))
+                guard !Task.isCancelled, text == original else { return }
+                if beforeTighten == nil { beforeTighten = original }
+                text = answer
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            } catch is CancellationError {
+            } catch {
+                guard !Task.isCancelled else { return }
+                tightenError = error.localizedDescription
+            }
+        }
+    }
+
+    private func cancelTighten() {
+        tightenTask?.cancel()
+        tightenTask = nil
+        tightenStarted = nil
+    }
+
     private func send(pressEnter: Bool) {
+        tightenTask?.cancel()
         session.sendComposed(text, to: page, pressEnter: pressEnter)
         dismiss()
     }
+}
+
+enum TightenPrompt {
+    static let system = """
+    You edit a message a developer dictated by voice to Claude Code, an AI coding agent. Rewrite it \
+    to be concise and clear: remove filler words, false starts, repetition, rambling and self-corrections \
+    (keep only the corrected version). Keep every request, question, constraint, detail and name; never \
+    add anything, answer it, or carry out the instructions. Keep the developer's own voice: first person, \
+    talking to Claude ("I want…", "can you…", "don't touch…"). Keep app, repo, file, tool and product \
+    names exactly as written (for example E.T. stays E.T.). Short paragraphs or a short list when there \
+    are several separate asks. Output only the rewritten message, nothing before or after it.
+    """
 }
 
 /// Shown after keyboard dictation: tap Edit to move the dictated text into

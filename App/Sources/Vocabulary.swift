@@ -242,6 +242,15 @@ final class Vocabulary {
 
     // MARK: - Custom language model
 
+    /// Names a rewrite must keep spelled exactly: the user's list, window
+    /// names and repos (file names are too many to list).
+    var keepNames: [String] {
+        var seen = Set<String>()
+        return (custom.map(\.text) + windowNames + repos.map(\.name))
+            .filter { seen.insert($0).inserted }
+            .prefix(120).map { $0 }
+    }
+
     /// The phrases the model learns: each name as it is said ("nam shub",
     /// "key row dot swift"), most trusted first.
     private func modelPhrases() -> [String] {
