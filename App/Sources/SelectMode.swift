@@ -1,3 +1,4 @@
+import ETCore
 import SwiftUI
 import UIKit
 
@@ -12,9 +13,45 @@ struct SelectModeRequest: Identifiable {
 /// soft-wrapped rows joined back into their logical lines.
 struct TerminalText {
     var text: String
-    /// UTF-16 offset where the visible screen begins.
+    /// UTF-16 offset where the visible screen begins (for a transcript:
+    /// where Claude's last reply begins).
     var screenStart: Int
+    /// The user's prompts, drawn in the accent color (transcripts only).
+    var prompts: [NSRange] = []
+
+    /// Claude's transcript as one text: each prompt, then Claude's reply,
+    /// with a blank line between them. Exact text, nothing cut off by the
+    /// screen's width or scrollback.
+    init(turns: [Transcript.Turn]) {
+        var text = ""
+        var prompts: [NSRange] = []
+        var lastReply = 0
+        for turn in turns {
+            if !text.isEmpty { text += "\n\n" }
+            let at = (text as NSString).length
+            text += turn.prompt
+            prompts.append(NSRange(location: at, length: (turn.prompt as NSString).length))
+            lastReply = at
+            if !turn.reply.isEmpty {
+                text += "\n\n"
+                lastReply = (text as NSString).length
+                text += turn.reply
+            }
+        }
+        self.text = text
+        self.screenStart = lastReply
+        self.prompts = prompts
+    }
+
+    init(text: String, screenStart: Int) {
+        self.text = text
+        self.screenStart = screenStart
+    }
 }
+
+/// What select mode shows: the terminal's text, or (Claude windows) the
+/// whole Claude transcript.
+enum SelectSource: Hashable { case transcript, screen }
 
 extension TerminalHost {
     func frozenText() -> TerminalText {
@@ -126,12 +163,29 @@ struct SelectModeView: View {
     @State private var volume = VolumeButtons()
     @State private var frozen: TerminalText?
     @State private var copied: String?
+    @State private var source = SelectSource.screen
+    @State private var transcript: TerminalText?
+    @State private var transcriptStatus: String?
+
+    private var isClaude: Bool { session.preset(for: request.page) == .claude }
+    private var shown: TerminalText? { source == .transcript ? transcript : frozen }
 
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Label("Select", systemImage: "text.cursor").font(.subheadline.weight(.semibold))
+                    if isClaude {
+                        // Claude windows: the whole transcript (exact text),
+                        // or what the terminal shows.
+                        Picker("Text", selection: $source) {
+                            Text("Transcript").tag(SelectSource.transcript)
+                            Text("Screen").tag(SelectSource.screen)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 170)
+                    } else {
+                        Label("Select", systemImage: "text.cursor").font(.subheadline.weight(.semibold))
+                    }
                     Spacer()
                     // Which end the volume buttons move.
                     Picker("Volume buttons move", selection: $model.movingStart) {
@@ -142,6 +196,9 @@ struct SelectModeView: View {
                     .frame(width: 140)
                     Image(systemName: "speaker.wave.2").font(.caption).foregroundStyle(.secondary)
                 }
+                if let transcriptStatus, source == .transcript {
+                    Text(transcriptStatus).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                }
                 if let n = model.autoCopied {
                     Label("Copied \(n) characters", systemImage: "checkmark.circle.fill")
                         .font(.caption2.weight(.semibold)).foregroundStyle(.green)
@@ -151,12 +208,19 @@ struct SelectModeView: View {
             }
             .padding(.horizontal, 12).padding(.vertical, 6)
             .background(Theme.surface)
-            if let frozen {
-                SelectTextRepresentable(model: model, text: frozen, initialSelection: request.initialSelection,
+            if let shown {
+                SelectTextRepresentable(model: model, text: shown,
+                                        initialSelection: source == .screen ? request.initialSelection : nil,
                                         sendToEditor: sendToEditor, copyOneLine: copyOneLine,
                                         switchWindow: { next in session.switchWindow(next: next) })
+                    .id(source)
             } else {
-                Color(Theme.background)
+                ZStack {
+                    Color(Theme.background)
+                    if source == .transcript, transcriptStatus == nil {
+                        ProgressView("Reading Claude's transcript…").tint(.secondary)
+                    }
+                }
             }
             toolbar
         }
@@ -173,9 +237,29 @@ struct SelectModeView: View {
             volume.onPress = { [model] up in model.volumePressed(up: up) }
             volume.start()
             _ = request.page.terminal.view.resignFirstResponder()
-            let text = request.page.terminal.frozenText()
-            model.screenStart = text.screenStart
-            frozen = text
+            frozen = request.page.terminal.frozenText()
+            if isClaude, request.initialSelection == nil { source = .transcript }
+        }
+        .onChange(of: shown?.screenStart, initial: true) { _, start in model.screenStart = start ?? 0 }
+        .task { await loadTranscript() }
+    }
+
+    /// Claude windows: fetch the transcript from the machine Claude runs on
+    /// (as Copilot does). On failure, fall back to the screen.
+    private func loadTranscript() async {
+        guard isClaude else { return }
+        do {
+            let result = try await session.transcript(for: request.page)
+            guard !result.turns.isEmpty else {
+                transcriptStatus = "No exchanges in the transcript yet"
+                source = .screen
+                return
+            }
+            transcript = TerminalText(turns: result.turns)
+            transcriptStatus = "\(result.turns.count) exchanges · \(result.host) · prompts in blue, tool output left out"
+        } catch {
+            transcriptStatus = (error as? LocalizedError)?.errorDescription ?? "\(error)"
+            if source == .transcript { source = .screen }
         }
     }
 
@@ -184,7 +268,11 @@ struct SelectModeView: View {
             tool("Copy", "doc.on.doc") { finish(copy: model.selectedText) }
             tool("One line", "arrow.right.to.line") { copyOneLine() }
             tool("Editor", "square.and.pencil") { sendToEditor() }
-            tool("Screen", "rectangle.dashed") { model.selectScreen() }
+            if source == .transcript {
+                tool("Last reply", "text.bubble") { model.selectScreen() }
+            } else {
+                tool("Screen", "rectangle.dashed") { model.selectScreen() }
+            }
             tool("Done", "checkmark") { exit() }
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
@@ -244,7 +332,17 @@ struct SelectTextRepresentable: UIViewRepresentable {
         let tv = SelectTextView()
         tv.delegate = context.coordinator
         tv.onTwoFingerSwipe = switchWindow
-        tv.text = text.text
+        if text.prompts.isEmpty {
+            tv.text = text.text
+        } else {
+            let styled = NSMutableAttributedString(string: text.text, attributes: [
+                .font: tv.font as Any, .foregroundColor: Theme.foreground,
+            ])
+            for range in text.prompts {
+                styled.addAttribute(.foregroundColor, value: tv.tintColor as Any, range: range)
+            }
+            tv.attributedText = styled
+        }
         model.textView = tv
         DispatchQueue.main.async {
             let ns = tv.text as NSString

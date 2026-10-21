@@ -129,21 +129,22 @@ struct KeyRow: View {
             MicButton(session: session, page: page, voice: voice)
             Spacer(minLength: 4)
             HStack(spacing: 8) {
-            if Clipboard.shared.hasText {
-                // The system paste button pastes in one tap, without the
-                // "allow paste" prompt a custom button would trigger.
-                PasteButton(payloadType: String.self) { strings in
-                    let text = strings.joined(separator: "\n")
-                    Task { @MainActor in
-                        session.keyWheelOpen = false
-                        session.paste(text, to: page)
-                    }
+            // The system paste button pastes in one tap, without the
+            // "allow paste" prompt a custom button would trigger. It is
+            // always shown (it greys itself out when there is nothing to
+            // paste): hiding it on `hasStrings` lost it whenever that
+            // went stale.
+            PasteButton(payloadType: String.self) { strings in
+                let text = strings.joined(separator: "\n")
+                Task { @MainActor in
+                    session.keyWheelOpen = false
+                    session.paste(text, to: page)
                 }
-                .labelStyle(.iconOnly)
-                .buttonBorderShape(.roundedRectangle(radius: 10))
-                .tint(Theme.accent)
-                .frame(width: 44, height: 40)
             }
+            .labelStyle(.iconOnly)
+            .buttonBorderShape(.roundedRectangle(radius: 10))
+            .tint(Theme.accent)
+            .frame(width: 44, height: 40)
             if roomy {
                 barButton(systemName: "photo", active: false) {
                     session.keyWheelOpen = false
@@ -299,23 +300,6 @@ struct KeyWheel: View {
             .contentShape(Rectangle())
             .onTapGesture { tap(key) }
             .onLongPressGesture(minimumDuration: 0.4) { longPress(key) }
-    }
-}
-
-/// Whether the clipboard holds text (shows the paste button). Checking
-/// `hasStrings` doesn't read the clipboard, so it never triggers iOS's
-/// paste prompt.
-@MainActor @Observable
-final class Clipboard {
-    static let shared = Clipboard()
-    private(set) var hasText = UIPasteboard.general.hasStrings
-
-    private init() {
-        for name in [UIPasteboard.changedNotification, UIApplication.didBecomeActiveNotification] {
-            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { _ in
-                MainActor.assumeIsolated { Clipboard.shared.hasText = UIPasteboard.general.hasStrings }
-            }
-        }
     }
 }
 
