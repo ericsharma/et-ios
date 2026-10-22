@@ -1,6 +1,6 @@
 # Plan: manymux sessions on all machines, over etd
 
-Status: 2026-10-22. A1 done (nixos-config a5f8cc0: manymux v0.2.2 nodes run on trigkey and gmktec; trigkey watches gmktec and mac-mini). Next: B1 (Mac mini). Follows [PLAN-iroh.md](PLAN-iroh.md).
+Status: 2026-10-22. A1 and B1 done: manymux v0.2.2 nodes run on trigkey, gmktec and the Mac mini (nixos-config a5f8cc0); `mm ls` on trigkey reaches all three. Next: A2. Follows [PLAN-iroh.md](PLAN-iroh.md).
 
 ## 1. Goal
 
