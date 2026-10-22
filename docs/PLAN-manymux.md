@@ -1,6 +1,6 @@
 # Plan: manymux sessions on all machines, over etd
 
-Status: 2026-10-22. A1, B1, A2, A3, A4 done. etd 62c3335 deployed: et-link manymux API, one ssh connection per machine, and push for manymux bells (etd follows trigkey's node and runs `et-notify --manymux`; nixos-config commit after 10b9805). manymux v0.2.2 runs on trigkey, gmktec and the Mac mini. etd 464e566 (deployed) has `Agent`, `ExecOn`, `Machines`; the ALPN stays `et/1` (no users: new variants are appended, no compatibility code). Push from a gmktec session verified on the phone (after nixos-config 9992672: the manymux service PATH needs ssh). B2 + B3 pushed by the Mac agent (be4689e, 226a17e, 7370440). C1 passed (owner: all works; wants free switching across machines, added to B4). Next: B4. Follows [PLAN-iroh.md](PLAN-iroh.md).
+Status: 2026-10-22. A1, B1, A2, A3, A4 done. etd 62c3335 deployed: et-link manymux API, one ssh connection per machine, and push for manymux bells (etd follows trigkey's node and runs `et-notify --manymux`; nixos-config commit after 10b9805). manymux v0.2.2 runs on trigkey, gmktec and the Mac mini. etd 464e566 (deployed) has `Agent`, `ExecOn`, `Machines`; the ALPN stays `et/1` (no users: new variants are appended, no compatibility code). Push from a gmktec session verified on the phone (after nixos-config 9992672: the manymux service PATH needs ssh). B2 + B3 pushed by the Mac agent (be4689e, 226a17e, 7370440). C1 passed (owner: all works; wants free switching across machines, added to B4). `ws` now builds the manymux workspace (shell + claude on every machine; nixos-config, after 9992672). Next: B4 (Mac agent), C2 (owner uses `ws`). Follows [PLAN-iroh.md](PLAN-iroh.md).
 
 ## 1. Goal
 
@@ -84,7 +84,7 @@ On a manymux page, the image goes in manymux's own `PASTE` frame. The session's 
 |---|---|---|
 | C1 | Test TestFlight build 1 on the phone (list, open, type, new session on gmktec, view-only, image). | After B3 |
 | C2 | Start your real sessions in manymux (`mm new claude`, `mm new gmktec claude`, …) and use them for a day. | After C1 |
-| C3 | Decide when to stop the tmux session on trigkey. tmux stays installed. | After C2 |
+| C3 | Decide when to stop the tmux session on trigkey. tmux stays installed. Then remove tmux-persist.nix and the et-notify tmux hook, from a shell outside tmux: removing the tmux-server unit runs its ExecStop (`kill-server`). | After C2 |
 
 ### Order
 
