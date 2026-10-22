@@ -1,6 +1,6 @@
 # Plan: manymux sessions on all machines, over etd
 
-Status: 2026-10-22. A1, B1, A2, A3, A4 done. etd 62c3335 deployed: et-link manymux API, one ssh connection per machine, and push for manymux bells (etd follows trigkey's node and runs `et-notify --manymux`; nixos-config commit after 10b9805). manymux v0.2.2 runs on trigkey, gmktec and the Mac mini. etd 464e566 (deployed) has `Agent`, `ExecOn`, `Machines`; the ALPN stays `et/1` (no users: new variants are appended, no compatibility code). Push from a gmktec session verified on the phone (after nixos-config 9992672: the manymux service PATH needs ssh). B2 + B3 pushed by the Mac agent (be4689e, 226a17e, 7370440). Next: C1 (TestFlight test), then B4. Follows [PLAN-iroh.md](PLAN-iroh.md).
+Status: 2026-10-22. A1, B1, A2, A3, A4 done. etd 62c3335 deployed: et-link manymux API, one ssh connection per machine, and push for manymux bells (etd follows trigkey's node and runs `et-notify --manymux`; nixos-config commit after 10b9805). manymux v0.2.2 runs on trigkey, gmktec and the Mac mini. etd 464e566 (deployed) has `Agent`, `ExecOn`, `Machines`; the ALPN stays `et/1` (no users: new variants are appended, no compatibility code). Push from a gmktec session verified on the phone (after nixos-config 9992672: the manymux service PATH needs ssh). B2 + B3 pushed by the Mac agent (be4689e, 226a17e, 7370440). C1 passed (owner: all works; wants free switching across machines, added to B4). Next: B4. Follows [PLAN-iroh.md](PLAN-iroh.md).
 
 ## 1. Goal
 
@@ -76,7 +76,7 @@ On a manymux page, the image goes in manymux's own `PASTE` frame. The session's 
 | B1 | `darwin-rebuild switch --flake ~/nixos-config#m1-mini` after A1: `mm` in `environment.systemPackages`, launchd agent for `mm daemon --no-notify`. | `ssh mac-mini mm --version` works from trigkey |
 | B2 | Bump `Vendor/etd`, rebuild the xcframework. | Builds |
 | B3 | Machines screen: sessions grouped by machine (title, idle, bell mark, attached count); tap opens a session page (SwiftTerm fed by the attach stream); swipe = next session on the machine; another gesture = next machine; long-press = rename, end, view-only; **+** = machine, then command. Image paste through `PASTE`. Overview thumbnails through `Peek`. TestFlight. | TestFlight build 1 |
-| B4 | Parity on manymux pages: select mode history (`history` lines on attach), Copilot and read aloud through `ExecOn`, key row from the session's command or title. TestFlight. | TestFlight build 2 |
+| B4 | (1) One ring of sessions across all machines (owner feedback after C1, 2026-10-22: in tmux, windows on every machine were one swipe apart): two-finger swipe goes through every session on every machine, tab strip and iPad sidebar list them all with a machine label, the previous session stays attached for an instant swipe back. (2) Push: heartbeat file through `exec` in manymux mode; a tap on a `manymux` push opens that session. (3) Parity: select mode history, Copilot and read aloud through `ExecOn`, key row from the command or title. TestFlight. | TestFlight build 2 |
 
 ### C. You
 
