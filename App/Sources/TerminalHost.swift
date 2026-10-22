@@ -260,6 +260,15 @@ final class TerminalHost: NSObject {
         view.feed(byteArray: bytes[...])
     }
 
+    /// Sets the terminal's size without the view's (a manymux session took
+    /// another size). The next change of the view's size sets it back.
+    func setSize(cols: Int, rows: Int) {
+        let t = terminal
+        guard cols > 1, rows > 1, cols != t.cols || rows != t.rows else { return }
+        t.resize(cols: cols, rows: rows)
+        view.setNeedsDisplay()
+    }
+
     /// Clears the terminal and replays restored content.
     func reset(with bytes: [UInt8]) {
         view.getTerminal().resetToInitialState()

@@ -20,6 +20,7 @@
 		7019904934883F3AD44F1675 /* Speaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD862AA08B0790FEA8C32121 /* Speaker.swift */; };
 		7B7A1AB52E7AAEB0D5283959 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB367F7DC192EBCCA06508BC /* AppModel.swift */; };
 		7E75886C82FBA663C296E12F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 65A00CC919987D56EC6D81C2 /* Assets.xcassets */; };
+		893A4346740B9772C37B287C /* MachinesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15F85597F66DBB0CC3A093AF /* MachinesView.swift */; };
 		92D2F2431FD1402AC2FB77A5 /* VolumeButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6643B444DEC1C52098247355 /* VolumeButtons.swift */; };
 		9883DC46C85AE06C00277FC1 /* ETSSH in Frameworks */ = {isa = PBXBuildFile; productRef = A3FE42A77BFB03B651F1C8C3 /* ETSSH */; };
 		B0C4E14269567F3757D629D8 /* Iroh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 934B8450ECC39D11B1F4B9F9 /* Iroh.swift */; };
@@ -36,6 +37,7 @@
 		090F6A6A5A570B49BDA73AE9 /* ET.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ET.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0B7EB4283A5F1B4E8DAE0DCE /* SessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionController.swift; sourceTree = "<group>"; };
 		0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHost.swift; sourceTree = "<group>"; };
+		15F85597F66DBB0CC3A093AF /* MachinesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MachinesView.swift; sourceTree = "<group>"; };
 		175E8D2F9B6999615A8AAF59 /* VoiceInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInput.swift; sourceTree = "<group>"; };
 		23D00D38126433369DDB5E17 /* Copilot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Copilot.swift; sourceTree = "<group>"; };
 		36A4263F016A81FE6C5B2B5E /* Overview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Overview.swift; sourceTree = "<group>"; };
@@ -89,6 +91,7 @@
 				EE328D04440F47561CB04404 /* ETApp.swift */,
 				934B8450ECC39D11B1F4B9F9 /* Iroh.swift */,
 				FFCBF94AC41590A9B15E7FAA /* KeyRow.swift */,
+				15F85597F66DBB0CC3A093AF /* MachinesView.swift */,
 				36A4263F016A81FE6C5B2B5E /* Overview.swift */,
 				D3251CE9C9BA08235AF09F96 /* Push.swift */,
 				68B7189D418370DCE2A29810 /* QRScanner.swift */,
@@ -218,6 +221,7 @@
 				F8F1BACDD89A3936FDBA3DCA /* ETApp.swift in Sources */,
 				B0C4E14269567F3757D629D8 /* Iroh.swift in Sources */,
 				176CEB6F04458465BE3439DA /* KeyRow.swift in Sources */,
+				893A4346740B9772C37B287C /* MachinesView.swift in Sources */,
 				C7D22526ADD3F1CB22E245DD /* Overview.swift in Sources */,
 				3A3285F4C8B435AFADFA4F39 /* Push.swift in Sources */,
 				31F3F13EE8608AD5117FAEC7 /* QRScanner.swift in Sources */,

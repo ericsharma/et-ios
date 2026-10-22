@@ -369,7 +369,11 @@ struct SessionView: View {
         .background(Color(Theme.background))
         .background { ShortcutKeys(session: session, toggleSidebar: toggleSidebar) }
         .sheet(isPresented: $session.showNewWindow) {
-            NavigationStack { NewWindowSheet(session: session) }
+            if session.mode == .manymux {
+                NavigationStack { MmSpawnSheet(session: session) }
+            } else {
+                NavigationStack { NewWindowSheet(session: session) }
+            }
         }
         .fullScreenCover(isPresented: $session.showOverview) {
             OverviewView(session: session)
@@ -424,9 +428,13 @@ struct SessionView: View {
                         .font(.caption2.monospaced())
                         .foregroundStyle(path == "direct" ? .green : .orange)
                 }
-                Text(session.server.displayName + (session.sessionName.map { " · \($0)" } ?? ""))
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
+                if session.mode == .manymux {
+                    mmTitle
+                } else {
+                    Text(session.server.displayName + (session.sessionName.map { " · \($0)" } ?? ""))
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                }
                 Text("Hi Isabel 👋")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Theme.accent)
@@ -440,15 +448,26 @@ struct SessionView: View {
                     .font(.caption2.monospaced())
                     .foregroundStyle(.tertiary)
                 speakerButton
-                Button { session.showOverview = true } label: {
-                    Image(systemName: "square.grid.2x2").font(.title3)
+                if session.mode == .manymux {
+                    Button { session.showNewWindow = true } label: {
+                        Image(systemName: "plus").font(.title3)
+                    }
+                    .disabled(session.state != .connected || session.machines.isEmpty)
+                    .accessibilityLabel("New session")
+                } else {
+                    Button { session.showOverview = true } label: {
+                        Image(systemName: "square.grid.2x2").font(.title3)
+                    }
+                    .disabled(session.windows.isEmpty)
+                    .accessibilityLabel("Overview")
                 }
-                .disabled(session.windows.isEmpty)
-                .accessibilityLabel("Overview")
                 Menu {
-                    Button("Overview", systemImage: "square.grid.2x2") { session.showOverview = true }
-                        .disabled(session.windows.isEmpty)
-                    Button("New window…", systemImage: "plus") { session.showNewWindow = true }
+                    modeButton
+                    if session.mode == .tmux {
+                        Button("Overview", systemImage: "square.grid.2x2") { session.showOverview = true }
+                            .disabled(session.windows.isEmpty)
+                    }
+                    Button(session.mode == .manymux ? "New session…" : "New window…", systemImage: "plus") { session.showNewWindow = true }
                         .disabled(session.state != .connected)
                     Button("Dictation words", systemImage: "character.book.closed") { showVocabulary = true }
                     Button(session.copilotMode ? "Close Copilot" : "Copilot", systemImage: "sparkles") { session.copilotMode.toggle() }
@@ -465,13 +484,53 @@ struct SessionView: View {
                 }
             }
             .padding(.horizontal, 12)
-            if !session.windows.isEmpty {
+            if !session.windows.isEmpty, session.mode == .tmux || session.currentWindow != nil {
                 WindowTabs(session: session)
             }
         }
         .padding(.top, 4)
         .padding(.bottom, 6)
         .background(Theme.surface)
+    }
+
+    /// manymux: back to Machines, the machine (tap: move to another), and
+    /// the session's title.
+    @ViewBuilder private var mmTitle: some View {
+        if let page = session.currentWindow {
+            Button { session.showMachines() } label: {
+                Image(systemName: "chevron.left").font(.subheadline.weight(.semibold))
+            }
+            .accessibilityLabel("Machines")
+            Menu {
+                ForEach(session.machines) { machine in
+                    Button(machine.name + (machine.sessions.isEmpty ? " (no sessions)" : "")) { session.openMachine(machine.name) }
+                        .disabled(machine.name == session.mmMachineName)
+                }
+            } label: {
+                Text(session.mmMachineName ?? "?")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+            }
+            Text(page.readOnly ? "\(page.name) · view only" : page.title.isEmpty ? page.name : page.title)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        } else {
+            Text(session.server.displayName + " · Machines")
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+        }
+    }
+
+    /// iroh servers: between the Machines screen and tmux.
+    @ViewBuilder private var modeButton: some View {
+        if session.server.isIroh {
+            if session.mode == .manymux {
+                Button("tmux", systemImage: "rectangle.split.3x1") { session.setMode(.tmux) }
+            } else {
+                Button("Machines", systemImage: "desktopcomputer") { session.setMode(.manymux) }
+            }
+        }
     }
 
     /// Tap: read the last "Next:" line. Hold: summarize Claude's whole
@@ -572,8 +631,12 @@ struct SessionView: View {
             Button { session.showNewWindow = true } label: { Image(systemName: "plus") }
                 .disabled(session.state != .connected)
             Button { session.showOverview = true } label: { Image(systemName: "square.grid.2x2") }
-                .disabled(session.windows.isEmpty)
+                .disabled(session.windows.isEmpty || session.mode == .manymux)
             Menu {
+                modeButton
+                if session.mode == .manymux, session.currentWindow != nil {
+                    Button("Machines", systemImage: "desktopcomputer") { session.showMachines() }
+                }
                 Button("Dictation words", systemImage: "character.book.closed") { showVocabulary = true }
                 Button(session.copilotMode ? "Close Copilot" : "Copilot", systemImage: "sparkles") { session.copilotMode.toggle() }
                     .disabled(session.currentWindow == nil || session.state != .connected)
@@ -587,6 +650,29 @@ struct SessionView: View {
     }
 
     @ViewBuilder private var content: some View {
+        if session.mode == .manymux, session.currentWindow == nil, !session.machines.isEmpty {
+            MachinesView(session: session)
+                .overlay(alignment: .top) { statusBanner }
+                .overlay(alignment: .top) { mmNoticeView }
+                .animation(.snappy, value: session.mmNotice)
+        } else {
+            stateContent
+        }
+    }
+
+    @ViewBuilder private var mmNoticeView: some View {
+        if let notice = session.mmNotice {
+            Label(notice, systemImage: "info.circle")
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(2)
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                .background(.ultraThinMaterial, in: Capsule())
+                .padding(.top, 8).padding(.horizontal, 16)
+                .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    @ViewBuilder private var stateContent: some View {
         switch session.state {
         case .connecting where !session.windows.isEmpty && session.approvalURL == nil:
             terminalArea
@@ -654,8 +740,20 @@ struct SessionView: View {
                 .allowsHitTesting(session.state == .connected)
                 .animation(.snappy, value: session.copilotMode)
             if let page = session.currentWindow, session.state == .connected {
-                KeyRow(session: session, page: page, voice: voice)
+                if page.readOnly {
+                    HStack {
+                        Label("View only", systemImage: "eye").font(.subheadline).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Open to type") {
+                            if let link = page.mm { session.openMm(machine: link.machine, name: link.name) }
+                        }
+                    }
+                    .padding(.horizontal, 16).frame(height: 40)
                     .padding(.bottom, 6)
+                } else {
+                    KeyRow(session: session, page: page, voice: voice)
+                        .padding(.bottom, 6)
+                }
             }
         }
         .overlay(alignment: .bottom) {
@@ -719,6 +817,8 @@ struct SessionView: View {
             }
         }
         .animation(.snappy, value: notice)
+        .overlay(alignment: .top) { mmNoticeView }
+        .animation(.snappy, value: session.mmNotice)
         .overlay(alignment: .top) {
             if let started = summaryStarted {
                 TimelineView(.periodic(from: started, by: 1)) { context in
@@ -820,8 +920,8 @@ struct WindowTabs: View {
                         .id(page.id)
                         .contextMenu {
                             Button("Rename…") { newName = page.name; renaming = page }
-                            Button("New window…") { session.showNewWindow = true }
-                            Button("Close window…", role: .destructive) { closing = page }
+                            Button(page.mm == nil ? "New window…" : "New session…") { session.showNewWindow = true }
+                            Button(page.mm == nil ? "Close window…" : "End session…", role: .destructive) { closing = page }
                         }
                     }
                     Button { session.showNewWindow = true } label: {
@@ -841,9 +941,10 @@ struct WindowTabs: View {
                 Button("Cancel", role: .cancel) {}
             }
             .confirmationDialog("Close \(closing?.name ?? "")?", isPresented: Binding(get: { closing != nil }, set: { if !$0 { closing = nil } }), titleVisibility: .visible) {
-                Button("Close window", role: .destructive) { if let page = closing { session.closeWindow(page) } }
+                Button(closing?.mm == nil ? "Close window" : "End session", role: .destructive) { if let page = closing { session.closeWindow(page) } }
             } message: {
-                Text("This kills the window and everything running in it, on the server.")
+                Text(closing?.mm == nil ? "This kills the window and everything running in it, on the server."
+                     : "This stops the program in the session, on \(closing?.mm?.machine ?? "its machine").")
             }
             .onChange(of: session.currentWindowID) { _, id in
                 withAnimation { proxy.scrollTo(id, anchor: .center) }
@@ -961,7 +1062,7 @@ struct ShortcutKeys: View {
             Button("Compose") {
                 if let page = session.currentWindow { session.composeRequest = ComposeRequest(page: page, text: "") }
             }.keyboardShortcut("k", modifiers: .command)
-            Button("Overview") { session.showOverview.toggle() }.keyboardShortcut("o", modifiers: .command)
+            Button("Overview") { if session.mode == .tmux { session.showOverview.toggle() } }.keyboardShortcut("o", modifiers: .command)
             Button("Toggle sidebar", action: toggleSidebar).keyboardShortcut("\\", modifiers: .command)
         }
         .opacity(0)
