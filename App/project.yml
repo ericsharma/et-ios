@@ -47,6 +47,7 @@ targets:
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         NSMicrophoneUsageDescription: E.T. uses the microphone when you tap the mic to dictate text for the terminal.
         NSSpeechRecognitionUsageDescription: E.T. turns your dictation into text on this device. Audio never leaves the device.
+        NSCameraUsageDescription: E.T. uses the camera to scan the QR code that `etd pair` shows.
         NSLocalNetworkUsageDescription: E.T. connects to servers on your local network (SSH, or etd directly).
         # et://pair?t=… from `etd pair` (QR code in the Camera app).
         CFBundleURLTypes:

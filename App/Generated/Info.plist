@@ -53,6 +53,8 @@
 	<false/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>E.T. uses the camera to scan the QR code that `etd pair` shows.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>E.T. connects to servers on your local network (SSH, or etd directly).</string>
 	<key>NSMicrophoneUsageDescription</key>

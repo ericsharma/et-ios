@@ -65,17 +65,49 @@ struct ServerListView: View {
     @Environment(AppModel.self) private var model
     @State private var editing: ServerConfig?
     @State private var adding = false
+    @State private var scanning = false
 
     var body: some View {
-        List {
+        Group {
             if model.servers.isEmpty {
-                Section {
-                    Text("Add the server that runs tmux. Run `etd pair` on it and scan the QR code with the Camera, or add an SSH server.")
-                        .foregroundStyle(.secondary)
-                    Button("Paste pairing link") { pastePairingLink() }
-                    Button("Add SSH server") { adding = true }
+                // No servers yet: the scanner is the start screen.
+                VStack(spacing: 0) {
+                    PairScannerView()
+                    HStack {
+                        Button("Paste pairing link") { pastePairingLink() }
+                        Spacer()
+                        Button("Add SSH server") { adding = true }
+                    }
+                    .padding()
                 }
+            } else {
+                serverList
             }
+        }
+        .navigationTitle("E.T.")
+        .toolbar {
+            Menu {
+                Button("Scan QR code", systemImage: "qrcode.viewfinder") { scanning = true }
+                Button("Paste pairing link", systemImage: "link") { pastePairingLink() }
+                Button("Add SSH server", systemImage: "terminal") { adding = true }
+            } label: { Image(systemName: "plus") }
+        }
+        .sheet(isPresented: $adding) {
+            NavigationStack { ServerEditView(server: nil) }
+        }
+        .sheet(item: $editing) { server in
+            NavigationStack { ServerEditView(server: server) }
+        }
+        // Pushed, not presented: RootView presents the confirm sheet.
+        .navigationDestination(isPresented: $scanning) {
+            PairScannerView().navigationTitle("Scan QR code").navigationBarTitleDisplayMode(.inline)
+        }
+        // Back to the list once a link is read.
+        .onChange(of: model.pendingPairing?.id) { _, id in if id != nil { scanning = false } }
+    }
+
+    private var serverList: some View {
+        List {
             if let file = model.incomingFile {
                 Section {
                     Label("Connect to a server to send \(file.name) to a window.", systemImage: "doc")
@@ -109,19 +141,6 @@ struct ServerListView: View {
             } footer: {
                 Text(AppInfo.buildLabel).font(.caption.monospaced())
             }
-        }
-        .navigationTitle("E.T.")
-        .toolbar {
-            Menu {
-                Button("Paste pairing link", systemImage: "link") { pastePairingLink() }
-                Button("Add SSH server", systemImage: "terminal") { adding = true }
-            } label: { Image(systemName: "plus") }
-        }
-        .sheet(isPresented: $adding) {
-            NavigationStack { ServerEditView(server: nil) }
-        }
-        .sheet(item: $editing) { server in
-            NavigationStack { ServerEditView(server: server) }
         }
     }
 }
