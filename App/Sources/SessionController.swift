@@ -121,7 +121,10 @@ final class SessionController {
     @ObservationIgnored let log: DebugLog
     @ObservationIgnored private let onServerChanged: (ServerConfig) -> Void
     @ObservationIgnored private var hostKeyAnswer: CheckedContinuation<Bool, Never>?
-    @ObservationIgnored private var connection: SSHConnection?
+    @ObservationIgnored private var connection: (any HostConnection)?
+    /// Set for iroh servers: shows "direct" or "relay" in the header.
+    private(set) var pathLabel: String?
+    @ObservationIgnored private var pathTask: Task<Void, Never>?
     @ObservationIgnored private var tmux: TmuxInstall?
     @ObservationIgnored private var client: TmuxClient?
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
@@ -207,14 +210,23 @@ final class SessionController {
 
     private func run() async {
         state = .connecting(isReconnecting ? "Reconnecting…" : "Connecting to \(server.host)…")
-        log.add("Connecting to \(server.user)@\(server.host):\(server.port)")
         do {
-            let connection = try await SSHConnection.connect(
-                server, identity: identity,
-                trustNewHostKey: { [weak self] key in await self?.askToTrust(key) ?? false },
-                onAuthBanner: { [weak self] text in
-                    Task { @MainActor in self?.received(banner: text) }
-                })
+            let connection: any HostConnection
+            if let endpointId = server.irohEndpointId {
+                log.add("Connecting to \(server.host) over iroh (\(endpointId.prefix(8)))")
+                if !IrohLink.shared.isStarted { state = .connecting("Starting network…") }
+                let host = try await IrohLink.shared.connect(endpointId: endpointId, relayURL: server.irohRelayURL)
+                connection = host
+                watchPath(host)
+            } else {
+                log.add("Connecting to \(server.user)@\(server.host):\(server.port)")
+                connection = try await SSHConnection.connect(
+                    server, identity: identity,
+                    trustNewHostKey: { [weak self] key in await self?.askToTrust(key) ?? false },
+                    onAuthBanner: { [weak self] text in
+                        Task { @MainActor in self?.received(banner: text) }
+                    })
+            }
             authBanner = nil
             approvalURL = nil
             self.connection = connection
@@ -247,15 +259,15 @@ final class SessionController {
         tasks.append(Task { await self.attach(create ? .attachOrCreate(name) : .attach(name), name: name) })
     }
 
-    private func attach(_ target: SSHConnection.ControlTarget, name: String) async {
+    private func attach(_ target: ControlTarget, name: String) async {
         guard let connection, let tmux else { return }
         state = .connecting("Attaching to \(name)…")
         do {
-            let channel = try await connection.openControlChannel(tmux: tmux, target: target)
+            let opened = try await connection.openControlChannel(tmux: tmux, target: target)
             tasks.append(Task { [log] in
-                for await text in channel.stderr { log.add("tmux stderr: \(text)") }
+                for await text in opened.stderr { log.add("tmux stderr: \(text)") }
             })
-            let client = TmuxClient(channel: channel)
+            let client = TmuxClient(channel: opened.channel)
             self.client = client
             await client.setErrorHandler { [weak self] error in
                 Task { @MainActor in self?.log.add("Command failed: \(error)") }
@@ -312,6 +324,8 @@ final class SessionController {
 
     private func closeConnection(releasing windows: [WindowID] = []) {
         heartbeatTask?.cancel()
+        pathTask?.cancel()
+        pathLabel = nil
         for task in tasks { task.cancel() }
         tasks.removeAll()
         let client = client
@@ -337,6 +351,21 @@ final class SessionController {
         client = nil
         state = .disconnected
         if !intentionalDisconnect { scheduleReconnect() }
+    }
+
+    /// Polls the iroh path ("direct" / "relay") for the header.
+    private func watchPath(_ host: IrohHost) {
+        pathTask?.cancel()
+        pathTask = Task {
+            while !Task.isCancelled {
+                let label = host.pathLabel
+                if label != self.pathLabel {
+                    if let label { self.log.add("iroh path: \(label)") }
+                    self.pathLabel = label
+                }
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
     }
 
     private func fail(_ error: Error) {
@@ -366,6 +395,7 @@ final class SessionController {
         switch error {
         case SSHConnectionError.unreachable, SSHConnectionError.timedOut, TmuxError.disconnected: true
         case is SSHConnectionError: false
+        case HostError.notPaired: false
         default: true
         }
     }
@@ -384,6 +414,14 @@ final class SessionController {
             "\(server.host) answered but the SSH login didn't finish in time. If it asked you to approve the login, retry and approve within 5 minutes."
         case SSHConnectionError.hostKeyChanged(_, let presented):
             "\(server.host)'s host key changed (now \(presented.fingerprint)). Not connecting. If this is expected, delete and re-add the server."
+        case HostError.notPaired:
+            "This iPhone is not paired with \(server.host), or it was removed. Run `etd pair` on \(server.host)."
+        case HostError.unreachable(let detail):
+            "Can't reach \(server.host).\n\n(\(detail))"
+        case HostError.closed(let detail), HostError.other(let detail):
+            detail
+        case SSHConnectionError.tmuxNotFound(let output) where server.isIroh:
+            "tmux not found on \(server.host).\n\netd said:\n\(output)"
         case SSHConnectionError.tmuxNotFound(let output):
             "tmux not found on \(server.host). Set its path in the server settings.\n\nDiscovery output:\n\(output)"
         case TmuxError.disconnected:

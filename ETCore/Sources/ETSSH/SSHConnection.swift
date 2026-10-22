@@ -32,6 +32,12 @@ public struct TmuxInstall: Sendable, Equatable {
     /// have the TMUX_TMPDIR that interactive shells set (home-manager's
     /// secureSocket puts the socket under /run/user/<uid>).
     public var tmpDir: String?
+
+    public init(path: String, version: String, tmpDir: String?) {
+        self.path = path
+        self.version = version
+        self.tmpDir = tmpDir
+    }
 }
 
 public struct SessionInfo: Sendable, Equatable, Identifiable {
@@ -39,11 +45,18 @@ public struct SessionInfo: Sendable, Equatable, Identifiable {
     public var name: String
     public var windowCount: Int
     public var attachedClients: Int
+
+    public init(id: SessionID, name: String, windowCount: Int, attachedClients: Int) {
+        self.id = id
+        self.name = name
+        self.windowCount = windowCount
+        self.attachedClients = attachedClients
+    }
 }
 
 /// One SSH connection to a server. Runs short commands (tmux discovery,
 /// session list) and opens the long-running control-mode channel.
-public actor SSHConnection {
+public actor SSHConnection: HostConnection {
     public let config: ServerConfig
     /// The host key the user trusted during `connect`, if it was new. The
     /// caller saves it into `ServerConfig.hostKey`.
@@ -243,15 +256,15 @@ public actor SSHConnection {
         }
     }
 
-    public enum ControlTarget: Sendable {
-        /// Attach to an existing session by exact name.
-        case attach(String)
-        /// Attach, or create the session if it does not exist.
-        case attachOrCreate(String)
-    }
+    public typealias ControlTarget = ETSSH.ControlTarget
 
     /// Opens `tmux -C` on an exec channel without a PTY (SPEC.md §2.1).
-    public func openControlChannel(tmux: TmuxInstall, target: ControlTarget) async throws -> SSHControlChannel {
+    public func openControlChannel(tmux: TmuxInstall, target: ControlTarget) async throws -> OpenedControl {
+        let channel = try await openSSHControlChannel(tmux: tmux, target: target)
+        return OpenedControl(channel: channel, stderr: channel.stderr)
+    }
+
+    func openSSHControlChannel(tmux: TmuxInstall, target: ControlTarget) async throws -> SSHControlChannel {
         let args = switch target {
         case .attach(let name): "-C attach-session -t \(shQuote("=" + name))"
         case .attachOrCreate(let name): "-C new-session -A -s \(shQuote(name))"

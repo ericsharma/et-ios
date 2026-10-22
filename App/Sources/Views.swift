@@ -6,10 +6,55 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        if let session = model.session {
-            SessionView(session: session)
-        } else {
-            NavigationStack { ServerListView() }
+        Group {
+            if let session = model.session {
+                SessionView(session: session)
+            } else {
+                NavigationStack { ServerListView() }
+            }
+        }
+        .sheet(item: Binding(get: { model.pendingPairing }, set: { if $0 == nil { model.cancelPairing() } })) { pending in
+            NavigationStack { PairingSheet(pending: pending) }
+                .presentationDetents([.medium])
+                .interactiveDismissDisabled(model.isPairing)
+        }
+        .alert("Pairing", isPresented: Binding(
+            get: { model.pendingPairing == nil && model.pairingStatus != nil },
+            set: { if !$0 { model.cancelPairing() } })) {
+            Button("OK", role: .cancel) { model.cancelPairing() }
+        } message: {
+            Text(model.pairingStatus ?? "")
+        }
+    }
+}
+
+/// Confirms an `et://pair` link before E.T. sends its secret (PLAN-iroh §6.1).
+struct PairingSheet: View {
+    @Environment(AppModel.self) private var model
+    let pending: PendingPairing
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent("Machine", value: pending.ticket.hostName)
+                LabeledContent("ID", value: String(pending.ticket.endpointId.prefix(8)))
+                    .font(.body.monospaced())
+            } footer: {
+                Text("Check that the ID matches the start of the one `etd pair` printed. After pairing, this iPhone can use tmux and run commands on \(pending.ticket.hostName).")
+            }
+            if let status = model.pairingStatus {
+                Section { Text(status).foregroundStyle(model.isPairing ? Color.secondary : Color.red) }
+            }
+        }
+        .navigationTitle("Pair with \(pending.ticket.hostName)?")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { model.cancelPairing() }.disabled(model.isPairing)
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                if model.isPairing { ProgressView() } else { Button("Pair") { model.confirmPairing() } }
+            }
         }
     }
 }
@@ -25,9 +70,10 @@ struct ServerListView: View {
         List {
             if model.servers.isEmpty {
                 Section {
-                    Text("Add the server that runs tmux. E.T. connects over SSH with its own key.")
+                    Text("Add the server that runs tmux. Run `etd pair` on it and scan the QR code with the Camera, or add an SSH server.")
                         .foregroundStyle(.secondary)
-                    Button("Add server") { adding = true }
+                    Button("Paste pairing link") { pastePairingLink() }
+                    Button("Add SSH server") { adding = true }
                 }
             }
             if let file = model.incomingFile {
@@ -41,7 +87,7 @@ struct ServerListView: View {
                     Button { model.connect(server) } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(server.displayName).font(.headline)
-                            Text("\(server.user)@\(server.host):\(server.port)")
+                            Text(server.addressLabel)
                                 .font(.caption.monospaced()).foregroundStyle(.secondary)
                         }
                     }
@@ -66,7 +112,10 @@ struct ServerListView: View {
         }
         .navigationTitle("E.T.")
         .toolbar {
-            Button { adding = true } label: { Image(systemName: "plus") }
+            Menu {
+                Button("Paste pairing link", systemImage: "link") { pastePairingLink() }
+                Button("Add SSH server", systemImage: "terminal") { adding = true }
+            } label: { Image(systemName: "plus") }
         }
         .sheet(isPresented: $adding) {
             NavigationStack { ServerEditView(server: nil) }
@@ -74,6 +123,12 @@ struct ServerListView: View {
         .sheet(item: $editing) { server in
             NavigationStack { ServerEditView(server: server) }
         }
+    }
+}
+
+extension ServerListView {
+    func pastePairingLink() {
+        model.receivePairingLink(UIPasteboard.general.string ?? "")
     }
 }
 
@@ -89,6 +144,39 @@ struct ServerEditView: View {
     @State private var tmuxPath = ""
 
     var body: some View {
+        if let server, let endpointId = server.irohEndpointId {
+            irohForm(server, endpointId: endpointId)
+        } else {
+            sshForm
+        }
+    }
+
+    /// iroh servers come from pairing; only the name can change.
+    private func irohForm(_ server: ServerConfig, endpointId: String) -> some View {
+        Form {
+            Section("Server") {
+                TextField("Name", text: $name)
+                LabeledContent("Machine", value: server.host)
+                LabeledContent("etd ID", value: String(endpointId.prefix(8))).font(.body.monospaced())
+            }
+        }
+        .navigationTitle("Edit server")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") {
+                    var updated = server
+                    updated.name = name.trimmingCharacters(in: .whitespaces)
+                    model.save(updated)
+                    dismiss()
+                }
+            }
+        }
+        .onAppear { name = server.name }
+    }
+
+    private var sshForm: some View {
         Form {
             Section("Server") {
                 TextField("Host or IP (e.g. trigkey)", text: $host)
@@ -312,6 +400,11 @@ struct SessionView: View {
             HStack(spacing: 8) {
                 if sidebarToggle { sidebarToggleButton }
                 Circle().fill(statusColor).frame(width: 8, height: 8)
+                if let path = session.pathLabel {
+                    Text(path)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(path == "direct" ? .green : .orange)
+                }
                 Text(session.server.displayName + (session.sessionName.map { " · \($0)" } ?? ""))
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)

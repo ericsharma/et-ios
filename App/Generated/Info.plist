@@ -34,6 +34,17 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>0.1</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>xyz.ericsharma.et.pair</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>et</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ETGitCommit</key>
@@ -43,7 +54,7 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>E.T. connects over SSH to servers on your local network.</string>
+	<string>E.T. connects to servers on your local network (SSH, or etd directly).</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>E.T. uses the microphone when you tap the mic to dictate text for the terminal.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

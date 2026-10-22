@@ -14,12 +14,14 @@
 		45D6BA62083244C784927078 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC2C774B86C691F339F5290 /* Views.swift */; };
 		5AF0ADD6EBFE20C5D372C10F /* Templates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E147244B49816415D5E26BA /* Templates.swift */; };
 		5DDBE00FB490CBC8C3CE2B31 /* SessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B7EB4283A5F1B4E8DAE0DCE /* SessionController.swift */; };
+		5DE693A03488FB808900B1A7 /* EtLink in Frameworks */ = {isa = PBXBuildFile; productRef = D46BA93F57438C4C1A4131E4 /* EtLink */; };
 		6F005C5539A7B64474934977 /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = ACB31B6DE076A6AEE0E31967 /* ETCore */; };
 		7019904934883F3AD44F1675 /* Speaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD862AA08B0790FEA8C32121 /* Speaker.swift */; };
 		7B7A1AB52E7AAEB0D5283959 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB367F7DC192EBCCA06508BC /* AppModel.swift */; };
 		7E75886C82FBA663C296E12F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 65A00CC919987D56EC6D81C2 /* Assets.xcassets */; };
 		92D2F2431FD1402AC2FB77A5 /* VolumeButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6643B444DEC1C52098247355 /* VolumeButtons.swift */; };
 		9883DC46C85AE06C00277FC1 /* ETSSH in Frameworks */ = {isa = PBXBuildFile; productRef = A3FE42A77BFB03B651F1C8C3 /* ETSSH */; };
+		B0C4E14269567F3757D629D8 /* Iroh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 934B8450ECC39D11B1F4B9F9 /* Iroh.swift */; };
 		B3B645CBAE52AC315F4D26D1 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 78E36ABFF9A6F111E6BC39DD /* SwiftTerm */; };
 		B9EF4532C1A648569D5AD074 /* TerminalHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */; };
 		C7D22526ADD3F1CB22E245DD /* Overview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36A4263F016A81FE6C5B2B5E /* Overview.swift */; };
@@ -39,7 +41,9 @@
 		5E147244B49816415D5E26BA /* Templates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Templates.swift; sourceTree = "<group>"; };
 		65A00CC919987D56EC6D81C2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6643B444DEC1C52098247355 /* VolumeButtons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeButtons.swift; sourceTree = "<group>"; };
+		775D2BD71278DE9B66655A0C /* EtLink */ = {isa = PBXFileReference; lastKnownFileType = folder; name = EtLink; path = ../Vendor/etd/apple/EtLink; sourceTree = SOURCE_ROOT; };
 		929A6DF5668934E4FF4835DA /* ETCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ETCore; path = ../ETCore; sourceTree = SOURCE_ROOT; };
+		934B8450ECC39D11B1F4B9F9 /* Iroh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Iroh.swift; sourceTree = "<group>"; };
 		9FE7D921D5CAA4506B3FD10C /* SelectMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectMode.swift; sourceTree = "<group>"; };
 		AAC2C774B86C691F339F5290 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
 		AB367F7DC192EBCCA06508BC /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
@@ -59,6 +63,7 @@
 				6F005C5539A7B64474934977 /* ETCore in Frameworks */,
 				9883DC46C85AE06C00277FC1 /* ETSSH in Frameworks */,
 				B3B645CBAE52AC315F4D26D1 /* SwiftTerm in Frameworks */,
+				5DE693A03488FB808900B1A7 /* EtLink in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -69,6 +74,7 @@
 			isa = PBXGroup;
 			children = (
 				929A6DF5668934E4FF4835DA /* ETCore */,
+				775D2BD71278DE9B66655A0C /* EtLink */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
@@ -79,6 +85,7 @@
 				AB367F7DC192EBCCA06508BC /* AppModel.swift */,
 				23D00D38126433369DDB5E17 /* Copilot.swift */,
 				EE328D04440F47561CB04404 /* ETApp.swift */,
+				934B8450ECC39D11B1F4B9F9 /* Iroh.swift */,
 				FFCBF94AC41590A9B15E7FAA /* KeyRow.swift */,
 				36A4263F016A81FE6C5B2B5E /* Overview.swift */,
 				D3251CE9C9BA08235AF09F96 /* Push.swift */,
@@ -142,6 +149,7 @@
 				ACB31B6DE076A6AEE0E31967 /* ETCore */,
 				A3FE42A77BFB03B651F1C8C3 /* ETSSH */,
 				78E36ABFF9A6F111E6BC39DD /* SwiftTerm */,
+				D46BA93F57438C4C1A4131E4 /* EtLink */,
 			);
 			productName = ET;
 			productReference = 090F6A6A5A570B49BDA73AE9 /* ET.app */;
@@ -175,6 +183,7 @@
 			packageReferences = (
 				D972A5EEDD00B5ECD33C75D6 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 				2095010AD733EA4E1483945C /* XCLocalSwiftPackageReference "../ETCore" */,
+				DAA4839E6AC1DB74C4BB05C3 /* XCLocalSwiftPackageReference "../Vendor/etd/apple/EtLink" */,
 			);
 			preferredProjectObjectVersion = 54;
 			projectDirPath = "";
@@ -204,6 +213,7 @@
 				7B7A1AB52E7AAEB0D5283959 /* AppModel.swift in Sources */,
 				D925AEB7EE1B1A2E8E25A3DF /* Copilot.swift in Sources */,
 				F8F1BACDD89A3936FDBA3DCA /* ETApp.swift in Sources */,
+				B0C4E14269567F3757D629D8 /* Iroh.swift in Sources */,
 				176CEB6F04458465BE3439DA /* KeyRow.swift in Sources */,
 				C7D22526ADD3F1CB22E245DD /* Overview.swift in Sources */,
 				3A3285F4C8B435AFADFA4F39 /* Push.swift in Sources */,
@@ -416,6 +426,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../ETCore;
 		};
+		DAA4839E6AC1DB74C4BB05C3 /* XCLocalSwiftPackageReference "../Vendor/etd/apple/EtLink" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../Vendor/etd/apple/EtLink;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -442,6 +456,10 @@
 		ACB31B6DE076A6AEE0E31967 /* ETCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ETCore;
+		};
+		D46BA93F57438C4C1A4131E4 /* EtLink */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = EtLink;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

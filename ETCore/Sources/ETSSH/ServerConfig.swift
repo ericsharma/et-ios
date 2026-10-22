@@ -18,10 +18,15 @@ public struct ServerConfig: Codable, Sendable, Hashable, Identifiable {
     public var lastSession: String?
     /// The host key trusted on first connect. A different key stops the connection.
     public var hostKey: HostKey?
+    /// The machine's etd `EndpointId` (hex). Set: connect over iroh, not SSH;
+    /// `host` is then only the machine's name.
+    public var irohEndpointId: String?
+    /// The relay from the pairing ticket, if any.
+    public var irohRelayURL: String?
 
     public init(id: UUID = UUID(), name: String = "", host: String, port: Int = 22, user: String,
                 tmuxPath: String? = nil, socketName: String? = nil, lastSession: String? = nil,
-                hostKey: HostKey? = nil) {
+                hostKey: HostKey? = nil, irohEndpointId: String? = nil, irohRelayURL: String? = nil) {
         self.id = id
         self.name = name
         self.host = host
@@ -31,9 +36,19 @@ public struct ServerConfig: Codable, Sendable, Hashable, Identifiable {
         self.socketName = socketName
         self.lastSession = lastSession
         self.hostKey = hostKey
+        self.irohEndpointId = irohEndpointId
+        self.irohRelayURL = irohRelayURL
     }
 
     public var displayName: String { name.isEmpty ? host : name }
+
+    public var isIroh: Bool { irohEndpointId != nil }
+
+    /// One line for the server list: `user@host:port`, or `etd · <id>`.
+    public var addressLabel: String {
+        if let id = irohEndpointId { return "etd · \(id.prefix(8))" }
+        return "\(user)@\(host):\(port)"
+    }
 }
 
 /// A server's public host key, as pinned in `ServerConfig.hostKey`.

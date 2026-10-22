@@ -12,6 +12,13 @@ struct IncomingFile: Identifiable {
     let data: Data
 }
 
+/// An `et://pair` link waiting for the user to confirm it.
+struct PendingPairing: Identifiable {
+    let id = UUID()
+    let url: String
+    let ticket: PairingTicket
+}
+
 /// App-wide state: saved servers, the client key, and the live session.
 @MainActor @Observable
 final class AppModel {
@@ -23,6 +30,11 @@ final class AppModel {
     private(set) var session: SessionController?
     /// A file opened in E.T., until it's sent to a window.
     var incomingFile: IncomingFile?
+    /// A pairing link the confirm sheet shows.
+    var pendingPairing: PendingPairing?
+    /// Set while pairing runs, or to the error when it failed.
+    private(set) var pairingStatus: String?
+    private(set) var isPairing = false
     /// The server to reconnect to when the app comes back to the foreground.
     private var activeServerID: UUID?
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
@@ -49,6 +61,8 @@ final class AppModel {
             templatesByServer = saved
         }
         startPathMonitor()
+        // One endpoint for all iroh servers; it takes seconds, so start it now.
+        IrohLink.shared.start { [log] line in Task { @MainActor in log.add(line) } }
         do {
             let identity = try KeyStore.loadOrCreate()
             self.identity = identity
@@ -72,6 +86,10 @@ final class AppModel {
     /// A file opened in E.T. ("Open in…"): kept until the user picks a
     /// window for it.
     func receive(_ url: URL) {
+        if url.scheme == "et" {
+            receivePairingLink(url.absoluteString)
+            return
+        }
         guard url.isFileURL else { return }
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
@@ -104,6 +122,56 @@ final class AppModel {
             save(server)
         }
         connect(server)
+    }
+
+    // MARK: - Pairing (etd)
+
+    /// An `et://pair?t=…` link, from the Camera app or pasted: shows the
+    /// confirm sheet.
+    func receivePairingLink(_ text: String) {
+        let link = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            let ticket = try IrohLink.ticket(from: link)
+            log.add("Pairing link for \(ticket.hostName) (\(ticket.endpointId.prefix(8)))")
+            pairingStatus = nil
+            pendingPairing = PendingPairing(url: link, ticket: ticket)
+        } catch {
+            log.add("Bad pairing link: \(error)")
+            pairingStatus = "That isn't a valid pairing link. Run `etd pair` on the machine for a new one.\n\n(\(error))"
+            pendingPairing = nil
+        }
+    }
+
+    /// Pairs, adds (or updates) the server, and connects to it.
+    func confirmPairing() {
+        guard let pending = pendingPairing, !isPairing else { return }
+        isPairing = true
+        pairingStatus = "Pairing with \(pending.ticket.hostName)…"
+        let deviceName = UIDevice.current.name
+        Task {
+            defer { isPairing = false }
+            do {
+                let paired = try await IrohLink.shared.pair(url: pending.url, deviceName: deviceName)
+                log.add("Paired with \(paired.hostName) (\(paired.endpointId.prefix(8)))")
+                var server = servers.first { $0.irohEndpointId == paired.endpointId }
+                    ?? ServerConfig(name: paired.hostName, host: paired.hostName, port: 0, user: "")
+                server.host = paired.hostName
+                server.irohEndpointId = paired.endpointId
+                server.irohRelayURL = paired.relayURL
+                save(server)
+                pendingPairing = nil
+                pairingStatus = nil
+                connect(server)
+            } catch {
+                log.add("Pairing failed: \(error)")
+                pairingStatus = "Pairing failed: \(SessionController.describe(error, server: ServerConfig(host: pending.ticket.hostName, user: "")))"
+            }
+        }
+    }
+
+    func cancelPairing() {
+        pendingPairing = nil
+        pairingStatus = nil
     }
 
     var publicKey: String {

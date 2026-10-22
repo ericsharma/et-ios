@@ -7,6 +7,8 @@ options:
 packages:
   ETCore:
     path: ../ETCore
+  EtLink:
+    path: ../Vendor/etd/apple/EtLink
   SwiftTerm:
     url: https://github.com/migueldeicaza/SwiftTerm.git
     exactVersion: 1.20.0
@@ -29,6 +31,7 @@ targets:
       - package: ETCore
         product: ETSSH
       - package: SwiftTerm
+      - package: EtLink
     info:
       path: Generated/Info.plist
       properties:
@@ -44,7 +47,11 @@ targets:
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         NSMicrophoneUsageDescription: E.T. uses the microphone when you tap the mic to dictate text for the terminal.
         NSSpeechRecognitionUsageDescription: E.T. turns your dictation into text on this device. Audio never leaves the device.
-        NSLocalNetworkUsageDescription: E.T. connects over SSH to servers on your local network.
+        NSLocalNetworkUsageDescription: E.T. connects to servers on your local network (SSH, or etd directly).
+        # et://pair?t=… from `etd pair` (QR code in the Camera app).
+        CFBundleURLTypes:
+          - CFBundleURLName: xyz.ericsharma.et.pair
+            CFBundleURLSchemes: [et]
         ITSAppUsesNonExemptEncryption: false
         # "Open in E.T." for any file (AirDrop, Files, share sheet): E.T.
         # uploads it and types its path into a window.
