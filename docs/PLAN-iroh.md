@@ -237,13 +237,13 @@ Phases 0–6 (§11) give you a working system on your own machines. Phases 7–9
 
 ### 10.1 Out of the box
 
-A new user with a Linux or macOS machine and tmux must do only this:
+A new user with Linux or macOS machines must do only this (the etd network, [PLAN-network.md](PLAN-network.md)):
 
-1. `curl -fsSL https://<site>/install.sh | sh`
-2. `etd install` (or `etd` to try it in the foreground)
-3. Scan the QR code with E.T.
+1. On each machine: `curl -fsSL https://<site>/install.sh | sh`, then `etd install` (etd, and the manymux node with `MM_SSH=etd-ssh`).
+2. On the first machine: `etd invite`, and scan the QR code with E.T.
+3. On each other machine: `etd join <link>`, with the link from `etd invite --machine` on a machine already in the network.
 
-No account, no configuration file, no open port, no SSH server. `etd` makes its key and its configuration on first start. All defaults must be safe: no device is paired until a QR code is scanned.
+No account, no configuration file, no open port, no SSH server or ssh keys. `etd` makes its key and its network on first start. All defaults must be safe: no member joins without a one-time invite from a machine of the network.
 
 ### 10.2 Binaries and install
 
