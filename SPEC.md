@@ -25,6 +25,18 @@ E.T. does not draw tmux's own screen. It runs `tmux -C` (control mode), like iTe
 
 ### 2.1 Connecting
 
+Each server has one of two transports. `SessionController` talks to both through `HostConnection` (`ETSSH/HostConnection.swift`): `findTmux`, `listSessions`, `openControlChannel`, `run`, `upload`, `close`.
+
+**etd over iroh** (`irohEndpointId` set; `App/Sources/Iroh.swift`, library `Vendor/etd` → `EtLink`, protocol in docs/PLAN-iroh.md §5):
+
+1. **Pair** once: `etd pair` on the machine shows a QR code for `et://pair?t=<ticket>` (one use, 10 minutes). The Camera app opens E.T. (URL scheme `et`), or use **Paste pairing link** in Servers. E.T. shows the host name and the first 8 characters of the machine's `EndpointId`, then sends `Pair` with the device name, saves a server named after the host, and connects.
+2. **Connect** with the app's one iroh endpoint (`Link.start` at launch, shared by all servers; it can take seconds, so the banner says "Starting network…"). The pinned `EndpointId` is the machine's identity; iroh's TLS checks both keys. etd closes connections from devices that aren't paired or were revoked: "This iPhone is not paired with <host>, or it was removed. Run `etd pair` on <host>."
+3. **tmux** comes from `Hello`: etd found it with its login environment. No tmux → "tmux not found" with etd's message.
+4. Sessions, attach and commands as in steps 3–5 below, but etd runs them: `Control` streams `tmux -C` bytes (stderr to the debug log), `Exec` returns output and the exit code directly (no `__ET_EXIT__`), `Upload` writes under `$HOME`.
+5. The header shows **direct** or **relay** (iroh's selected path). A closed connection uses the same reconnect backoff as SSH (§5.5).
+
+**SSH**:
+
 1. **SSH** with the app's key (§8). A new host key is fetched in a separate short connection and shown for trust *before* the timed login (Citadel allows 10 s for login). Login banners are surfaced: Tailscale SSH's approval link becomes an **Approve in browser** screen, and the login timeout grows to 5 minutes once a banner arrives.
 2. **Find tmux and its socket** in one `/bin/sh` exec: `command -v tmux` (plain and login shell), then common paths (`/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin`, `/run/current-system/sw/bin`, `/etc/profiles/per-user/$USER/bin`, `~/.nix-profile/bin`, `/snap/bin`). Then find the directory with a live server among `$TMUX_TMPDIR`, the login shell's `$TMUX_TMPDIR`, `$XDG_RUNTIME_DIR`, `/run/user/<uid>`, `/tmp`. Non-login commands (Tailscale SSH) lack the login environment, so this matters. Every tmux command then runs as `env TMUX_TMPDIR=<dir> <tmux>`.
 3. **Pick a session** (`list-sessions`): the current one on reconnect, the only one, or the last used; otherwise a picker. **Never create a session silently.** An empty list usually means a wrong socket; the picker offers "New session".
@@ -150,7 +162,7 @@ The window's history and screen frozen as plain text in a native text view (iOS 
 
 ## 6. Settings and storage
 
-Per server (JSON in Application Support): name, host, port, user, tmux path (auto), last session, pinned host key; templates per server; key-row choices per window name and claimed windows in UserDefaults. App: the client key (Keychain, this device only). Theme: Catppuccin Mocha.
+Per server (JSON in Application Support): name, host, port, user, tmux path (auto), last session, pinned host key, and for etd servers `irohEndpointId` and `irohRelayURL` (set = iroh transport; `host` is then the machine's name; old JSON decodes as SSH); templates per server; key-row choices per window name and claimed windows in UserDefaults. App: the SSH client key (Keychain, this device only) and the iroh device key (32 bytes, Keychain, `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, one for all machines; each etd can revoke it). Theme: Catppuccin Mocha.
 
 ## 7. Security
 
@@ -161,6 +173,7 @@ Per server (JSON in Application Support): name, host, port, user, tmux path (aut
 ## 8. Build and release
 
 - **Machine:** Mac mini (m1-mini), headless. Xcode 26.6 via `xcodes`; project from `App/project.yml` (`xcodegen`).
+- **iroh library:** `git submodule update --init`, then `scripts/build-link.sh` (rustup with `stable-aarch64-apple-darwin`) builds `Vendor/etd/apple/EtLink` (xcframework + generated Swift, not in git). Never `cargo update` there: `Cargo.lock` pins `libc` 0.2.189 and `vendor/netdev` is an iOS patch.
 - **Signing:** App Store Connect API key (`scripts/asc.env`, `.p8` in `~/.appstoreconnect/private_keys/`), a dedicated keychain with an API-created development certificate (`scripts/setup-signing`, `scripts/unlock-signing`).
 - **Release:** `scripts/testflight` archives (build number = UTC time), exports the `.ipa`, and uploads with `altool`. App Store Connect app 6823235487 ("E.T"), internal group "Eric".
 - **Device builds** (when the phone is awake on the same Wi-Fi): `xcodebuild … build` then `xcrun devicectl device install app`.
