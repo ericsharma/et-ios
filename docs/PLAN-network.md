@@ -1,6 +1,6 @@
 # Plan: the etd network (one install per machine, out of the box)
 
-Status: 2026-10-22. Decisions D1–D5 accepted by the owner (all as recommended). N0 done: adopted rayfish's network key and signed document (§3, §4.1); manymux hosts.toml format checked. Next: N1.
+Status: 2026-10-22. Decisions D1–D5 accepted by the owner (all as recommended). N0 done: adopted rayfish's network key and signed document (§3, §4.1); manymux hosts.toml format checked. N1 done (etd 10dab6a): network key, signed document, invite, join, revoke everywhere; three-etd test. Moved to N1b: a new network key after a machine is revoked (with the pkarr record). Next: N2.
 
 Follows [PLAN-iroh.md](PLAN-iroh.md) and [PLAN-manymux.md](PLAN-manymux.md). Replaces the hub design of PLAN-manymux §3 (trigkey reaches the other machines with ssh) when N6 is done.
 
@@ -152,7 +152,7 @@ About 4–5 days. Your current setup keeps working until N6.
 | Risk | What to do |
 |---|---|
 | A revoked device can still reach a machine that was offline during the revoke | Sync on every connection; a machine refuses a device that any member it talks to has removed; show "last synced" per machine; N1b (pkarr) closes the gap |
-| A machine is stolen: it holds the network key | Revoke it from another machine; its newer records lose to the removal only if the removal's stamp is higher, so a revoke also rotates the network key (new key, new signatures, sent to the remaining machines). Plan the rotation in N1 |
+| A machine is stolen: it holds the network key | Revoke it from another machine. Until N1b, it keeps the network key and could still sign changes; N1b gives the remaining machines a new network key after a machine is revoked |
 | A stolen phone could revoke everyone | D1: only machines may revoke |
 | manymux changes how it calls ssh | One pinned version; a test runs `mm ls` and `mm attach` through `etd-ssh` |
 | Two machines with the same name | `join` refuses a name already in use |
