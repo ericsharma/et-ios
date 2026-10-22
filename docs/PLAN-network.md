@@ -1,6 +1,6 @@
 # Plan: the etd network (one install per machine, out of the box)
 
-Status: draft, 2026-10-22. Not started. The decisions in §8 need the owner's answer before N1.
+Status: 2026-10-22. Decisions D1–D5 accepted by the owner (all as recommended). Next: N0.
 
 Follows [PLAN-iroh.md](PLAN-iroh.md) and [PLAN-manymux.md](PLAN-manymux.md). Replaces the hub design of PLAN-manymux §3 (trigkey reaches the other machines with ssh) when N6 is done.
 
@@ -148,7 +148,7 @@ About 4–5 days. Your current setup keeps working until N6.
 | manymux changes how it calls ssh | One pinned version; a test runs `mm ls` and `mm attach` through `etd-ssh` |
 | Two machines with the same name | `join` refuses a name already in use |
 
-## 8. Decisions for the owner
+## 8. Decisions (accepted 2026-10-22, all as recommended)
 
 | # | Question | Recommendation |
 |---|---|---|
