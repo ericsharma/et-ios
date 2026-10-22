@@ -1,6 +1,6 @@
 # Plan: connect E.T. to any machine over iroh (`etd`)
 
-Status: draft v3, 2026-10-22. Phases 0–4 done (see §11.1–§11.4). The iPhone paired with trigkey over iroh and connects with Tailscale off (TestFlight build from c4f1e53). Phase 5 (field test) in progress. Code: `~/etd`, public at github.com/ericsharma/etd.
+Status: 2026-10-22. Phases 0–5 done (see §11.1–§11.6): E.T. works with trigkey over iroh, with Tailscale off on the phone. Phase 6 (cleanup) is optional. Code: `~/etd`, public at github.com/ericsharma/etd.
 
 ## 1. Goal
 
@@ -358,6 +358,18 @@ Scope change: deploy to **trigkey only**. All tmux windows run on trigkey and ss
 ### 11.4 Phase 3, Linux part (2026-10-22)
 
 `crates/et-link` (etd commit `369b2d2`): the Swift-facing client over UniFFI 0.32 with async exports. `Link` (one endpoint per device; `start`, `pair`, `connect`), `RemoteHost` (`hello`, `list_sessions`, `exec`, `upload`, `open_control`, `ping`, `path`, `closed`), `ControlStream` (`next`, `write`, `finish`), typed `LinkError` (`NotPaired` after a revoke). The Swift class is `RemoteHost`, because `Host` clashes with Foundation on macOS. iOS fixes from p2poker: `vendor/netdev`, `libc` 0.2.189. Tested on Linux against an in-process etd; the Swift bindings generate. The Mac part (xcframework, `apple/EtLink` Swift tests, Simulator end to end) is for the Mac mini agent.
+
+### 11.6 Phase 5 results (2026-10-22, the owner on the iPhone, Tailscale off)
+
+| Test | Result |
+|---|---|
+| Pair by QR code | Pass |
+| Windows, typing | Pass |
+| Wi-Fi off, then on again while connected | Pass: E.T. reconnects by itself |
+| Image upload into a Claude window | Pass |
+| Push after a command of more than 15 s | Pass |
+| E.T. in the background for 1 hour | Not reported |
+
 
 ### 11.5 Idea: manymux for sessions on other machines (not planned yet)
 
