@@ -317,6 +317,7 @@ struct SessionView: View {
     @Bindable var session: SessionController
     @State private var showLog = false
     @State private var showVocabulary = false
+    @State private var showNetwork = false
     /// Brief message under the header (e.g. no "Next:" to read).
     @State private var notice: String?
     @State private var showReadAloud = false
@@ -402,6 +403,13 @@ struct SessionView: View {
                 }
             }
         }
+        .sheet(isPresented: $showNetwork) {
+            NavigationStack {
+                NetworkView(session: session).toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { showNetwork = false } }
+                }
+            }
+        }
         .sheet(isPresented: $showLog) {
             NavigationStack {
                 DebugLogView().toolbar {
@@ -469,6 +477,10 @@ struct SessionView: View {
                     }
                     Button(session.mode == .manymux ? "New session…" : "New window…", systemImage: "plus") { session.showNewWindow = true }
                         .disabled(session.state != .connected)
+                    if session.server.isIroh {
+                        Button("Network", systemImage: "point.3.connected.trianglepath.dotted") { showNetwork = true }
+                            .disabled(session.state != .connected)
+                    }
                     Button("Dictation words", systemImage: "character.book.closed") { showVocabulary = true }
                     Button(session.copilotMode ? "Close Copilot" : "Copilot", systemImage: "sparkles") { session.copilotMode.toggle() }
                         .disabled(session.currentWindow == nil || session.state != .connected)

@@ -223,6 +223,41 @@ final class IrohHost: HostConnection, @unchecked Sendable {
     func mmEvents() async throws -> MmEventFeed {
         MmEventFeed(try await mapped { try await host.mmEvents() })
     }
+
+    // MARK: - The etd network (PLAN-network §4.7)
+
+    /// Every machine and device; the network key's signature is checked in EtLink.
+    func network() async throws -> NetInfo {
+        let info = try await mapped { try await host.network() }
+        return NetInfo(name: info.name, key: info.key, members: info.members.map {
+            NetMember(endpointId: $0.endpointId, name: $0.name, isMachine: $0.isMachine)
+        })
+    }
+
+    /// An `et://pair` link, valid 10 minutes, one use. `machine`: for
+    /// `etd join <link>` on a new machine; else a phone or tablet.
+    func invite(machine: Bool) async throws -> String {
+        try await mapped { try await host.invite(machine: machine) }
+    }
+
+    /// "E.T. is open" for `seconds` (at most 120): no pushes from this machine until then.
+    func foreground(seconds: Int) async throws {
+        try await mapped { try await host.foreground(seconds: UInt32(clamping: seconds)) }
+    }
+}
+
+struct NetMember: Sendable, Equatable, Identifiable {
+    var endpointId: String
+    var name: String
+    /// A machine runs etd and has sessions; otherwise a phone or tablet.
+    var isMachine: Bool
+    var id: String { endpointId }
+}
+
+struct NetInfo: Sendable, Equatable {
+    var name: String
+    var key: String
+    var members: [NetMember]
 }
 
 /// A manymux session, as `mmList` reports it.

@@ -229,8 +229,25 @@ final class SessionController {
     /// Pages whose sessions are attached, the most recent last: the visible
     /// one and the one before (a swipe back is instant).
     @ObservationIgnored private var mmAttachedPages: [WindowPage] = []
-    @ObservationIgnored private var mmEventFeed: MmEventFeed?
+    /// One event feed per machine connection: the hub's, and each network machine's.
+    @ObservationIgnored private var mmEventFeeds: [String: MmEventFeed] = [:]
     @ObservationIgnored private var mmRefreshTask: Task<Void, Never>?
+
+    // The etd network (PLAN-network §4.7, N5)
+    /// The network from the hub's etd; nil until loaded, or if its etd has none.
+    private(set) var network: NetInfo?
+    private(set) var networkError: String?
+    @ObservationIgnored private var networkLoaded: Date?
+    /// The hub's host name (hello), which its node puts on its own events.
+    @ObservationIgnored private var hubHostName: String?
+    /// Network machines other than the hub, connected directly, by network name.
+    @ObservationIgnored private var mmHosts: [String: IrohHost] = [:]
+    /// A network machine's host name (hello), which its node puts on its own events.
+    @ObservationIgnored private var mmHostNames: [String: String] = [:]
+    /// Why a network machine is not connected.
+    @ObservationIgnored private var mmHostErrors: [String: String] = [:]
+    @ObservationIgnored private var mmConnecting: Set<String> = []
+    @ObservationIgnored private var mmLastTry: [String: Date] = [:]
 
     init(server: ServerConfig, identity: SSHIdentity, log: DebugLog,
          onServerChanged: @escaping (ServerConfig) -> Void) {
@@ -424,18 +441,30 @@ final class SessionController {
         let client = client
         let connection = connection
         let attachments = mmAttachedPages.compactMap { releaseMm($0) }
-        let events = mmEventFeed
+        let events = Array(mmEventFeeds.values)
+        let members = Array(mmHosts.values)
         let wasManymux = mode == .manymux && connection != nil
-        mmEventFeed = nil
+        mmEventFeeds = [:]
+        mmHosts = [:]
+        mmHostNames = [:]
+        mmHostErrors = [:]
+        mmConnecting = []
+        mmLastTry = [:]
+        networkLoaded = nil
         self.client = nil
         self.connection = nil
         Task {
             // Leave the session running for its other clients.
             for attachment in attachments { await attachment.detach() }
-            await events?.close()
+            for feed in events { await feed.close() }
             if wasManymux, let connection {
+                // No longer open: pushes resume right away.
+                for host in members + [connection as? IrohHost].compactMap({ $0 }) {
+                    try? await host.foreground(seconds: 0)
+                }
                 _ = try? await connection.run(Self.heartbeatClearScript)
             }
+            for host in members { await host.close() }
             if let client {
                 for id in windows { await client.post(TmuxCommand.releaseWindowSize(id)) }
                 // No longer open: notifications resume right away.
@@ -788,7 +817,7 @@ final class SessionController {
                 // startManymux calls this again once connected.
                 guard state == .connected, hubName != nil else { return }
                 Push.shared.pendingManymux = nil
-                openMm(machine: target.machine, name: target.session)
+                openMm(machine: mmMachineName(for: target.machine), name: target.session)
             } else if Push.shared.pendingWindowName != nil {
                 setMode(.tmux)
             }
@@ -1459,15 +1488,45 @@ extension SessionController {
         reconnect()
     }
 
-    /// The machine as the API names it: nil for the hub.
-    private func apiMachine(_ name: String) -> String? {
-        name == hubName ? nil : name
+    /// Where a machine's calls go: the hub and network machines answer for
+    /// themselves (`machine: nil`); machines reached by ssh from the hub
+    /// go through the hub by name (until they join the network, N6).
+    private func route(_ machine: String) throws -> (host: IrohHost, machine: String?) {
+        guard let hub = connection as? IrohHost else { throw SummaryError.notConnected }
+        if machine == hubName { return (hub, nil) }
+        guard networkMachines.contains(where: { $0.name == machine }) else { return (hub, machine) }
+        guard let host = mmHosts[machine] else {
+            throw HostError.unreachable(mmConnecting.contains(machine) ? "Connecting…" : "Not reachable: \(mmHostErrors[machine] ?? "not connected")")
+        }
+        return (host, nil)
+    }
+
+    /// The network's machines other than the hub, by name.
+    private var networkMachines: [NetMember] {
+        (network?.members ?? [])
+            .filter { $0.isMachine && $0.endpointId != server.irohEndpointId }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    /// A machine name from a push or an event (a network name, or a node's
+    /// host name for itself) → the name on the Machines screen.
+    func mmMachineName(for name: String) -> String {
+        if name == hubHostName, let hubName { return hubName }
+        if mmHostNames[name] != nil { return name }
+        return mmHostNames.first { $0.value == name }?.key ?? name
     }
 
     private func startManymux(_ host: IrohHost) async throws {
         state = .connecting("Loading machines…")
-        let hub = try await host.hostName()
-        hubName = hub
+        let hostName = try await host.hostName()
+        hubHostName = hostName
+        await loadNetwork(host)
+        hubName = network?.members.first { $0.endpointId == server.irohEndpointId }?.name ?? hostName
+        // Give the network machines a moment, so the first list has them.
+        connectNetworkMachines()
+        for _ in 0..<25 where !mmConnecting.isEmpty {
+            try? await Task.sleep(for: .milliseconds(200))
+        }
         await refreshMachines()
         guard (connection as? IrohHost) === host else { return }
         state = .connected
@@ -1479,7 +1538,7 @@ extension SessionController {
             let error = await host.waitClosed()
             self?.mmConnectionEnded(host, error: error)
         })
-        startMmEvents(host)
+        startMmEvents(host, machine: hubName ?? hostName, hub: host)
         // The ring (and Machines) stays current: every 5 s while connected.
         tasks.append(Task {
             while !Task.isCancelled {
@@ -1488,10 +1547,19 @@ extension SessionController {
                 await self.refreshMachines()
             }
         })
+        // "E.T. is open" to every connected machine: none sends a push for
+        // 60 s. An etd without `Foreground` gets the heartbeat file instead.
         heartbeatTask?.cancel()
         heartbeatTask = Task {
             while !Task.isCancelled {
-                _ = try? await host.run(Self.heartbeatTouchScript)
+                do {
+                    try await host.foreground(seconds: 60)
+                } catch {
+                    _ = try? await host.run(Self.heartbeatTouchScript)
+                }
+                for member in self.mmHosts.values {
+                    Task { try? await member.foreground(seconds: 60) }
+                }
                 try? await Task.sleep(for: .seconds(20))
             }
         }
@@ -1502,10 +1570,88 @@ extension SessionController {
         Task { await discoverVocabulary() }
     }
 
-    /// A script on a machine: `exec` on the hub, `execOn` elsewhere.
+    /// A script on a machine: `exec` on the machine itself, or `execOn`
+    /// through the hub for a machine reached by ssh.
     func mmRun(_ script: String, on machine: String) async throws -> (output: String, exitCode: Int) {
-        guard let host = connection as? IrohHost else { throw SummaryError.notConnected }
-        return machine == hubName ? try await host.run(script) : try await host.run(script, on: machine)
+        let route = try route(machine)
+        if let name = route.machine { return try await route.host.run(script, on: name) }
+        return try await route.host.run(script)
+    }
+
+    // MARK: The etd network
+
+    /// The member list from the hub (`Network`); again every 30 s on refresh.
+    private func loadNetwork(_ hub: IrohHost) async {
+        networkLoaded = Date()
+        do {
+            let info = try await hub.network()
+            guard (connection as? IrohHost) === hub else { return }
+            if info != network {
+                log.add("Network \(info.name): \(info.members.map { "\($0.name)\($0.isMachine ? "" : " (device)")" }.joined(separator: ", "))")
+                network = info
+            }
+            networkError = nil
+        } catch {
+            guard (connection as? IrohHost) === hub else { return }
+            if networkError == nil { log.add("Network: \(error)") }
+            networkError = Self.describeMm(error)
+        }
+    }
+
+    /// Connects to each network machine that has no connection (one try
+    /// per 15 s each), and drops machines that left the network.
+    private func connectNetworkMachines() {
+        guard let hub = connection as? IrohHost else { return }
+        let members = networkMachines
+        for name in mmHosts.keys where !members.contains(where: { $0.name == name }) {
+            log.add("\(name) left the network")
+            dropMember(name)
+        }
+        for member in members where mmHosts[member.name] == nil && !mmConnecting.contains(member.name) {
+            if let last = mmLastTry[member.name], Date().timeIntervalSince(last) < 15 { continue }
+            let name = member.name
+            mmConnecting.insert(name)
+            mmLastTry[name] = Date()
+            Task {
+                defer { self.mmConnecting.remove(name) }
+                do {
+                    let host = try await IrohLink.shared.connect(endpointId: member.endpointId, relayURL: nil)
+                    let hostName = try await host.hostName()
+                    guard (self.connection as? IrohHost) === hub, self.networkMachines.contains(member) else {
+                        await host.close()
+                        return
+                    }
+                    self.log.add("Connected to \(name) (\(hostName)) over iroh, \(host.pathLabel ?? "no path yet")")
+                    self.mmHosts[name] = host
+                    self.mmHostNames[name] = hostName
+                    self.mmHostErrors[name] = nil
+                    try? await host.foreground(seconds: 60)
+                    self.startMmEvents(host, machine: name, hub: hub)
+                    self.tasks.append(Task { [weak self] in
+                        let error = await host.waitClosed()
+                        guard let self, self.mmHosts[name] === host else { return }
+                        self.log.add("\(name): connection ended: \(error)")
+                        self.dropMember(name)
+                        self.mmHostErrors[name] = Self.describeMm(error)
+                        self.scheduleMmRefresh()
+                    })
+                    self.scheduleMmRefresh()
+                } catch {
+                    self.log.add("\(name): \(error)")
+                    self.mmHostErrors[name] = Self.describeMm(error)
+                }
+            }
+        }
+    }
+
+    private func dropMember(_ name: String) {
+        let host = mmHosts.removeValue(forKey: name)
+        let feed = mmEventFeeds.removeValue(forKey: name)
+        mmHostNames[name] = nil
+        Task {
+            await feed?.close()
+            await host?.close()
+        }
     }
 
     /// Dictation names: git repos and files on every machine.
@@ -1542,22 +1688,32 @@ extension SessionController {
     }
 
     /// Lists every machine's sessions (in parallel; each call is its own stream).
+    /// Order: the hub, the network's machines by name, then the machines
+    /// the hub reaches by ssh. A machine that fails shows its error.
     func refreshMachines() async {
         guard let host = connection as? IrohHost, let hub = hubName else { return }
-        var names = [hub]
+        if networkLoaded.map({ Date().timeIntervalSince($0) > 30 }) ?? true { await loadNetwork(host) }
+        connectNetworkMachines()
+        let networkNames = networkMachines.map(\.name)
+        var names = [hub] + networkNames
         do {
-            names += try await host.machines().filter { $0 != hub }
+            names += try await host.machines().filter { $0 != hub && $0 != hubHostName && !networkNames.contains($0) }
         } catch {
             log.add("manymux machines: \(error)")
         }
+        let routes = names.map { name in Result { try route(name) } }
         let listed = await withTaskGroup(of: (Int, MmMachine).self) { group in
             for (i, name) in names.enumerated() {
-                let machine: String? = i == 0 ? nil : name
+                let route = routes[i]
+                let direct = networkNames.contains(name)
                 group.addTask {
                     do {
+                        let (host, machine) = try route.get()
                         return (i, MmMachine(name: name, sessions: try await host.mmList(machine: machine)))
                     } catch {
-                        return (i, MmMachine(name: name, sessions: [], error: Self.describeMm(error)))
+                        let text = Self.describeMm(error)
+                        let shown = !direct || text.hasPrefix("Not reachable") || text == "Connecting…" ? text : "Not reachable: \(text)"
+                        return (i, MmMachine(name: name, sessions: [], error: shown))
                     }
                 }
             }
@@ -1730,13 +1886,12 @@ extension SessionController {
 
     /// The cached screen now, then a fresh one, until the attach's first output.
     private func paintPeek(_ page: WindowPage) {
-        guard let link = page.mm, let host = connection as? IrohHost else { return }
+        guard let link = page.mm, let (host, machine) = try? route(link.machine) else { return }
         if let screen = link.peek {
             page.terminal.setSize(cols: screen.cols, rows: screen.rows)
             page.terminal.reset(with: screen.bytes)
         }
         let generation = link.generation
-        let machine = apiMachine(link.machine)
         let name = link.name
         Task {
             guard let screen = try? await host.mmPeek(machine: machine, names: [name]).first else { return }
@@ -1750,8 +1905,7 @@ extension SessionController {
     /// Peeks of the sessions on either side in the ring, so the next swipe
     /// paints at once.
     private func prefetchPeeks(around page: WindowPage) {
-        guard let host = connection as? IrohHost, windows.count > 1,
-              let i = windows.firstIndex(where: { $0 === page }) else { return }
+        guard windows.count > 1, let i = windows.firstIndex(where: { $0 === page }) else { return }
         let neighbours = [windows[(i + 1) % windows.count], windows[(i - 1 + windows.count) % windows.count]]
             .filter { !isAttached($0) }
         var byMachine: [String: [WindowPage]] = [:]
@@ -1760,7 +1914,7 @@ extension SessionController {
             byMachine[neighbour.mm!.machine, default: []].append(neighbour)
         }
         for (machine, pages) in byMachine {
-            let api = apiMachine(machine)
+            guard let (host, api) = try? route(machine) else { continue }
             let names = pages.map(\.name)
             Task {
                 guard let screens = try? await host.mmPeek(machine: api, names: names) else { return }
@@ -1795,7 +1949,15 @@ extension SessionController {
     }
 
     private func attachMm(_ page: WindowPage) {
-        guard let host = connection as? IrohHost, let link = page.mm, state == .connected else { return }
+        guard let hub = connection as? IrohHost, let link = page.mm, state == .connected else { return }
+        let host: IrohHost, machine: String?
+        do {
+            (host, machine) = try route(link.machine)
+        } catch {
+            flash("\(link.machine): \(Self.describeMm(error))")
+            if currentWindowID == page.id { currentWindowID = nil }
+            return
+        }
         detachMm(page)
         mmAttachedPages.append(page)
         while mmAttachedPages.count > 2, let oldest = mmAttachedPages.first(where: { $0 !== page }) {
@@ -1808,7 +1970,6 @@ extension SessionController {
         let (input, continuation) = AsyncStream<[UInt8]>.makeStream()
         link.input = continuation
         let size = terminalSize ?? (cols: page.terminal.terminal.cols, rows: page.terminal.terminal.rows)
-        let machine = apiMachine(link.machine)
         let name = link.name
         let readOnly = page.readOnly
         log.add("Attaching \(link.machine)/\(name) \(size.cols)x\(size.rows)\(readOnly ? " view-only" : "")")
@@ -1838,7 +1999,7 @@ extension SessionController {
                 }
             } catch {
                 guard link.generation == generation else { return }
-                mmAttachEnded(page, host: host, error: error)
+                mmAttachEnded(page, hub: hub, error: error)
             }
         }
     }
@@ -1891,10 +2052,10 @@ extension SessionController {
     /// The attach stream failed. A lost connection reconnects (and attaches
     /// again); a closed stream on a live connection attaches again, up to
     /// three times; anything else goes back to the Machines screen.
-    private func mmAttachEnded(_ page: WindowPage, host: IrohHost, error: any Error) {
+    private func mmAttachEnded(_ page: WindowPage, hub: IrohHost, error: any Error) {
         log.add("Attach \(page.name) ended: \(error)")
         releaseMm(page)
-        guard (connection as? IrohHost) === host, state == .connected, let link = page.mm else { return }
+        guard (connection as? IrohHost) === hub, state == .connected, let link = page.mm else { return }
         if case HostError.closed = error, link.retries < 3 {
             link.retries += 1
             Task {
@@ -1927,16 +2088,39 @@ extension SessionController {
         }
     }
 
-    private func startMmEvents(_ host: IrohHost) {
+    /// One machine connection's feed (`machine`: its name here). A node
+    /// also reports the machines it watches; each event is taken from the
+    /// feed of the machine it happened on, so a bell counts once.
+    private func startMmEvents(_ host: IrohHost, machine: String, hub: IrohHost) {
+        let alive = { [weak self] in
+            guard let self, (self.connection as? IrohHost) === hub else { return false }
+            return host === hub || self.mmHosts[machine] === host
+        }
         tasks.append(Task {
-            while !Task.isCancelled, (self.connection as? IrohHost) === host {
+            while !Task.isCancelled, alive() {
                 do {
                     let feed = try await host.mmEvents()
-                    self.mmEventFeed = feed
-                    while true { self.mmEvent(try await feed.next()) }
+                    guard alive() else {
+                        await feed.close()
+                        return
+                    }
+                    self.mmEventFeeds[machine] = feed
+                    while true {
+                        var event = try await feed.next()
+                        if host === hub {
+                            // The hub's own events, and those of the machines it reaches by ssh.
+                            if event.machine == self.hubHostName { event.machine = machine }
+                            if self.networkMachines.contains(where: { $0.name == event.machine })
+                                || self.mmHostNames.values.contains(event.machine) { continue }
+                        } else {
+                            guard event.machine == self.mmHostNames[machine] || event.machine == machine else { continue }
+                            event.machine = machine
+                        }
+                        self.mmEvent(event)
+                    }
                 } catch {
-                    guard (self.connection as? IrohHost) === host else { return }
-                    self.log.add("manymux events: \(error)")
+                    guard alive() else { return }
+                    self.log.add("manymux events (\(machine)): \(error)")
                     try? await Task.sleep(for: .seconds(5))
                 }
             }
@@ -1973,13 +2157,20 @@ extension SessionController {
 
     /// Starts a session and opens it. `command` empty = the login shell.
     func spawnMm(machine: String, name: String?, command: [String]) {
-        guard let host = connection as? IrohHost, !mmSpawning else { return }
+        guard !mmSpawning else { return }
+        let host: IrohHost, api: String?
+        do {
+            (host, api) = try route(machine)
+        } catch {
+            flash("Couldn't start: \(Self.describeMm(error))")
+            return
+        }
         let size = terminalSize ?? (cols: 80, rows: 24)
         mmSpawning = true
         Task {
             defer { mmSpawning = false }
             do {
-                let got = try await host.mmSpawn(machine: apiMachine(machine), name: name, command: command,
+                let got = try await host.mmSpawn(machine: api, name: name, command: command,
                                                  cols: size.cols, rows: size.rows)
                 log.add("Spawned \(machine)/\(got): \(command.isEmpty ? "shell" : command.joined(separator: " "))")
                 await refreshMachines()
@@ -1995,7 +2186,7 @@ extension SessionController {
     /// the page); others through `mmRename`.
     func renameMm(machine: String, name: String, to newName: String) {
         let newName = newName.trimmingCharacters(in: .whitespaces)
-        guard let host = connection as? IrohHost, !newName.isEmpty, newName != name else { return }
+        guard !newName.isEmpty, newName != name else { return }
         if let link = mmAttachedPages.compactMap(\.mm).first(where: { $0.machine == machine && $0.name == name }),
            let attachment = link.attachment {
             Task {
@@ -2005,7 +2196,8 @@ extension SessionController {
         }
         Task {
             do {
-                try await host.mmRename(machine: apiMachine(machine), name: name, to: newName)
+                let (host, api) = try route(machine)
+                try await host.mmRename(machine: api, name: name, to: newName)
             } catch {
                 flash("Rename failed: \(Self.describeMm(error))")
             }
@@ -2015,10 +2207,10 @@ extension SessionController {
 
     /// Ends the session (kills its program). An attached page gets `exit`.
     func endMm(machine: String, name: String) {
-        guard let host = connection as? IrohHost else { return }
         Task {
             do {
-                try await host.mmKill(machine: apiMachine(machine), name: name)
+                let (host, api) = try route(machine)
+                try await host.mmKill(machine: api, name: name)
                 log.add("Ended \(machine)/\(name)")
             } catch {
                 flash("Couldn't end \(name): \(Self.describeMm(error))")
@@ -2051,5 +2243,23 @@ extension SessionController {
             try? await Task.sleep(for: .seconds(4))
             uploadStatus = nil
         }
+    }
+}
+
+// MARK: - The etd network screen (PLAN-network §4.7)
+
+extension SessionController {
+    /// The member list again, for the Network screen.
+    func reloadNetwork() async {
+        guard let hub = connection as? IrohHost else { return }
+        await loadNetwork(hub)
+    }
+
+    /// An invite link from the hub: `machine` for `etd join <link>`, else a phone or tablet.
+    func invite(machine: Bool) async throws -> String {
+        guard let hub = connection as? IrohHost else { throw SummaryError.notConnected }
+        let url = try await hub.invite(machine: machine)
+        log.add("Invite (\(machine ? "machine" : "device")) from \(hubName ?? server.host)")
+        return url
     }
 }

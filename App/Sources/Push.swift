@@ -16,7 +16,8 @@ final class Push: NSObject {
     var pendingManymux: ManymuxTarget?
 
     /// `"manymux": {"machine": …, "session": …}` in a push (et-notify
-    /// --manymux). `machine` is a host name; the hub's own name = the hub.
+    /// --manymux). `machine` is the network's name for the machine (the
+    /// hub's own sessions carry the hub's name); SessionController maps it.
     struct ManymuxTarget: Equatable {
         var machine: String
         var session: String
