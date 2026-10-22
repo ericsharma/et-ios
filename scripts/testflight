@@ -14,6 +14,8 @@ git diff --quiet HEAD -- . || COMMIT="$COMMIT-dirty"
 ARCHIVE=../.build-app/ET-$BUILD.xcarchive
 AUTH="-allowProvisioningUpdates -authenticationKeyPath $ASC_KEY_PATH -authenticationKeyID $ASC_KEY_ID -authenticationKeyIssuerID $ASC_ISSUER_ID"
 
+[ -d ../Vendor/etd/apple/EtLink/EtLinkFFI.xcframework ] \
+  || { echo "EtLink not built: run scripts/build-link.sh first."; exit 1; }
 xcodegen generate -q
 echo "Archiving build $BUILD…"
 # shellcheck disable=SC2086

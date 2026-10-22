@@ -1,0 +1,4 @@
+[submodule "Vendor/etd"]
+	path = Vendor/etd
+	url = https://github.com/ericsharma/etd
+	branch = main
