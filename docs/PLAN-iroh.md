@@ -1,6 +1,6 @@
 # Plan: connect E.T. to any machine over iroh (`etd`)
 
-Status: draft v3, 2026-10-22. Phases 0–2 done (see §11.1–§11.3). Code: `~/etd`, public at github.com/ericsharma/etd. Running on trigkey as a user service.
+Status: draft v3, 2026-10-22. Phases 0–4 done (see §11.1–§11.4). The iPhone paired with trigkey over iroh and connects with Tailscale off (TestFlight build from c4f1e53). Phase 5 (field test) in progress. Code: `~/etd`, public at github.com/ericsharma/etd.
 
 ## 1. Goal
 
