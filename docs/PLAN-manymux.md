@@ -1,6 +1,6 @@
 # Plan: manymux sessions on all machines, over etd
 
-Status: 2026-10-22. A1, B1, A2, A3, A4 done. etd 62c3335 deployed: et-link manymux API, one ssh connection per machine, and push for manymux bells (etd follows trigkey's node and runs `et-notify --manymux`; nixos-config commit after 10b9805). manymux v0.2.2 runs on trigkey, gmktec and the Mac mini. etd 464e566 (deployed) has `Agent`, `ExecOn`, `Machines`; the ALPN stays `et/1` (no users: new variants are appended, no compatibility code). Next: B2 + B3 (Mac agent, running). Follows [PLAN-iroh.md](PLAN-iroh.md).
+Status: 2026-10-22. A1, B1, A2, A3, A4 done. etd 62c3335 deployed: et-link manymux API, one ssh connection per machine, and push for manymux bells (etd follows trigkey's node and runs `et-notify --manymux`; nixos-config commit after 10b9805). manymux v0.2.2 runs on trigkey, gmktec and the Mac mini. etd 464e566 (deployed) has `Agent`, `ExecOn`, `Machines`; the ALPN stays `et/1` (no users: new variants are appended, no compatibility code). Push from a gmktec session verified on the phone (after nixos-config 9992672: the manymux service PATH needs ssh). B2 + B3 pushed by the Mac agent (be4689e, 226a17e, 7370440). Next: C1 (TestFlight test), then B4. Follows [PLAN-iroh.md](PLAN-iroh.md).
 
 ## 1. Goal
 
