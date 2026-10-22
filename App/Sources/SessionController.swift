@@ -218,6 +218,12 @@ final class SessionController {
     /// A short message (session ended, rename refused).
     private(set) var mmNotice: String?
     private(set) var mmSpawning = false
+    /// Saved sessions not running (`mm checkpoint show` on the hub), for
+    /// the Machines screen's Restore row; nil when none are missing.
+    private(set) var mmMissing: (checkpoint: MmCheckpoint, targets: [String])?
+    private(set) var mmRestoring = false
+    /// What the last `mm checkpoint restore` printed, until dismissed.
+    var mmRestoreOutput: String?
     @ObservationIgnored private var mmPages: [String: WindowPage] = [:]
     @ObservationIgnored private var nextMmID = 0
     /// Pages whose sessions are attached, the most recent last: the visible
@@ -1562,6 +1568,45 @@ extension SessionController {
         guard (connection as? IrohHost) === host else { return }
         if listed != machines { machines = listed }
         syncPages()
+        if currentWindow == nil { await checkCheckpoint(host) }
+    }
+
+    /// Machines screen: compares the hub's checkpoint with the ring.
+    private func checkCheckpoint(_ host: IrohHost) async {
+        guard let hub = hubName, let output = try? await host.run("mm checkpoint show").output else { return }
+        guard (connection as? IrohHost) === host else { return }
+        var running: Set<String> = []
+        for machine in machines {
+            for session in machine.sessions {
+                running.insert(machine.name == hub ? session.name : machine.name + "/" + session.name)
+            }
+        }
+        if let checkpoint = MmCheckpoint(show: output) {
+            let missing = checkpoint.missing(running: running)
+            mmMissing = missing.isEmpty ? nil : (checkpoint, missing)
+        } else {
+            mmMissing = nil
+        }
+    }
+
+    /// Starts the saved sessions that are not running (running ones are
+    /// left alone), shows what it printed, and lists again.
+    func restoreCheckpoint() {
+        guard let host = connection as? IrohHost, !mmRestoring else { return }
+        mmRestoring = true
+        Task {
+            defer { mmRestoring = false }
+            do {
+                let (output, code) = try await host.run("mm checkpoint restore")
+                log.add("Checkpoint restore (exit \(code)): \(output.suffix(300))")
+                let text = MmCheckpoint.stripANSI(output).trimmingCharacters(in: .whitespacesAndNewlines)
+                mmRestoreOutput = (text.isEmpty ? "No output" : text) + (code == 0 ? "" : "\n\n(exit \(code))")
+            } catch {
+                log.add("Checkpoint restore failed: \(error)")
+                mmRestoreOutput = "Restore failed: \(Self.describeMm(error))"
+            }
+            await refreshMachines()
+        }
     }
 
     nonisolated static func describeMm(_ error: any Error) -> String {

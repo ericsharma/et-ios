@@ -18,6 +18,24 @@ struct MachinesView: View {
 
     var body: some View {
         List {
+            if let missing = session.mmMissing {
+                Section {
+                    ForEach(missing.targets, id: \.self) { target in
+                        Text(target).font(.callout.monospaced()).foregroundStyle(.secondary)
+                    }
+                    Button { session.restoreCheckpoint() } label: {
+                        HStack {
+                            Label("Restore", systemImage: "arrow.counterclockwise")
+                            if session.mmRestoring { Spacer(); ProgressView() }
+                        }
+                    }
+                    .disabled(session.mmRestoring)
+                } header: {
+                    Text("\(missing.targets.count) session\(missing.targets.count == 1 ? "" : "s") not running (saved \(missing.checkpoint.savedAgo) ago)")
+                } footer: {
+                    Text("From the checkpoint \(session.hubName ?? "the hub") saves every 15 minutes. Running sessions are left alone.")
+                }
+            }
             ForEach(session.machines) { machine in
                 Section {
                     if let error = machine.error {
@@ -60,6 +78,11 @@ struct MachinesView: View {
             if session.machines.isEmpty, session.state == .connected {
                 ProgressView()
             }
+        }
+        .alert("Restore", isPresented: Binding(get: { session.mmRestoreOutput != nil }, set: { if !$0 { session.mmRestoreOutput = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(session.mmRestoreOutput ?? "")
         }
         .alert("Rename session", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $newName)
