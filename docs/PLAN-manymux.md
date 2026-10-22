@@ -1,6 +1,6 @@
 # Plan: manymux sessions on all machines, over etd
 
-Status: 2026-10-22. A1 and B1 done: manymux v0.2.2 nodes run on trigkey, gmktec and the Mac mini (nixos-config a5f8cc0); `mm ls` on trigkey reaches all three. Next: A2. Follows [PLAN-iroh.md](PLAN-iroh.md).
+Status: 2026-10-22. A1, B1, A2 done. manymux v0.2.2 runs on trigkey, gmktec and the Mac mini. etd 464e566 (deployed) has `Agent`, `ExecOn`, `Machines`; the ALPN stays `et/1` (no users: new variants are appended, no compatibility code). Next: A3. Follows [PLAN-iroh.md](PLAN-iroh.md).
 
 ## 1. Goal
 
@@ -37,9 +37,9 @@ EtLink: manymux client  ──iroh──▶  etd ── Agent{host: None} ──
                                      └── Events on trigkey's node ─▶ et-notify ─▶ APNs
 ```
 
-### 3.1 etd protocol `et/2`
+### 3.1 etd protocol (et/1, appended)
 
-etd accepts `et/2` and `et/1` (PLAN-iroh §5.1). New requests:
+The ALPN stays `et/1`: the new variants go at the end of the enums, and there are no users to keep compatible. New requests:
 
 | Request | What etd does |
 |---|---|
@@ -64,7 +64,7 @@ On a manymux page, the image goes in manymux's own `PASTE` frame. The session's 
 | # | Work | Result you can check | Estimate |
 |---|---|---|---|
 | A1 | nixos-config: manymux flake input (one pinned commit), package, `mm daemon --no-notify` user service with `X-RestartIfChanged = false` on trigkey and gmktec. `mm add gmktec`, `mm add mac-mini` on trigkey. Write the nix-darwin module for the Mac mini (deployed by B1). Deploy trigkey and gmktec. | `mm ls` on trigkey lists all three machines | 2–3 h |
-| A2 | etd `et/2`: `Agent`, `ExecOn`, `Machines`; host allowlist. Tests use their own node (`mm --socket`). | `etd-probe agent gmktec` lists gmktec's sessions | 3 h |
+| A2 | etd: `Agent`, `ExecOn`, `Machines`; host allowlist. Tests use their own node (`mm --socket`). | `etd-probe agent gmktec` lists gmktec's sessions | 3 h |
 | A3 | et-link: manymux API for Swift. `machines()`, `sessions(host)`, `spawn`, `kill`, `rename`, `peek`, `attach(host, name, size, history, readOnly)` → a session stream (output, input, resize, paste image, detach, exit, events), `execOn`. Linux tests against an isolated node. | Tests pass; Swift bindings generate | 4–5 h |
 | A4 | Push: etd `Events` subscription, `et-notify --manymux` in nixos-config. | A bell in a gmktec session sends a push | 2 h |
 | A5 | The prompts for B, in the order below. | | — |
