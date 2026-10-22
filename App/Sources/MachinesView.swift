@@ -54,15 +54,8 @@ struct MachinesView: View {
                 Text("The tmux sessions on \(session.hubName ?? session.server.displayName), as before.")
             }
         }
+        // The controller also refreshes every 5 s while connected.
         .refreshable { await session.refreshMachines() }
-        // Every 5 s while this screen is visible (and connected).
-        .task(id: session.state == .connected) {
-            guard session.state == .connected else { return }
-            while !Task.isCancelled {
-                await session.refreshMachines()
-                try? await Task.sleep(for: .seconds(5))
-            }
-        }
         .overlay {
             if session.machines.isEmpty, session.state == .connected {
                 ProgressView()

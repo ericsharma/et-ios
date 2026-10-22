@@ -207,6 +207,19 @@ final class IrohHost: HostConnection, @unchecked Sendable {
         return MmAttachHandle(attachment)
     }
 
+    /// Screens for thumbnails and instant paints; `names` empty = all.
+    func mmPeek(machine: String?, names: [String]) async throws -> [MmScreen] {
+        try await mapped { try await host.mmPeek(machine: machine, names: names) }.map {
+            MmScreen(name: $0.name, cols: Int($0.cols), rows: Int($0.rows), bytes: Array($0.screen.utf8))
+        }
+    }
+
+    /// `run`, on another machine (through ssh from the hub).
+    func run(_ script: String, on machine: String) async throws -> (output: String, exitCode: Int) {
+        let result = try await mapped { try await host.execOn(machine: machine, script: script) }
+        return (String(decoding: result.output, as: UTF8.self), Int(result.exitCode ?? -1))
+    }
+
     func mmEvents() async throws -> MmEventFeed {
         MmEventFeed(try await mapped { try await host.mmEvents() })
     }
@@ -225,6 +238,14 @@ struct MmSessionInfo: Sendable, Equatable, Identifiable {
     var cols: Int
     var rows: Int
     var id: String { name }
+}
+
+/// A session's screen from `mmPeek`: bytes that paint `cols` x `rows`.
+struct MmScreen: Sendable {
+    var name: String
+    var cols: Int
+    var rows: Int
+    var bytes: [UInt8]
 }
 
 /// What a manymux event says happened.

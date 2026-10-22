@@ -107,10 +107,21 @@ final class AppModel {
     /// A tapped notification: connect to its server and session if needed,
     /// then open its window.
     private func open(_ request: Push.OpenRequest) {
-        log.add("Notification: \(request.window ?? "?") in \(request.session ?? "?")")
-        Push.shared.pendingWindowName = request.window
         guard var server = servers.first(where: { $0.id == request.server })
                 ?? session?.server ?? servers.first else { return }
+        if let target = request.manymux {
+            log.add("Notification: manymux \(target.machine)/\(target.session)")
+            Push.shared.pendingManymux = target
+            if let session, session.server.id == server.id {
+                if session.isDisconnected { session.reconnect() }
+                session.openPendingWindow()
+            } else {
+                connect(server)
+            }
+            return
+        }
+        log.add("Notification: \(request.window ?? "?") in \(request.session ?? "?")")
+        Push.shared.pendingWindowName = request.window
         if let session, session.server.id == server.id,
            request.session == nil || session.sessionName == request.session {
             if session.isDisconnected { session.reconnect() }

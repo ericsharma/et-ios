@@ -910,6 +910,9 @@ struct WindowTabs: View {
                                 } else if page.hasActivity {
                                     Circle().fill(Theme.accent).frame(width: 6, height: 6)
                                 }
+                                if let machine = page.mm?.machine {
+                                    Text(machine).font(.caption2).foregroundStyle(.secondary)
+                                }
                                 Text(page.name).font(.caption.monospaced())
                             }
                             .padding(.horizontal, 10).padding(.vertical, 5)
@@ -1028,10 +1031,17 @@ struct WindowSidebar: View {
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(page.name).font(.body.monospaced())
-                        Text(page.currentCommand).font(.caption).foregroundStyle(.secondary)
+                        if let machine = page.mm?.machine {
+                            Text(machine + (page.title.isEmpty ? "" : " · \(page.title)"))
+                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        } else {
+                            Text(page.currentCommand).font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                     Spacer()
-                    Text("\(page.index)").font(.caption.monospaced()).foregroundStyle(.tertiary)
+                    if page.mm == nil {
+                        Text("\(page.index)").font(.caption.monospaced()).foregroundStyle(.tertiary)
+                    }
                 }
                 .tag(Optional(page.id))
             }

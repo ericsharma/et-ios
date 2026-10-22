@@ -81,6 +81,12 @@ final class MmPage {
     var sessionSize: (cols: Int, rows: Int)?
     /// Attaches again after the stream closed, in a row.
     var retries = 0
+    /// The full command line (key-row preset).
+    var command = ""
+    /// The last `mmPeek` screen, painted at once when the page opens.
+    var peek: MmScreen?
+    /// Attached, but no output yet: the peek stays on screen until then.
+    var awaitingOutput = false
 
     init(machine: String, name: String) {
         self.machine = machine
@@ -214,8 +220,9 @@ final class SessionController {
     private(set) var mmSpawning = false
     @ObservationIgnored private var mmPages: [String: WindowPage] = [:]
     @ObservationIgnored private var nextMmID = 0
-    /// The page whose session is attached (at most one).
-    @ObservationIgnored private var mmAttached: WindowPage?
+    /// Pages whose sessions are attached, the most recent last: the visible
+    /// one and the one before (a swipe back is instant).
+    @ObservationIgnored private var mmAttachedPages: [WindowPage] = []
     @ObservationIgnored private var mmEventFeed: MmEventFeed?
     @ObservationIgnored private var mmRefreshTask: Task<Void, Never>?
 
@@ -410,7 +417,7 @@ final class SessionController {
         mmRefreshTask?.cancel()
         let client = client
         let connection = connection
-        let attachment = mmAttached.flatMap { releaseMm($0) }
+        let attachments = mmAttachedPages.compactMap { releaseMm($0) }
         let events = mmEventFeed
         let wasManymux = mode == .manymux && connection != nil
         mmEventFeed = nil
@@ -418,7 +425,7 @@ final class SessionController {
         self.connection = nil
         Task {
             // Leave the session running for its other clients.
-            await attachment?.detach()
+            for attachment in attachments { await attachment.detach() }
             await events?.close()
             if wasManymux, let connection {
                 _ = try? await connection.run(Self.heartbeatClearScript)
@@ -770,9 +777,19 @@ final class SessionController {
 
     /// Opens the window a tapped notification named, once it exists.
     func openPendingWindow() {
-        // Pushes come from tmux windows (et-notify) for now.
         if mode == .manymux {
-            if Push.shared.pendingWindowName != nil { setMode(.tmux) }
+            if let target = Push.shared.pendingManymux {
+                // startManymux calls this again once connected.
+                guard state == .connected, hubName != nil else { return }
+                Push.shared.pendingManymux = nil
+                openMm(machine: target.machine, name: target.session)
+            } else if Push.shared.pendingWindowName != nil {
+                setMode(.tmux)
+            }
+            return
+        }
+        if Push.shared.pendingManymux != nil, server.isIroh {
+            setMode(.manymux)
             return
         }
         guard let name = Push.shared.pendingWindowName,
@@ -811,6 +828,12 @@ final class SessionController {
     /// Two-finger swipe: next or previous window, no wrap-around.
     func switchWindow(next: Bool) {
         guard let i = windows.firstIndex(where: { $0.id == currentWindowID }) else { return }
+        // manymux: one ring of every session on every machine.
+        if mode == .manymux {
+            guard windows.count > 1 else { return }
+            currentWindowID = windows[(i + (next ? 1 : -1) + windows.count) % windows.count].id
+            return
+        }
         let j = next ? i + 1 : i - 1
         guard windows.indices.contains(j) else {
             UINotificationFeedbackGenerator().notificationOccurred(.warning)
@@ -1020,6 +1043,8 @@ final class SessionController {
         if let chosen = presetChoices[page.name] { return chosen }
         // A window running claude over ssh shows "ssh", so the name matters too.
         let looksLikeClaude = page.currentCommand == "claude" || page.name.localizedCaseInsensitiveContains("claude")
+            || page.title.localizedCaseInsensitiveContains("claude")
+            || page.mm?.command.localizedCaseInsensitiveContains("claude") == true
         return looksLikeClaude ? .claude : .shell
     }
 
@@ -1229,21 +1254,34 @@ final class SessionController {
     /// (the window's ssh host, else the tmux server). Picks the transcript
     /// holding the last prompt on screen.
     func transcript(for page: WindowPage) async throws -> (host: String, turns: [Transcript.Turn]) {
-        // PLAN-manymux B4: through ExecOn on the session's machine.
-        if page.mm != nil { throw SummaryError.failed("Transcripts aren't on manymux pages yet") }
-        guard let connection, let client else { throw SummaryError.notConnected }
-        let screen = (try? await client.command("capture-pane -p -J -t \(page.pane) -S -300").textLines.joined(separator: "\n"))
-            ?? page.terminal.frozenText().text
+        guard let connection else { throw SummaryError.notConnected }
+        let screen: String
+        if page.mm != nil {
+            // The terminal's copy: attach asked for 1000 lines of history.
+            screen = page.terminal.frozenText().text
+        } else {
+            guard let client else { throw SummaryError.notConnected }
+            screen = (try? await client.command("capture-pane -p -J -t \(page.pane) -S -300").textLines.joined(separator: "\n"))
+                ?? page.terminal.frozenText().text
+        }
         let needle = ClaudeReply.lastPrompt(from: screen).flatMap(Transcript.needle(fromPrompt:))
         let script = Transcript.fetchScript(needle: needle)
         var host = server.displayName
-        var command = script
-        if page.currentCommand == "ssh", let destination = try await sshDestination(of: page, client: client) {
-            host = destination
-            command = "printf '%s\\n' \(TmuxCommand.quote(script)) | ssh -o BatchMode=yes -o ConnectTimeout=5 \(TmuxCommand.quote(destination)) sh"
-        }
         let started = Date()
-        let (output, code) = try await connection.run(command)
+        let output: String
+        let code: Int
+        if let link = page.mm {
+            // On the session's own machine (ExecOn for machines other than the hub).
+            host = link.machine
+            (output, code) = try await mmRun(script, on: link.machine)
+        } else {
+            var command = script
+            if page.currentCommand == "ssh", let client, let destination = try await sshDestination(of: page, client: client) {
+                host = destination
+                command = "printf '%s\\n' \(TmuxCommand.quote(script)) | ssh -o BatchMode=yes -o ConnectTimeout=5 \(TmuxCommand.quote(destination)) sh"
+            }
+            (output, code) = try await connection.run(command)
+        }
         if code == 3, output.contains("ET_NO_TRANSCRIPT") { throw SummaryError.failed("No Claude transcripts on \(host)") }
         guard code == 0, let fetched = Transcript.decodeFetchOutput(output) else {
             log.add("Transcript fetch failed on \(host) (exit \(code)): \(output.prefix(300))")
@@ -1309,6 +1347,10 @@ final class SessionController {
     /// tmux host (pane directories first), and on each host a window has
     /// ssh'd to, reached from the tmux host with its own keys.
     func discoverVocabulary() async {
+        if mode == .manymux {
+            await discoverMmVocabulary()
+            return
+        }
         guard let connection, let client else { return }
         Vocabulary.shared.setDiscoveryStatus("Searching \(server.displayName)…")
         do {
@@ -1432,6 +1474,14 @@ extension SessionController {
             self?.mmConnectionEnded(host, error: error)
         })
         startMmEvents(host)
+        // The ring (and Machines) stays current: every 5 s while connected.
+        tasks.append(Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(5))
+                guard !Task.isCancelled, (self.connection as? IrohHost) === host else { return }
+                await self.refreshMachines()
+            }
+        })
         heartbeatTask?.cancel()
         heartbeatTask = Task {
             while !Task.isCancelled {
@@ -1443,6 +1493,38 @@ extension SessionController {
         if let page = currentWindow, page.mm != nil { attachMm(page) }
         openPendingWindow()
         Task { await registerPushToken() }
+        Task { await discoverVocabulary() }
+    }
+
+    /// A script on a machine: `exec` on the hub, `execOn` elsewhere.
+    func mmRun(_ script: String, on machine: String) async throws -> (output: String, exitCode: Int) {
+        guard let host = connection as? IrohHost else { throw SummaryError.notConnected }
+        return machine == hubName ? try await host.run(script) : try await host.run(script, on: machine)
+    }
+
+    /// Dictation names: git repos and files on every machine.
+    private func discoverMmVocabulary() async {
+        let names = machines.filter { $0.error == nil }.map(\.name)
+        guard !names.isEmpty else { return }
+        Vocabulary.shared.setDiscoveryStatus("Searching \(names.joined(separator: ", "))…")
+        let script = VocabDiscovery.searchScript(localDirs: [], destinations: [])
+        var repos: [DiscoveredRepo] = []
+        var searched: [String] = []
+        for name in names {
+            do {
+                let output = try await mmRun(script, on: name).output
+                repos += VocabDiscovery.parse(output, localLabel: name)
+                searched.append(name)
+            } catch {
+                log.add("Dictation name search on \(name) failed: \(error)")
+            }
+        }
+        guard !searched.isEmpty else {
+            Vocabulary.shared.setDiscoveryStatus("Search failed")
+            return
+        }
+        Vocabulary.shared.setRepos(repos, hosts: searched)
+        log.add("Dictation names: \(repos.count) repos on \(searched.joined(separator: ", "))")
     }
 
     private func mmConnectionEnded(_ host: IrohHost, error: any Error) {
@@ -1500,18 +1582,19 @@ extension SessionController {
         }
     }
 
-    /// The pages are the sessions of `mmMachine`, in list order. The visible
-    /// page stays even if a list misses it.
+    /// The pages are one ring of every session on every machine: the hub's
+    /// first, then each machine in `machines()` order, sessions in list
+    /// order. The visible page stays even if a list misses it.
     private func syncPages() {
         guard mode == .manymux else { return }
         var pages: [WindowPage] = []
         var keep: Set<String> = []
         for machine in machines {
-            for session in machine.sessions { keep.insert(machine.name + "/" + session.name) }
-            guard machine.name == mmMachine else { continue }
             for (i, info) in machine.sessions.enumerated() {
+                keep.insert(machine.name + "/" + info.name)
                 let page = mmPage(machine: machine.name, name: info.name)
                 page.index = i
+                page.mm?.command = info.command
                 if page.title != info.title { page.title = info.title }
                 let program = Manymux.programName(info.command)
                 if page.currentCommand != program { page.currentCommand = program }
@@ -1520,7 +1603,7 @@ extension SessionController {
             }
         }
         if let current = currentWindow, !pages.contains(where: { $0 === current }) { pages.append(current) }
-        for (key, page) in mmPages where !keep.contains(key) && page !== currentWindow { mmPages[key] = nil }
+        for (key, page) in mmPages where !keep.contains(key) && page !== currentWindow && !isAttached(page) { mmPages[key] = nil }
         if pages.map(\.id) != windows.map(\.id) { windows = pages }
     }
 
@@ -1544,11 +1627,11 @@ extension SessionController {
         let page = mmPage(machine: machine, name: name)
         if !windows.contains(where: { $0 === page }) { windows.append(page) }
         if page.readOnly != readOnly {
-            if mmAttached === page { detachMm(page) }
+            if isAttached(page) { detachMm(page) }
             page.readOnly = readOnly
         }
         if currentWindowID == page.id {
-            if mmAttached !== page { attachMm(page) }
+            if !isAttached(page) { attachMm(page) }
         } else {
             currentWindowID = page.id
         }
@@ -1571,19 +1654,75 @@ extension SessionController {
         currentWindowID = nil
     }
 
-    /// From `currentWindowID`'s didSet: attach the visible session, detach the
-    /// one before.
+    private func isAttached(_ page: WindowPage) -> Bool {
+        mmAttachedPages.contains { $0 === page }
+    }
+
+    /// From `currentWindowID`'s didSet. A page still attached is current
+    /// already; another paints its peek at once, then attaches. The page
+    /// before stays attached (at most two). Back to Machines detaches all.
     fileprivate func mmCurrentChanged() {
-        let page = currentWindow
-        if let attached = mmAttached, attached !== page {
-            detachMm(attached)
-            attached.readOnly = false
-        }
-        if let page, page.mm != nil {
-            mmMachine = page.mm?.machine
-            if mmAttached !== page { attachMm(page) }
-        } else if page == nil {
+        guard let page = currentWindow, page.mm != nil else {
+            for attached in mmAttachedPages {
+                detachMm(attached)
+                attached.readOnly = false
+            }
             Task { await refreshMachines() }
+            return
+        }
+        mmMachine = page.mm?.machine
+        if isAttached(page) {
+            mmAttachedPages.removeAll { $0 === page }
+            mmAttachedPages.append(page)
+            page.hasActivity = false
+            mmResized()
+        } else {
+            attachMm(page)
+            paintPeek(page)
+        }
+        prefetchPeeks(around: page)
+    }
+
+    /// The cached screen now, then a fresh one, until the attach's first output.
+    private func paintPeek(_ page: WindowPage) {
+        guard let link = page.mm, let host = connection as? IrohHost else { return }
+        if let screen = link.peek {
+            page.terminal.setSize(cols: screen.cols, rows: screen.rows)
+            page.terminal.reset(with: screen.bytes)
+        }
+        let generation = link.generation
+        let machine = apiMachine(link.machine)
+        let name = link.name
+        Task {
+            guard let screen = try? await host.mmPeek(machine: machine, names: [name]).first else { return }
+            link.peek = screen
+            guard link.generation == generation, link.awaitingOutput else { return }
+            page.terminal.setSize(cols: screen.cols, rows: screen.rows)
+            page.terminal.reset(with: screen.bytes)
+        }
+    }
+
+    /// Peeks of the sessions on either side in the ring, so the next swipe
+    /// paints at once.
+    private func prefetchPeeks(around page: WindowPage) {
+        guard let host = connection as? IrohHost, windows.count > 1,
+              let i = windows.firstIndex(where: { $0 === page }) else { return }
+        let neighbours = [windows[(i + 1) % windows.count], windows[(i - 1 + windows.count) % windows.count]]
+            .filter { !isAttached($0) }
+        var byMachine: [String: [WindowPage]] = [:]
+        for neighbour in neighbours where neighbour.mm != nil {
+            if byMachine[neighbour.mm!.machine]?.contains(where: { $0 === neighbour }) == true { continue }
+            byMachine[neighbour.mm!.machine, default: []].append(neighbour)
+        }
+        for (machine, pages) in byMachine {
+            let api = apiMachine(machine)
+            let names = pages.map(\.name)
+            Task {
+                guard let screens = try? await host.mmPeek(machine: api, names: names) else { return }
+                for screen in screens {
+                    pages.first { $0.name == screen.name }?.mm?.peek = screen
+                }
+            }
         }
     }
 
@@ -1597,9 +1736,10 @@ extension SessionController {
         link.input?.finish()
         link.input = nil
         link.sentSize = nil
+        link.awaitingOutput = false
         let attachment = link.attachment
         link.attachment = nil
-        if mmAttached === page { mmAttached = nil }
+        mmAttachedPages.removeAll { $0 === page }
         return attachment
     }
 
@@ -1611,18 +1751,18 @@ extension SessionController {
 
     private func attachMm(_ page: WindowPage) {
         guard let host = connection as? IrohHost, let link = page.mm, state == .connected else { return }
-        if let other = mmAttached, other !== page { detachMm(other) }
         detachMm(page)
-        mmAttached = page
+        mmAttachedPages.append(page)
+        while mmAttachedPages.count > 2, let oldest = mmAttachedPages.first(where: { $0 !== page }) {
+            detachMm(oldest)
+            oldest.readOnly = false
+        }
         let generation = UUID()
         link.generation = generation
+        link.awaitingOutput = true
         let (input, continuation) = AsyncStream<[UInt8]>.makeStream()
         link.input = continuation
         let size = terminalSize ?? (cols: page.terminal.terminal.cols, rows: page.terminal.terminal.rows)
-        // Back to the view's size (an earlier attach may have taken the
-        // session's), then an empty screen for the history and repaint.
-        page.terminal.setSize(cols: size.cols, rows: size.rows)
-        page.terminal.reset(with: [])
         let machine = apiMachine(link.machine)
         let name = link.name
         let readOnly = page.readOnly
@@ -1663,8 +1803,15 @@ extension SessionController {
         guard let link = page.mm else { return false }
         switch output {
         case .history(let bytes), .data(let bytes):
+            if link.awaitingOutput {
+                // The peek was a stand-in; the attach repaints from scratch.
+                link.awaitingOutput = false
+                page.terminal.reset(with: [])
+            }
             page.terminal.feed(bytes)
+            if page.id != currentWindowID { page.hasActivity = true }
         case .resync(let bytes):
+            link.awaitingOutput = false
             page.terminal.reset(with: bytes)
         case .size(let cols, let rows):
             link.sessionSize = (cols, rows)
@@ -1707,7 +1854,7 @@ extension SessionController {
             link.retries += 1
             Task {
                 try? await Task.sleep(for: .seconds(1))
-                if self.currentWindow === page, self.mmAttached == nil { self.attachMm(page) }
+                if self.currentWindow === page, !self.isAttached(page) { self.attachMm(page) }
             }
             return
         }
@@ -1756,8 +1903,8 @@ extension SessionController {
         case .bell, .notify:
             // The attached session's own bell arrives in its output.
             let page = mmPages[event.machine + "/" + event.session]
-            if let page, page === mmAttached { break }
-            if let page, event.machine == mmMachine, windows.contains(where: { $0 === page }) {
+            if let page, isAttached(page) { break }
+            if let page, windows.contains(where: { $0 === page }) {
                 bellRang(in: page)
             } else {
                 UINotificationFeedbackGenerator().notificationOccurred(.warning)
@@ -1804,7 +1951,7 @@ extension SessionController {
     func renameMm(machine: String, name: String, to newName: String) {
         let newName = newName.trimmingCharacters(in: .whitespaces)
         guard let host = connection as? IrohHost, !newName.isEmpty, newName != name else { return }
-        if let page = mmAttached, let link = page.mm, link.machine == machine, link.name == name,
+        if let link = mmAttachedPages.compactMap(\.mm).first(where: { $0.machine == machine && $0.name == name }),
            let attachment = link.attachment {
             Task {
                 do { try await attachment.rename(to: newName) } catch { flash("Rename failed: \(Self.describeMm(error))") }

@@ -12,12 +12,22 @@ final class Push: NSObject {
     private(set) var token: String?
     /// Window name from a tapped notification; the session opens it.
     var pendingWindowName: String?
+    /// A manymux session from a tapped notification; the session opens it.
+    var pendingManymux: ManymuxTarget?
+
+    /// `"manymux": {"machine": …, "session": …}` in a push (et-notify
+    /// --manymux). `machine` is a host name; the hub's own name = the hub.
+    struct ManymuxTarget: Equatable {
+        var machine: String
+        var session: String
+    }
 
     /// What a tapped notification points at (sent by et-notify).
     struct OpenRequest {
         var server: UUID?
         var session: String?
         var window: String?
+        var manymux: ManymuxTarget?
     }
 
     /// Set by AppModel; until then a tap is kept in `pendingOpen`.
@@ -32,16 +42,23 @@ final class Push: NSObject {
     private var pendingOpen: OpenRequest?
 
     func open(_ request: OpenRequest) {
-        Push.trace("open window=\(request.window ?? "nil") session=\(request.session ?? "nil") handler=\(onOpen != nil)")
+        Push.trace("open window=\(request.window ?? "nil") session=\(request.session ?? "nil")" +
+            (request.manymux.map { " manymux=\($0.machine)/\($0.session)" } ?? "") + " handler=\(onOpen != nil)")
         if let onOpen { onOpen(request) } else { pendingOpen = request }
     }
 
     /// The notification payload → what to open.
     nonisolated static func request(from info: [AnyHashable: Any]) -> OpenRequest {
-        OpenRequest(
+        var manymux: ManymuxTarget?
+        if let mm = info["manymux"] as? [String: Any], let machine = mm["machine"] as? String,
+           let session = mm["session"] as? String {
+            manymux = ManymuxTarget(machine: machine, session: session)
+        }
+        return OpenRequest(
             server: (info["server"] as? String).flatMap(UUID.init(uuidString:)),
             session: info["session"] as? String,
-            window: info["window"] as? String)
+            window: info["window"] as? String,
+            manymux: manymux)
     }
 
     /// Sandbox for Xcode builds, production for TestFlight / App Store.
