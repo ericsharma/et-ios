@@ -101,6 +101,7 @@ ETCore/                    Swift package, no UI
   Tests/   parser fixtures + client integration against a throwaway local tmux
 App/                       xcodegen project (project.yml)
   AppModel        servers, templates, key, network monitor, notification routing
+  MachinesView    manymux Machines screen, session row, new-session sheet (§5.0)
   SessionController  one connection: attach, windows, restore/repaint, claims, heartbeat,
                      input, uploads, reconnect
   TerminalHost    one SwiftTerm view per window; two-finger gestures; dictation result hook
@@ -112,6 +113,20 @@ scripts/                   asc-token, asc.env, setup-signing, unlock-signing, te
 All tmux traffic goes through `TmuxClient`. Every window keeps a live `TerminalView`, even when hidden.
 
 ## 5. Features
+
+### 5.0 Machines (manymux, iroh servers)
+
+An etd server opens on **Machines**: the [manymux](https://github.com/rayfish/manymux) sessions of the hub (the etd machine, trigkey) and of every machine its node watches (`machines()`: gmktec, mac-mini), one section each, hub first. Plan and protocol: docs/PLAN-manymux.md. Code: `MachinesView.swift`, the manymux extension at the end of `SessionController.swift`, wrappers in `Iroh.swift`.
+
+- **Row:** bell dot (bells > 0), title (the program's terminal title, e.g. Claude Code's task; the name if empty), then name · idle time · attached count. Refresh: pull down, every 5 s while the screen is visible, and 1 s after any manymux event.
+- **Tap:** a session page. Its pages are the sessions of that machine: tabs, **two-finger left/right** for the next/previous session, ⌘[ ⌘]. Header: ‹ back to Machines, the machine name (tap: a picker to move to another machine, opening its first session), the title.
+- **Only the visible session is attached** (`mmAttach`, the view's cols × rows, history 1000), so other sessions keep their size for other devices. Leaving or switching detaches. A view size change asks `resize`; the session's answer (`size`, the smallest of its clients) sets the terminal's size. `resync` resets, then repaints. `exit` shows "<name> ended (code)" and goes back to Machines.
+- **Typing, key row, mic, editor, paste** write to the attachment, in order. **Image** (🖼, Open in E.T.): manymux's `PASTE` frame; the session's machine saves the file and types its path. Other files: not on manymux pages.
+- **Long-press a row:** Rename, Open view-only (`readOnly`: no typing, no resize; the key row becomes "View only · Open to type"), End (confirm first).
+- **+** (header, tabs): machine, then Shell / Claude (`claude`) / a command (split like a shell, with quotes), optional name; spawns at the view's size and opens it.
+- **Bells:** a session's own bell rings in its output; `mmEvents` bells elsewhere show the in-app banner (same machine) or a notice and refresh the list. Pushes for manymux sessions: PLAN-manymux A4.
+- **tmux:** the "tmux" entry on Machines (and ⋯ → tmux) reconnects in tmux mode, the app as described below; ⋯ → Machines comes back. A tapped tmux notification switches to tmux. SSH servers are tmux only.
+- **Not yet on manymux pages** (PLAN-manymux B4): Overview thumbnails, Copilot and transcript select mode, dictation-name discovery. Read aloud and summaries use the screen.
 
 ### 5.1 Screen
 
@@ -156,8 +171,8 @@ The window's history and screen frozen as plain text in a native text view (iOS 
 | Event | Action |
 |---|---|
 | Launch | Connect to the last server (unless a tapped notification chose one). |
-| Background | Close the control client (release windows, clear heartbeat) — except while a login waits for browser approval. |
-| Foreground / network change | Reconnect, keeping pages; full restore. |
+| Background | Close the control client (release windows, clear heartbeat) — except while a login waits for browser approval. manymux: detach the attached session. |
+| Foreground / network change | Reconnect, keeping pages; full restore. manymux: attach the visible session again. |
 | Lost connection | Retry after 0.5, 1, 2, 4 s, then every 8 s for 2 minutes. |
 
 ## 6. Settings and storage
