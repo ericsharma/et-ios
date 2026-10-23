@@ -2,6 +2,8 @@
 
 Status: 2026-10-23. D1 ACCEPTED: iroh-blobs (the building blocks of [sendme](https://github.com/n0-computer/sendme), not the sendme binary). D3 ACCEPTED with a change: files land in a top-level folder in the home directory (`~/etd-downloads/`). Owner priority: the main use is to **send files to machines and point a Claude session there at them**. A file view on the phone or iPad is nice to have (phase 2). D2 and D4 apply only to phase 2.
 
+F0 DONE on Linux (etd branch `spike/f0-blobs`, c135142): the receiver pulls over the **sender's own connection** (§4.1); a 200 MB folder, cut at 50 %, finished with only the missing 50 % (second pull 104.8 MB, 0.4 s on localhost); a hash the sender did not offer is refused; the tree comes out whole. The new crates with OS code (redb, reflink-copy, positioned-io, iroh-io) compile for `aarch64-apple-ios` and `-ios-sim`; blake3 and ring were already in the app. Left in F0: the full xcframework build on the Mac (Mac agent).
+
 Follows [PLAN-network.md](PLAN-network.md) and [PLAN-macos.md](PLAN-macos.md). Work split as in those plans: **A** = the trigkey Claude session (etd, et-link), **B** = the Mac agent (apps, extensions, builds), **C** = the owner (tests).
 
 ## 1. Goal
@@ -26,18 +28,18 @@ The last row lets one Claude session hand files to another: Claude on trigkey ru
 | Fact | Where | Effect |
 |---|---|---|
 | sendme is a CLI only (one `src/main.rs`), built on iroh-blobs 0.103.1 + `iroh ^1.0`. The sender serves until the receiver pulls with a ticket; each send uses a new random key; anyone with the ticket can fetch. | github.com/n0-computer/sendme v0.37.1 | Use its parts (iroh-blobs `Collection`, `BlobTicket`, `FsStore`, import/export), not its binary or its access model. |
-| iroh-blobs 0.103.1 builds with etd's iroh 1.4.1. It can refuse connections (`ConnectMode::Intercept`) and it has `PushRequest` (the sender pushes data to the receiver). | crates.io, docs.rs | etd serves blobs to network members only. A phone pushes to a machine, so the phone never has to accept connections. |
-| Devices (iPhone, iPad, Mac app) only dial out; et-link has no accept loop. Machines run etd all the time. | `et-link/src/lib.rs` | Phase 1 works with push from the sender. Phase 2 needs files for a device to wait on a machine (D2). |
+| iroh-blobs 0.103.1 builds with etd's iroh 1.4.1. `PushRequest` is marked experimental, and the pusher does not learn when the receiver refuses. `provider::handle_connection` serves on **any** connection, also one this side opened; `remote().fetch(conn, …)` asks only for what the local store does not have. | crates.io, iroh-blobs source, F0 test | The sender serves on its own et/1 connection; the target pulls. No push, no new ALPN, no access hook on the machine: et/1's member check covers it. |
+| Devices (iPhone, iPad, Mac app) only dial out; et-link has no accept loop. Machines run etd all the time. | `et-link/src/lib.rs` | Phase 1 works because the device serves on the connection it opened. Phase 2 needs files for a device to wait on a machine (D2). |
 | `Upload { path, len }`: max 32 MiB, the whole file in memory, writes to `~/.cache/et-uploads`. | `et-proto`, `etd/src/ops.rs` | Replaced for files by iroh-blobs. Kept for now; removed when phase 1 is done (no users, no compatibility work). |
 | A manymux session in the iOS app accepts **images only** (`attachment.paste`): "Only images can go to a manymux session". On the Mac, other files go to `~/.cache/et-uploads` with `Upload`. | `SessionController.swift:2255`, `SessionTerminal.swift:300` | Phase 1 removes this limit: any file, any size, any session. Images keep the paste path (Claude Code shows them inline). |
 | manymux has no CLI command to type into a session. The app types with its `MmAttachment` (et-link `mm.rs`). | `mm --help`, et-link | The app types the path itself. For `etd send … machine:session`, etd must type through manymux's agent protocol without resizing the session: F4 checks it first. |
-| A new request at the end of the `Request` enum keeps `et/1`. | `PROTOCOL.md` | Add requests; no ALPN change. iroh-blobs runs on its own ALPN on the same endpoint. |
+| A new request at the end of the `Request` enum keeps `et/1`. | `PROTOCOL.md` | Add requests; no ALPN change. iroh-blobs streams run inside the et/1 connection (F0). |
 
 ## 3. Decisions
 
 | # | Question | Decision |
 |---|---|---|
-| D1 | Transfer protocol | **ACCEPTED: iroh-blobs** on etd's endpoint (its own ALPN), members only. The control messages (what, where, which session) stay on et/1. Folders are a `Collection`, so the old D5 (zip) is gone. Resume and BLAKE3 checks come with it. |
+| D1 | Transfer protocol | **ACCEPTED: iroh-blobs**, inside the et/1 connection (F0), so members only. The control messages (what, where, which session) stay on et/1. Folders are a `Collection`, so the old D5 (zip) is gone. Resume and BLAKE3 checks come with it. |
 | D2 | (Phase 2) How does a file reach a phone or tablet? | Recommended: the file waits in a machine's blob store, tagged for the device; a push goes to that device only; the app fetches when it opens. |
 | D3 | Where do files land on a machine? | **ACCEPTED: `~/etd-downloads/`**, a top-level folder in the home directory, lower case so it is easy to type in a shell (`ETD_DOWNLOADS` changes it). A folder keeps its name and tree: `~/etd-downloads/out/…`. A name clash gets ` (2)`, ` (3)`. Short paths, so a Claude prompt stays readable. |
 | D4 | (Phase 2) How long does a machine keep a device's file? | Recommended: until the device has it, at most 7 days. |
@@ -47,20 +49,22 @@ The last row lets one Claude session hand files to another: Claude on trigkey ru
 ### 4.1 One send, step by step
 
 ```
-sender (app or etd)                        target machine's etd
+sender (app or etd)                          target machine's etd
 1. import file/folder into own FsStore
-   as a Collection → root hash
-2. ── iroh-blobs PushRequest(root) ──────▶ intercept: peer is a member? store it
-3. ── et/1 Deliver { hash, name } ───────▶ export the Collection to ~/etd-downloads/
-                                           delete the blob (its tag)
-4. ◀── Delivered { paths } ─────────────
-5. type "<paths> " into the session (app), or print them (etd send)
-6. delete the blob from own store
+   by reference (no copy) as a Collection
+2. serve that one root hash on its own
+   et/1 connection (provider, intercept)
+3. ── et/1 Deliver { hash, name, session } ─▶ (the et/1 member check, as always)
+4.                        ◀── iroh-blobs GET ─ fetch(conn, root): asks only for
+   ── the missing chunks ───────────────────▶   the chunks it does not have
+5.                                            export to ~/etd-downloads/, drop the blob
+6. ◀── Delivered { paths, typed } ──────────
+7. type "<paths> " into the session (app), or print them (etd send); clean own store
 ```
 
-- If the stream breaks, step 2 runs again and sends only what is missing (iroh-blobs knows which chunks it has).
-- A `Deliver` for a hash that is not complete answers `Error("incomplete")`; the sender pushes again.
-- The target refuses a push that leaves less than 2 GB free on its disk.
+- If the connection breaks, the sender sends `Deliver` again; step 4 fetches only the rest (F0: cut at 50 %, the second pull read 50 %).
+- The sender serves only the hash it is delivering; other requests get `Permission` (F0).
+- The target refuses a `Deliver` that leaves less than 2 GB free on its disk (the Collection's sizes are known before the pull).
 
 ### 4.2 Protocol (et/1, appended)
 
@@ -74,7 +78,7 @@ Response::Delivered { paths: Vec<String>, typed: bool }
 
 ### 4.3 etd
 
-- `crates/etd/src/files.rs`: `FsStore` under the state directory (`blobs/`), the blobs protocol handler with `Intercept` (members of the network only, devices and machines), export to `~/etd-downloads/` (D3), clean-up of blobs with no tag at start and each hour.
+- `crates/etd/src/files.rs`: `FsStore` under the state directory (`blobs/`), the fetch on the `Deliver` connection, the provider side for `etd send` (on etd's outgoing connection), export to `~/etd-downloads/` (D3), clean-up of blobs with no tag at start and each hour.
 - CLI (sends through the local etd over its socket, as `etd-ssh` does):
   - `etd send <path>… <machine>[:<session>]`. A path can be a file or a folder. Progress on stderr. Prints the paths on the target, one per line, so Claude can read them.
   - Names: machine names from `etd members`; `<session>` is the manymux session name on that machine.
