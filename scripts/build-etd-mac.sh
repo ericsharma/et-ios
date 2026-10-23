@@ -8,10 +8,10 @@ set -euo pipefail
 cd "$(dirname "$0")/../Vendor/etd"
 export PATH="$HOME/.cargo/bin:$PATH"
 TC="${RUST_TOOLCHAIN:-stable-aarch64-apple-darwin}"
-# Xcode's build environment points the C compilers at its SDK settings; cargo
-# wants the plain macOS ones.
-unset SDKROOT IPHONEOS_DEPLOYMENT_TARGET 2>/dev/null || true
-export MACOSX_DEPLOYMENT_TARGET=15.0
+# The C parts (ring) need the macOS SDK, also from inside an Xcode build.
+unset IPHONEOS_DEPLOYMENT_TARGET 2>/dev/null || true
+SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
+export SDKROOT MACOSX_DEPLOYMENT_TARGET=15.0
 cargo "+$TC" build --release -p etd --bin etd --bin etd-ssh --target aarch64-apple-darwin >&2
 OUT="$PWD/target/aarch64-apple-darwin/release"
 if [ $# -ge 1 ]; then

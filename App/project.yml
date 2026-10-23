@@ -85,6 +85,13 @@ targets:
         product: ETSSH
       - package: SwiftTerm
       - package: EtLink
+      - package: ETCore
+        product: ETOnboarding
+    # etd + etd-ssh (cargo, from Vendor/etd) and the login item's plist.
+    postCompileScripts:
+      - name: Bundle etd
+        script: '"$SRCROOT/../scripts/bundle-etd-mac.sh"'
+        basedOnDependencyAnalysis: false
     info:
       path: Generated/Info-mac.plist
       properties:
@@ -103,6 +110,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: xyz.ericsharma.et.mac
         PRODUCT_NAME: E.T.
         ENABLE_HARDENED_RUNTIME: YES
+        # The etd build phase runs cargo and writes into the bundle.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
         # EtLinkFFI (and the bundled etd) are arm64 only: Apple silicon.
         ARCHS: arm64
         CURRENT_PROJECT_VERSION: "1"

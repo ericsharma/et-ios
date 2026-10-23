@@ -5,6 +5,7 @@ import SwiftUI
 /// terminal on the right.
 struct MainWindow: View {
     @Environment(Fleet.self) private var fleet
+    @Environment(Setup.self) private var setup
     @State private var selection: SessionRef?
     @State private var showingNewSession = false
     @State private var renaming: SessionRef?
@@ -34,9 +35,6 @@ struct MainWindow: View {
         }
         .sheet(isPresented: $showingNewSession) {
             NewSessionSheet(defaultMachine: selection?.machine) { ref in selection = ref }
-        }
-        .sheet(item: Binding(get: { fleet.pendingPairing }, set: { if $0 == nil { fleet.cancelPairing() } })) { pending in
-            ConfirmPairingSheet(pending: pending)
         }
         .alert("Rename session", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $newName)
@@ -86,10 +84,9 @@ struct MainWindow: View {
     }
 
     @ViewBuilder private var detail: some View {
-        switch fleet.phase {
-        case .unpaired:
-            PairingView()
-        default:
+        if setup.stage != .done {
+            SetupView()
+        } else {
             if let selection {
                 TerminalScreen(selection: $selection)
                     .id(selection)

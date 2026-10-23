@@ -35,10 +35,6 @@ final class Fleet {
     private(set) var hubName: String?
     /// A short message at the bottom of the window (spawn failed, bell…).
     private(set) var notice: String?
-    /// Pairing: the link waiting for confirmation, and progress or the error.
-    var pendingPairing: PendingPairing?
-    private(set) var pairingStatus: String?
-    private(set) var isPairing = false
     /// A session to show (a tapped notification); the front window takes it.
     var requestedRef: SessionRef?
     let log = DebugLog()
@@ -82,49 +78,15 @@ final class Fleet {
         if hub != nil { connect() }
     }
 
-    // MARK: - Pairing
+    // MARK: - The hub (this Mac's etd, paired by Setup)
 
-    /// An `et://pair?t=…` link, opened or pasted: shows the confirm sheet.
-    func receivePairingLink(_ text: String) {
-        let link = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        do {
-            let ticket = try IrohLink.ticket(from: link)
-            pairingStatus = nil
-            pendingPairing = PendingPairing(url: link, ticket: ticket)
-        } catch {
-            log.add("Bad pairing link: \(error)")
-            pairingStatus = "That isn't a pairing link. Run `etd invite` on a machine for a new one."
-            pendingPairing = nil
-        }
-    }
-
-    func confirmPairing() {
-        guard let pending = pendingPairing, !isPairing else { return }
-        isPairing = true
-        pairingStatus = "Pairing with \(pending.ticket.hostName)…"
-        let deviceName = Host.current().localizedName ?? "Mac"
-        Task {
-            defer { isPairing = false }
-            do {
-                let paired = try await IrohLink.shared.pair(url: pending.url, deviceName: deviceName)
-                log.add("Paired with \(paired.hostName) (\(paired.endpointId.prefix(8)))")
-                var server = ServerConfig(name: paired.hostName, host: paired.hostName, port: 0, user: "")
-                server.irohEndpointId = paired.endpointId
-                server.irohRelayURL = paired.relayURL
-                save(server)
-                pendingPairing = nil
-                pairingStatus = nil
-                connect()
-            } catch {
-                log.add("Pairing failed: \(error)")
-                pairingStatus = "Pairing failed: \(Self.describe(error))"
-            }
-        }
-    }
-
-    func cancelPairing() {
-        pendingPairing = nil
-        pairingStatus = nil
+    /// The app paired with an etd (its own Mac's): save it and connect.
+    func adopt(name: String, endpointId: String, relayURL: String?) {
+        var server = ServerConfig(name: name, host: name, port: 0, user: "")
+        server.irohEndpointId = endpointId
+        server.irohRelayURL = relayURL
+        save(server)
+        connect()
     }
 
     /// Forgets the hub (this Mac stays a member of the network until `etd revoke`).
@@ -647,13 +609,6 @@ final class Fleet {
         default: "\(error)"
         }
     }
-}
-
-/// An `et://pair` link waiting for the user to confirm it.
-struct PendingPairing: Identifiable {
-    let id = UUID()
-    let url: String
-    let ticket: PairingTicket
 }
 
 /// A ring buffer of log lines (Help → Debug Log).

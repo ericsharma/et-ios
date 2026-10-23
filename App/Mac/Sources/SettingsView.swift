@@ -1,74 +1,6 @@
 import CoreImage.CIFilterBuiltins
 import SwiftUI
 
-/// First run: paste an `et://pair` link from `etd invite`.
-struct PairingView: View {
-    @Environment(Fleet.self) private var fleet
-    @State private var link = ""
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Pair this Mac").font(.largeTitle.bold())
-            Text("E.T. reaches your machines through etd. On any machine in your etd network, run:")
-            Text("etd invite")
-                .font(.body.monospaced())
-                .padding(8)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
-                .textSelection(.enabled)
-            Text("Then paste the et://pair link here (or open it on this Mac).")
-            HStack {
-                TextField("et://pair?t=…", text: $link)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.body.monospaced())
-                    .onSubmit { pair() }
-                Button("Pair") { pair() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(link.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            if let status = fleet.pairingStatus, fleet.pendingPairing == nil {
-                Text(status).foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: 520)
-        .padding(40)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private func pair() {
-        fleet.receivePairingLink(link)
-    }
-}
-
-struct ConfirmPairingSheet: View {
-    @Environment(Fleet.self) private var fleet
-    let pending: PendingPairing
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Pair with \(pending.ticket.hostName)?").font(.title2.bold())
-            Text("This Mac joins your etd network and can open sessions on every machine in it.")
-                .foregroundStyle(.secondary)
-            Text("Machine ID \(pending.ticket.endpointId.prefix(16))…")
-                .font(.caption.monospaced()).foregroundStyle(.secondary)
-            if let status = fleet.pairingStatus {
-                HStack {
-                    if fleet.isPairing { ProgressView().controlSize(.small) }
-                    Text(status)
-                }
-            }
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel) { fleet.cancelPairing() }
-                Button("Pair") { fleet.confirmPairing() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(fleet.isPairing)
-            }
-        }
-        .padding(24)
-        .frame(width: 440)
-    }
-}
-
 // MARK: - Settings (⌘,)
 
 struct SettingsView: View {
@@ -85,16 +17,19 @@ struct SettingsView: View {
 
 struct NetworkSettings: View {
     @Environment(Fleet.self) private var fleet
+    @Environment(Setup.self) private var setup
     @State private var invite: String?
     @State private var inviteError: String?
     @State private var confirmingUnpair = false
 
     var body: some View {
         Form {
-            Section("Hub") {
-                LabeledContent("Connected through", value: fleet.hub?.name ?? "Not paired")
+            Section("This Mac") {
+                LabeledContent("Machine name", value: setup.status?.machineName ?? fleet.hub?.name ?? "—")
+                LabeledContent("etd", value: setup.status.map { "\($0.version ?? "?"), managed by \(setup.manager?.label ?? "?")" } ?? "—")
+                LabeledContent("Login item", value: Setup.describe(Setup.agent.status))
                 if fleet.hub != nil {
-                    Button("Unpair…", role: .destructive) { confirmingUnpair = true }
+                    Button("Unpair E.T.…", role: .destructive) { confirmingUnpair = true }
                 }
             }
             if let network = fleet.network {
@@ -132,9 +67,12 @@ struct NetworkSettings: View {
         .formStyle(.grouped)
         .task { await fleet.reloadNetwork() }
         .confirmationDialog("Unpair this Mac?", isPresented: $confirmingUnpair) {
-            Button("Unpair", role: .destructive) { fleet.unpair() }
+            Button("Unpair", role: .destructive) {
+                fleet.unpair()
+                setup.start()
+            }
         } message: {
-            Text("E.T. forgets the hub. To remove this Mac from the network too, run `etd revoke` on a machine.")
+            Text("E.T. forgets its pairing and pairs again at the next start. etd and manymux keep running.")
         }
     }
 

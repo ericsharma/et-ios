@@ -2,7 +2,6 @@
 import AppKit
 
 /// Launch flags for testing on a headless Mac (debug builds only):
-///   --pair <et://pair link>   pair without the confirm sheet
 ///   --open <machine/session>  select a session in the first window
 ///   --snapshot <file.png>     every 3 s, draw the front window into a PNG
 ///   --spawn <machine:command>  start a session and show it
@@ -13,10 +12,6 @@ enum DebugHooks {
         let args = CommandLine.arguments
         func value(_ flag: String) -> String? {
             args.firstIndex(of: flag).flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil }
-        }
-        if let link = value("--pair") {
-            fleet.receivePairingLink(link)
-            fleet.confirmPairing()
         }
         if let target = value("--open") {
             let parts = target.split(separator: "/", maxSplits: 1).map(String.init)

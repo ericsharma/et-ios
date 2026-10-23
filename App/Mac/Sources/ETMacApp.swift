@@ -5,21 +5,33 @@ import UserNotifications
 @main
 struct ETMacApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var fleet = Fleet()
+    @State private var fleet: Fleet
+    @State private var setup: Setup
+
+    init() {
+        let fleet = Fleet()
+        _fleet = State(initialValue: fleet)
+        _setup = State(initialValue: Setup(fleet: fleet))
+    }
 
     var body: some Scene {
         // ⌘N: a new window; "Open in New Window" passes the session.
         WindowGroup("E.T.", for: SessionRef.self) { $ref in
             MainWindow(initial: ref)
                 .environment(fleet)
+                .environment(setup)
                 .onAppear {
                     AppDelegate.fleet = fleet
+                    if !AppDelegate.setupStarted {
+                        AppDelegate.setupStarted = true
+                        setup.start()
+                    }
                     #if DEBUG
                     DebugHooks.run(fleet)
                     #endif
                 }
                 .onOpenURL { url in
-                    if url.scheme == "et" { fleet.receivePairingLink(url.absoluteString) }
+                    if url.scheme == "et" { setup.receive(link: url.absoluteString) }
                 }
         }
         .defaultSize(width: 1100, height: 700)
@@ -28,6 +40,7 @@ struct ETMacApp: App {
         Settings {
             SettingsView()
                 .environment(fleet)
+                .environment(setup)
         }
 
         Window("Debug Log", id: "log") {
@@ -40,11 +53,16 @@ struct ETMacApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     @MainActor static weak var fleet: Fleet?
+    @MainActor static var setupStarted = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let center = UNUserNotificationCenter.current()
         center.delegate = self
         center.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            NSLog("ETMAC windows: %@", "\(NSApp.windows.map { "\(type(of: $0)) visible=\($0.isVisible) frame=\($0.frame)" })")
+        }
     }
 
     /// A tapped bell notification: show its session.
