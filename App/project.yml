@@ -25,8 +25,9 @@ targets:
     platform: iOS
     # xcodegen picks the build phase by file type, so the asset catalog
     # (app icon) is listed under sources too.
-    sources: [Sources, Shared, Resources]
+    sources: [Sources, Shared, ShareKit, Resources]
     dependencies:
+      - target: ETShare
       - package: ETCore
         product: ETCore
       - package: ETCore
@@ -41,6 +42,8 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         # Short git commit the build was made from (scripts/testflight).
         ETGitCommit: $(ET_GIT_COMMIT)
+        # The Keychain group of the iroh key, shared with the extension.
+        ETKeychainGroup: $(AppIdentifierPrefix)xyz.ericsharma.et
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
@@ -72,6 +75,45 @@ targets:
         MARKETING_VERSION: "0.1"
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  # The share sheet's "E.T." (docs/PLAN-files.md F7): files to a machine,
+  # optionally into a session. Shares the iroh key (Keychain group) and the
+  # App Group with the app.
+  ETShare:
+    type: app-extension
+    platform: iOS
+    sources: [ShareExtension, ShareKit, Shared]
+    dependencies:
+      - package: ETCore
+        product: ETCore
+      - package: ETCore
+        product: ETSSH
+      - package: EtLink
+    info:
+      path: Generated/Info-share.plist
+      properties:
+        CFBundleDisplayName: E.T.
+        CFBundleShortVersionString: "0.1"
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ETGitCommit: $(ET_GIT_COMMIT)
+        ETKeychainGroup: $(AppIdentifierPrefix)xyz.ericsharma.et
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            # Any file: photos, PDFs, anything from Files.
+            NSExtensionActivationRule: >-
+              SUBQUERY(extensionItems, $extensionItem, SUBQUERY($extensionItem.attachments, $attachment,
+              ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.data"
+              || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.file-url").@count >= 1).@count >= 1
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: xyz.ericsharma.et.share
+        CODE_SIGN_ENTITLEMENTS: ShareExtension/ETShare.entitlements
+        CURRENT_PROJECT_VERSION: "1"
+        ET_GIT_COMMIT: dev
+        MARKETING_VERSION: "0.1"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        APPLICATION_EXTENSION_API_ONLY: YES
   # The Mac app (docs/PLAN-macos.md): SwiftUI + AppKit, not Catalyst; not
   # sandboxed (it runs etd), shipped Developer ID signed (scripts/mac-release).
   ET-mac:

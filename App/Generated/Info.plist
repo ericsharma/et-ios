@@ -49,6 +49,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ETGitCommit</key>
 	<string>$(ET_GIT_COMMIT)</string>
+	<key>ETKeychainGroup</key>
+	<string>$(AppIdentifierPrefix)xyz.ericsharma.et</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>

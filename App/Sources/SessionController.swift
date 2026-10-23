@@ -894,6 +894,10 @@ final class SessionController {
 
     /// Shown while an upload runs or after it finishes.
     private(set) var uploadStatus: String?
+    /// Share-extension outbox jobs being sent, and ones that failed this run
+    /// (tried again at the next launch).
+    @ObservationIgnored private var shareJobsSending: Set<String> = []
+    @ObservationIgnored private var shareJobsFailed: Set<String> = []
 
     /// A photo from the key row. A manymux session gets it pasted (Claude
     /// sees an image); a tmux window gets it sent like a file.
@@ -929,15 +933,8 @@ final class SessionController {
                 let target = try await sendTarget(for: page)
                 uploadStatus = "Sending \(label) to \(target.machine)…"
                 log.add("Sending \(label) to \(target.machine)\(target.session.map { "/" + $0 } ?? "")")
-                let sent = try await target.host.sendFiles(urls.map(\.path), session: target.session) { done, total in
-                    guard total > 0 else { return }
-                    let percent = Int(Double(done) / Double(total) * 100)
-                    Task { @MainActor in
-                        if self.uploadStatus?.hasPrefix("Sending \(label)") == true {
-                            self.uploadStatus = "Sending \(label) to \(target.machine)… \(percent)%"
-                        }
-                    }
-                }
+                let sent = try await target.host.sendFiles(urls.map(\.path), session: target.session,
+                                                           progress: showProgress(label, to: target.machine))
                 log.add("Sent to \(target.machine): \(sent.paths.joined(separator: " "))\(sent.typed ? " (typed by etd)" : "")")
                 if !sent.typed, !sent.paths.isEmpty {
                     send(Array((sent.paths.map(Self.shellQuoted).joined(separator: " ") + " ").utf8), to: page)
@@ -971,6 +968,19 @@ final class SessionController {
             log.add("\(destination) isn't a machine of the network: sending to \(server.displayName)")
         }
         return (hub, hubName ?? server.displayName, nil)
+    }
+
+    /// Progress of a send, in the status line.
+    private func showProgress(_ label: String, to machine: String) -> @Sendable (UInt64, UInt64) -> Void {
+        { done, total in
+            guard total > 0 else { return }
+            let percent = Int(Double(done) / Double(total) * 100)
+            Task { @MainActor in
+                if self.uploadStatus?.hasPrefix("Sending \(label)") == true {
+                    self.uploadStatus = "Sending \(label) to \(machine)… \(percent)%"
+                }
+            }
+        }
     }
 
     private func flashUpload(_ text: String) {
@@ -1769,6 +1779,7 @@ extension SessionController {
         guard (connection as? IrohHost) === host else { return }
         if listed != machines { machines = listed }
         syncPages()
+        publishForShare()
         if currentWindow == nil { await checkCheckpoint(host) }
     }
 
@@ -1791,6 +1802,7 @@ extension SessionController {
         guard (connection as? IrohHost) === host, let i = machines.firstIndex(where: { $0.name == name }) else { return }
         if machines[i] != listed { machines[i] = listed }
         syncPages()
+        publishForShare()
     }
 
     nonisolated private static func listError(_ error: any Error, direct: Bool) -> String {
@@ -2318,6 +2330,70 @@ extension SessionController {
                 }
             } else {
                 flashUpload(page.readOnly ? "View only" : "\(page.name) isn't attached")
+            }
+        }
+    }
+}
+
+// MARK: - The share extension (PLAN-files F7)
+
+extension SessionController {
+    /// The machines the share extension offers: the hub and the network's
+    /// machines, each with its own endpoint (the extension connects to it
+    /// directly), and their sessions. Then sends what the extension left.
+    func publishForShare() {
+        guard let hubName, let hubId = server.irohEndpointId else { return }
+        let shared: [ShareStore.Machine] = machines.compactMap { machine in
+            let endpoint: (id: String, relay: String?)
+            if machine.name == hubName {
+                endpoint = (hubId, server.irohRelayURL)
+            } else if let member = networkMachines.first(where: { $0.name == machine.name }) {
+                endpoint = (member.endpointId, nil)
+            } else {
+                return nil // reached by ssh through the hub: no sendFiles there
+            }
+            return ShareStore.Machine(name: machine.name, endpointId: endpoint.id, relayURL: endpoint.relay,
+                                      sessions: machine.sessions.map { ShareStore.Session(name: $0.name, title: $0.title) })
+        }
+        ShareStore.saveMachines(shared)
+        sendShareOutbox()
+    }
+
+    /// Large files the share extension left in the App Group: each job is
+    /// sent once its machine is connected, then deleted.
+    private func sendShareOutbox() {
+        for (folder, job, files) in ShareStore.jobs() {
+            let id = folder.lastPathComponent
+            guard !shareJobsSending.contains(id), !shareJobsFailed.contains(id) else { continue }
+            guard !files.isEmpty else {
+                ShareStore.removeJob(folder)
+                continue
+            }
+            // Not connected yet: the next refresh tries again.
+            guard let route = try? route(job.machine), route.machine == nil else { continue }
+            shareJobsSending.insert(id)
+            let label = files.count == 1 ? files[0].lastPathComponent : "\(files.count) files"
+            let place = job.machine + (job.session.map { "/" + $0 } ?? "")
+            Task {
+                defer { shareJobsSending.remove(id) }
+                uploadStatus = "Sending \(label) to \(job.machine)…"
+                log.add("Share outbox: sending \(label) to \(place)")
+                do {
+                    let sent = try await route.host.sendFiles(files.map(\.path), session: job.session,
+                                                              progress: showProgress(label, to: job.machine))
+                    ShareStore.removeJob(folder)
+                    log.add("Share outbox: sent to \(job.machine): \(sent.paths.joined(separator: " "))\(sent.typed ? " (typed by etd)" : "")")
+                    if !sent.typed, let session = job.session,
+                       let page = windows.first(where: { $0.mm?.machine == job.machine && $0.mm?.name == session }) {
+                        send(Array((sent.paths.map(Self.shellQuoted).joined(separator: " ") + " ").utf8), to: page)
+                    }
+                    flashUpload("\(label) sent to \(place)")
+                } catch {
+                    shareJobsFailed.insert(id)
+                    log.add("Share outbox: \(label) to \(place) failed: \(error)")
+                    if Date().timeIntervalSince(job.created) > 7 * 24 * 3600 { ShareStore.removeJob(folder) }
+                    flashUpload("Couldn't send \(label): \(Self.describeMm(error))")
+                }
             }
         }
     }

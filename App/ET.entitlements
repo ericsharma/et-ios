@@ -5,5 +5,16 @@
     <!-- Xcode switches this to "production" when exporting for TestFlight. -->
     <key>aps-environment</key>
     <string>development</string>
+    <!-- Shared with the share extension (PLAN-files F7): machines and the outbox. -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.xyz.ericsharma.et</string>
+    </array>
+    <!-- The iroh device key, read by the share extension too. The first
+         group is the app's own default, where the key already is. -->
+    <key>keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)xyz.ericsharma.et</string>
+    </array>
 </dict>
 </plist>

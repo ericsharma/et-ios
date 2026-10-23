@@ -7,26 +7,35 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		010B450E8B06F554C36BBE3A /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF38856E7DA96D98C428743 /* ShareViewController.swift */; };
 		02C471DF674A9FDDD8D315B1 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FBEC799A622722D593EB86B /* SettingsView.swift */; };
+		09B34837EC8C57C54AA12295 /* Iroh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4880DD1374C363AFA5C69F37 /* Iroh.swift */; };
 		0A0D3637C837954773B6B363 /* NetworkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10890B81C05CE555FD81D008 /* NetworkView.swift */; };
 		0AEEC656192348D8F9AC0E89 /* Iroh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4880DD1374C363AFA5C69F37 /* Iroh.swift */; };
+		129167D900DCDB1EF68F3C66 /* VocabMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 591C2444EF4A2214A0249778 /* VocabMatcher.swift */; };
 		13D385DF09D2AE2FD4144B08 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CB2856B21C534EA0CAE1C159 /* Assets.xcassets */; };
 		176CEB6F04458465BE3439DA /* KeyRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCBF94AC41590A9B15E7FAA /* KeyRow.swift */; };
 		1CF2C07C262A0FFE2738D263 /* VoiceInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 175E8D2F9B6999615A8AAF59 /* VoiceInput.swift */; };
 		1F53A5401133E4C36EBC1B23 /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6F7CAF25144AE01A1FD0AB2 /* SetupView.swift */; };
+		273834FD679594F0EFD222D3 /* Manymux.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BE76CB262FB7EA0605C99EB /* Manymux.swift */; };
 		2DD2565AA79A7249D6DAD7BA /* ETSSH in Frameworks */ = {isa = PBXBuildFile; productRef = A2F4FF65C9B840ED48A51F46 /* ETSSH */; };
 		31F3F13EE8608AD5117FAEC7 /* QRScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68B7189D418370DCE2A29810 /* QRScanner.swift */; };
 		39EA59E5D48AE69A7807B9A0 /* SelectMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FE7D921D5CAA4506B3FD10C /* SelectMode.swift */; };
 		3A3285F4C8B435AFADFA4F39 /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3251CE9C9BA08235AF09F96 /* Push.swift */; };
+		44546852A16838D9010F6492 /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = 3EC677F4C4423E9C7AF25E72 /* ETCore */; };
 		45D6BA62083244C784927078 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC2C774B86C691F339F5290 /* Views.swift */; };
 		4CF65DB10F288E2D0C2D525B /* Bars.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19174F7966F0E207A7456BC3 /* Bars.swift */; };
 		5513D8628FF9265A5B7C110D /* DebugHooks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6567BD006FC3985DF01BE526 /* DebugHooks.swift */; };
 		58F3229B35D71250C678BC3D /* Iroh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4880DD1374C363AFA5C69F37 /* Iroh.swift */; };
+		5AC1A9D6FB41AED39BB517BE /* EtLink in Frameworks */ = {isa = PBXBuildFile; productRef = C0F7D98EDB67C93A9368F37B /* EtLink */; };
 		5AF0ADD6EBFE20C5D372C10F /* Templates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E147244B49816415D5E26BA /* Templates.swift */; };
+		5BB8151EB62B196B778C7930 /* ETShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = CF2F817C4FB3FE99495AF097 /* ETShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5DDBE00FB490CBC8C3CE2B31 /* SessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B7EB4283A5F1B4E8DAE0DCE /* SessionController.swift */; };
 		5DE693A03488FB808900B1A7 /* EtLink in Frameworks */ = {isa = PBXBuildFile; productRef = D46BA93F57438C4C1A4131E4 /* EtLink */; };
+		5E1F84249444DFC50010EADD /* ShareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36C085050613D51A5F16E4D3 /* ShareView.swift */; };
 		66C925D75EC77293B6451EAB /* AppInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4A3A124DA65B9FD17453340 /* AppInfo.swift */; };
 		67169DC0BE388E8F72DC49C4 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = E016E05FBF8DE467C1BC1F30 /* SwiftTerm */; };
+		6BF6D002CAD9907E777E8EED /* ETSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 11602F37CD401485C3D66840 /* ETSSH */; };
 		6F005C5539A7B64474934977 /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = ACB31B6DE076A6AEE0E31967 /* ETCore */; };
 		7019904934883F3AD44F1675 /* Speaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD862AA08B0790FEA8C32121 /* Speaker.swift */; };
 		71DCD98736F4928BF2983F28 /* AppInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4A3A124DA65B9FD17453340 /* AppInfo.swift */; };
@@ -47,27 +56,58 @@
 		B3B645CBAE52AC315F4D26D1 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 78E36ABFF9A6F111E6BC39DD /* SwiftTerm */; };
 		B49C06222B399FE2F004842A /* Setup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63189CD29B6FB5728F823465 /* Setup.swift */; };
 		B7B2B9BE3BD4B283F11398E5 /* VocabMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 591C2444EF4A2214A0249778 /* VocabMatcher.swift */; };
+		B93916DB291AA31617776199 /* ShareModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68EF0E032C704DFFD2610FFA /* ShareModel.swift */; };
 		B9EF4532C1A648569D5AD074 /* TerminalHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */; };
+		BFC56E0C4CE90C8544693723 /* AppInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4A3A124DA65B9FD17453340 /* AppInfo.swift */; };
 		C7D22526ADD3F1CB22E245DD /* Overview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36A4263F016A81FE6C5B2B5E /* Overview.swift */; };
 		C8B75C969CC365668A042C04 /* EtLink in Frameworks */ = {isa = PBXBuildFile; productRef = E8BC1D28CF427FA6638A620D /* EtLink */; };
 		D925AEB7EE1B1A2E8E25A3DF /* Copilot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23D00D38126433369DDB5E17 /* Copilot.swift */; };
 		DCC53456F454E5F2E4EB4A14 /* Manymux.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BE76CB262FB7EA0605C99EB /* Manymux.swift */; };
 		EB28BC4D4608DBE3C2FD9D80 /* Vocabulary.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5E31C39DDE31580DBCAB4E /* Vocabulary.swift */; };
+		EBD84653806CD1F4B3F10156 /* ShareStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FBF0491C3AEC4AE125F75D8 /* ShareStore.swift */; };
 		EEBCAA1A936538064AF9140F /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = E77D439CE39322DFC4891B39 /* ETCore */; };
+		F47146C7DDE2BF17032EF65D /* ShareStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FBF0491C3AEC4AE125F75D8 /* ShareStore.swift */; };
 		F8F1BACDD89A3936FDBA3DCA /* ETApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE328D04440F47561CB04404 /* ETApp.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		5A4365B4FAD76E1A25DC0ACE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6F4281A54E60728CCBAA3380 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FB19C1C42380B4C0C327A9DB;
+			remoteInfo = ETShare;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		123C0D3CBA6EA613C69BDD81 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				5BB8151EB62B196B778C7930 /* ETShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		090F6A6A5A570B49BDA73AE9 /* ET.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ET.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0B7EB4283A5F1B4E8DAE0DCE /* SessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionController.swift; sourceTree = "<group>"; };
 		0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHost.swift; sourceTree = "<group>"; };
 		10890B81C05CE555FD81D008 /* NetworkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkView.swift; sourceTree = "<group>"; };
+		11E239C7E30504FDDB7F6878 /* ETShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ETShare.entitlements; sourceTree = "<group>"; };
 		15F85597F66DBB0CC3A093AF /* MachinesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MachinesView.swift; sourceTree = "<group>"; };
 		175E8D2F9B6999615A8AAF59 /* VoiceInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInput.swift; sourceTree = "<group>"; };
 		19174F7966F0E207A7456BC3 /* Bars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bars.swift; sourceTree = "<group>"; };
 		23D00D38126433369DDB5E17 /* Copilot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Copilot.swift; sourceTree = "<group>"; };
 		36A4263F016A81FE6C5B2B5E /* Overview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Overview.swift; sourceTree = "<group>"; };
+		36C085050613D51A5F16E4D3 /* ShareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareView.swift; sourceTree = "<group>"; };
 		3A02635506A8CBB96DC1C6C9 /* ET-mac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ET-mac.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3FBF0491C3AEC4AE125F75D8 /* ShareStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareStore.swift; sourceTree = "<group>"; };
 		3FDD228A576819287E908B47 /* SwiftTerm */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SwiftTerm; path = ../Vendor/SwiftTerm; sourceTree = SOURCE_ROOT; };
 		44366E16603D79FB4DCAF6D2 /* SessionTerminal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTerminal.swift; sourceTree = "<group>"; };
 		4880DD1374C363AFA5C69F37 /* Iroh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Iroh.swift; sourceTree = "<group>"; };
@@ -79,6 +119,7 @@
 		65A00CC919987D56EC6D81C2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6643B444DEC1C52098247355 /* VolumeButtons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeButtons.swift; sourceTree = "<group>"; };
 		68B7189D418370DCE2A29810 /* QRScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScanner.swift; sourceTree = "<group>"; };
+		68EF0E032C704DFFD2610FFA /* ShareModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareModel.swift; sourceTree = "<group>"; };
 		6FBEC799A622722D593EB86B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		75096092B60CEDCA629164FC /* FileSendViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSendViews.swift; sourceTree = "<group>"; };
 		775D2BD71278DE9B66655A0C /* EtLink */ = {isa = PBXFileReference; lastKnownFileType = folder; name = EtLink; path = ../Vendor/etd/apple/EtLink; sourceTree = SOURCE_ROOT; };
@@ -91,7 +132,9 @@
 		AB367F7DC192EBCCA06508BC /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		C423DF1A7824BFB0B4AB4556 /* ETMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ETMacApp.swift; sourceTree = "<group>"; };
 		CB2856B21C534EA0CAE1C159 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		CF2F817C4FB3FE99495AF097 /* ETShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = ETShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D3251CE9C9BA08235AF09F96 /* Push.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Push.swift; sourceTree = "<group>"; };
+		DAF38856E7DA96D98C428743 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		DD862AA08B0790FEA8C32121 /* Speaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Speaker.swift; sourceTree = "<group>"; };
 		DE5E31C39DDE31580DBCAB4E /* Vocabulary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vocabulary.swift; sourceTree = "<group>"; };
 		EB2420D4BA60D70DBDC8885A /* VoiceInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInput.swift; sourceTree = "<group>"; };
@@ -101,6 +144,16 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		2DE41BC21291115FE2A96F14 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				44546852A16838D9010F6492 /* ETCore in Frameworks */,
+				6BF6D002CAD9907E777E8EED /* ETSSH in Frameworks */,
+				5AC1A9D6FB41AED39BB517BE /* EtLink in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E2641D91C285F1CDA653F2ED /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -188,6 +241,17 @@
 			path = Sources;
 			sourceTree = "<group>";
 		};
+		90BE4B31A2920C42E9FCD987 /* ShareExtension */ = {
+			isa = PBXGroup;
+			children = (
+				11E239C7E30504FDDB7F6878 /* ETShare.entitlements */,
+				68EF0E032C704DFFD2610FFA /* ShareModel.swift */,
+				36C085050613D51A5F16E4D3 /* ShareView.swift */,
+				DAF38856E7DA96D98C428743 /* ShareViewController.swift */,
+			);
+			path = ShareExtension;
+			sourceTree = "<group>";
+		};
 		B3763F0955C58291DC8D648B /* Resources */ = {
 			isa = PBXGroup;
 			children = (
@@ -212,8 +276,17 @@
 			children = (
 				3A02635506A8CBB96DC1C6C9 /* ET-mac.app */,
 				090F6A6A5A570B49BDA73AE9 /* ET.app */,
+				CF2F817C4FB3FE99495AF097 /* ETShare.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		D52F6E0FB29AE68046B803CA /* ShareKit */ = {
+			isa = PBXGroup;
+			children = (
+				3FBF0491C3AEC4AE125F75D8 /* ShareStore.swift */,
+			);
+			path = ShareKit;
 			sourceTree = "<group>";
 		};
 		E30081932FC350E49AC67E58 = {
@@ -223,6 +296,8 @@
 				59806B3A3A9AA44AF6BF3019 /* Packages */,
 				B3763F0955C58291DC8D648B /* Resources */,
 				CB4B710CD5530F6336098BC3 /* Shared */,
+				90BE4B31A2920C42E9FCD987 /* ShareExtension */,
+				D52F6E0FB29AE68046B803CA /* ShareKit */,
 				8CC7CBC42751C95F504943AC /* Sources */,
 				CDFDE144CB13D7575C0F9986 /* Products */,
 			);
@@ -272,10 +347,12 @@
 				287C36CAC568C69167B2298D /* Sources */,
 				52F148B754CC9D9BF3E893E1 /* Resources */,
 				E2641D91C285F1CDA653F2ED /* Frameworks */,
+				123C0D3CBA6EA613C69BDD81 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				193D848293F03A9B07697E37 /* PBXTargetDependency */,
 			);
 			name = ET;
 			packageProductDependencies = (
@@ -287,6 +364,27 @@
 			productName = ET;
 			productReference = 090F6A6A5A570B49BDA73AE9 /* ET.app */;
 			productType = "com.apple.product-type.application";
+		};
+		FB19C1C42380B4C0C327A9DB /* ETShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2E3ECD01FFCBEA4E06375C61 /* Build configuration list for PBXNativeTarget "ETShare" */;
+			buildPhases = (
+				2E1DF86F1218E8F96A03E825 /* Sources */,
+				2DE41BC21291115FE2A96F14 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ETShare;
+			packageProductDependencies = (
+				3EC677F4C4423E9C7AF25E72 /* ETCore */,
+				11602F37CD401485C3D66840 /* ETSSH */,
+				C0F7D98EDB67C93A9368F37B /* EtLink */,
+			);
+			productName = ETShare;
+			productReference = CF2F817C4FB3FE99495AF097 /* ETShare.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -302,6 +400,10 @@
 						ProvisioningStyle = Automatic;
 					};
 					D7E2221DC5CFCB290C5A3D00 = {
+						DevelopmentTeam = 9MY2559FS4;
+						ProvisioningStyle = Automatic;
+					};
+					FB19C1C42380B4C0C327A9DB = {
 						DevelopmentTeam = 9MY2559FS4;
 						ProvisioningStyle = Automatic;
 					};
@@ -328,6 +430,7 @@
 			targets = (
 				D7E2221DC5CFCB290C5A3D00 /* ET */,
 				B24D5A53BA6DC05EB7B2DDA1 /* ET-mac */,
+				FB19C1C42380B4C0C327A9DB /* ETShare */,
 			);
 		};
 /* End PBXProject section */
@@ -414,6 +517,7 @@
 				31F3F13EE8608AD5117FAEC7 /* QRScanner.swift in Sources */,
 				39EA59E5D48AE69A7807B9A0 /* SelectMode.swift in Sources */,
 				5DDBE00FB490CBC8C3CE2B31 /* SessionController.swift in Sources */,
+				EBD84653806CD1F4B3F10156 /* ShareStore.swift in Sources */,
 				7019904934883F3AD44F1675 /* Speaker.swift in Sources */,
 				5AF0ADD6EBFE20C5D372C10F /* Templates.swift in Sources */,
 				B9EF4532C1A648569D5AD074 /* TerminalHost.swift in Sources */,
@@ -425,9 +529,52 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2E1DF86F1218E8F96A03E825 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BFC56E0C4CE90C8544693723 /* AppInfo.swift in Sources */,
+				09B34837EC8C57C54AA12295 /* Iroh.swift in Sources */,
+				273834FD679594F0EFD222D3 /* Manymux.swift in Sources */,
+				B93916DB291AA31617776199 /* ShareModel.swift in Sources */,
+				F47146C7DDE2BF17032EF65D /* ShareStore.swift in Sources */,
+				5E1F84249444DFC50010EADD /* ShareView.swift in Sources */,
+				010B450E8B06F554C36BBE3A /* ShareViewController.swift in Sources */,
+				129167D900DCDB1EF68F3C66 /* VocabMatcher.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		193D848293F03A9B07697E37 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FB19C1C42380B4C0C327A9DB /* ETShare */;
+			targetProxy = 5A4365B4FAD76E1A25DC0ACE /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		0BA0CBDB9360E6C9E07F61B7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ETShare.entitlements;
+				CURRENT_PROJECT_VERSION = 1;
+				ET_GIT_COMMIT = dev;
+				INFOPLIST_FILE = "Generated/Info-share.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = xyz.ericsharma.et.share;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		12C9F1C389B7E49C2A8982B8 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -639,6 +786,26 @@
 			};
 			name = Debug;
 		};
+		F53D06AED2D264D38851A7D2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ETShare.entitlements;
+				CURRENT_PROJECT_VERSION = 1;
+				ET_GIT_COMMIT = dev;
+				INFOPLIST_FILE = "Generated/Info-share.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = xyz.ericsharma.et.share;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -647,6 +814,15 @@
 			buildConfigurations = (
 				E716D94DE1C6A660372B4D38 /* Debug */,
 				D7C83C65C4D04A4B4DDED32C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		2E3ECD01FFCBEA4E06375C61 /* Build configuration list for PBXNativeTarget "ETShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F53D06AED2D264D38851A7D2 /* Debug */,
+				0BA0CBDB9360E6C9E07F61B7 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -687,6 +863,14 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		11602F37CD401485C3D66840 /* ETSSH */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ETSSH;
+		};
+		3EC677F4C4423E9C7AF25E72 /* ETCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ETCore;
+		};
 		6C698F4751908DE96FEAE403 /* ETOnboarding */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ETOnboarding;
@@ -706,6 +890,10 @@
 		ACB31B6DE076A6AEE0E31967 /* ETCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ETCore;
+		};
+		C0F7D98EDB67C93A9368F37B /* EtLink */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = EtLink;
 		};
 		D46BA93F57438C4C1A4131E4 /* EtLink */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -481,6 +481,20 @@ enum DeviceKey {
     private static let service = "xyz.ericsharma.et.iroh-key"
     private static let account = "default"
 
+    /// iOS: the app and its share extension use one key, in the Keychain
+    /// group `<team>.xyz.ericsharma.et` (the app's own default group, so the
+    /// key made before the extension existed is found). Unsigned builds
+    /// have no team prefix: then the default group.
+    private static var accessGroup: String? {
+        #if os(iOS)
+        guard let group = Bundle.main.infoDictionary?["ETKeychainGroup"] as? String,
+              !group.hasPrefix("xyz.") else { return nil }
+        return group
+        #else
+        return nil
+        #endif
+    }
+
     static func loadOrCreate() throws -> Data {
         #if os(macOS)
         do {
@@ -514,6 +528,7 @@ enum DeviceKey {
         #if os(macOS)
         query[kSecUseDataProtectionKeychain as String] = true
         #endif
+        if let accessGroup { query[kSecAttrAccessGroup as String] = accessGroup }
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         if status == errSecSuccess, let data = item as? Data, data.count == 32 { return data }
@@ -529,6 +544,7 @@ enum DeviceKey {
         #if os(macOS)
         add[kSecUseDataProtectionKeychain as String] = true
         #endif
+        if let accessGroup { add[kSecAttrAccessGroup as String] = accessGroup }
         let added = SecItemAdd(add as CFDictionary, nil)
         guard added == errSecSuccess else { throw KeychainError(status: added) }
         return key
