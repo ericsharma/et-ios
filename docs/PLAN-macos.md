@@ -1,6 +1,6 @@
 # Plan: E.T. for macOS (client of every machine, and a machine itself)
 
-Status: 2026-10-23. Decisions D1–D5 ACCEPTED by the owner (all as recommended); A3 not wanted for now. The Mac agent already started a macOS app; it adapts its work to this plan when the owner accepts it. Owner requests (2026-10-23): before the D4 test, the trigkey session walks the owner through removing etd, manymux and every related file from m1-air (§5.1), so the app is tested from zero; the app shows a screen with the choice **Start a new network** / **Join a network** (§4.3).
+Status: 2026-10-23. Decisions D1–D5 ACCEPTED by the owner (all as recommended); A3 not wanted for now. A1 + A2 DONE (etd 4f3eb42, tag v0.0.2): `etd status --json` (with `manager`), `etd install --no-service`, `ETD_LOG_FILE` (`~/` = home), one etd per key (lock `etd.lock` in the state directory), clear `etd join` error for a phone link (the invite is used up by the try). Next: B1–B4 (Mac agent). The Mac agent already started a macOS app; it adapts its work to this plan when the owner accepts it. Owner requests (2026-10-23): before the D4 test, the trigkey session walks the owner through removing etd, manymux and every related file from m1-air (§5.1), so the app is tested from zero; the app shows a screen with the choice **Start a new network** / **Join a network** (§4.3).
 
 Follows [PLAN-network.md](PLAN-network.md). The m1-air test on 2026-10-23 (prebuilt etd v0.0.1, `etd install`, `etd join`) is the manual version of what this app does by itself.
 
