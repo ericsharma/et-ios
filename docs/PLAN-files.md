@@ -1,6 +1,6 @@
 # Plan: file sharing between every member of the network
 
-Status: 2026-10-23. D1 ACCEPTED: iroh-blobs (the building blocks of [sendme](https://github.com/n0-computer/sendme), not the sendme binary). D3 ACCEPTED with a change: files land in an `etd` folder (`~/Downloads/etd/`). Owner priority: the main use is to **send files to machines and point a Claude session there at them**. A file view on the phone or iPad is nice to have (phase 2). D2 and D4 apply only to phase 2.
+Status: 2026-10-23. D1 ACCEPTED: iroh-blobs (the building blocks of [sendme](https://github.com/n0-computer/sendme), not the sendme binary). D3 ACCEPTED with a change: files land in a top-level folder in the home directory (`~/etd-downloads/`). Owner priority: the main use is to **send files to machines and point a Claude session there at them**. A file view on the phone or iPad is nice to have (phase 2). D2 and D4 apply only to phase 2.
 
 Follows [PLAN-network.md](PLAN-network.md) and [PLAN-macos.md](PLAN-macos.md). Work split as in those plans: **A** = the trigkey Claude session (etd, et-link), **B** = the Mac agent (apps, extensions, builds), **C** = the owner (tests).
 
@@ -12,9 +12,9 @@ Move a file to the machine where a Claude session needs it, and put its path in 
 
 | From | To | How the owner does it | Result |
 |---|---|---|---|
-| iPhone / iPad, in a session | that session | Paperclip in the key row (or "Open in E.T." / share sheet → E.T. → pick a session) | File in `~/Downloads/etd/` on the session's machine; its path typed into the session (no Enter), so you add the question |
+| iPhone / iPad, in a session | that session | Paperclip in the key row (or "Open in E.T." / share sheet → E.T. → pick a session) | File in `~/etd-downloads/` on the session's machine; its path typed into the session (no Enter), so you add the question |
 | Mac app | a session | Drag the file onto the terminal, or onto a session in the sidebar | Same |
-| Mac app | a machine | Drag the file onto a machine in the sidebar | File in `~/Downloads/etd/` there; path shown, copy button |
+| Mac app | a machine | Drag the file onto a machine in the sidebar | File in `~/etd-downloads/` there; path shown, copy button |
 | A terminal or a Claude session on a machine | another machine, or a session there | `etd send report.pdf gmktec` / `etd send ./out gmktec:claude` | Same; folders keep their tree; `etd send` prints the path(s) on the target |
 
 The last row lets one Claude session hand files to another: Claude on trigkey runs `etd send diff.patch mac-mini:claude`, and the path appears in the mac-mini Claude prompt.
@@ -39,7 +39,7 @@ The last row lets one Claude session hand files to another: Claude on trigkey ru
 |---|---|---|
 | D1 | Transfer protocol | **ACCEPTED: iroh-blobs** on etd's endpoint (its own ALPN), members only. The control messages (what, where, which session) stay on et/1. Folders are a `Collection`, so the old D5 (zip) is gone. Resume and BLAKE3 checks come with it. |
 | D2 | (Phase 2) How does a file reach a phone or tablet? | Recommended: the file waits in a machine's blob store, tagged for the device; a push goes to that device only; the app fetches when it opens. |
-| D3 | Where do files land on a machine? | **ACCEPTED: `~/Downloads/etd/`** (`ETD_DOWNLOADS` changes it). A folder keeps its name and tree: `~/Downloads/etd/out/…`. A name clash gets ` (2)`, ` (3)`. Short paths, so a Claude prompt stays readable. |
+| D3 | Where do files land on a machine? | **ACCEPTED: `~/etd-downloads/`**, a top-level folder in the home directory, lower case so it is easy to type in a shell (`ETD_DOWNLOADS` changes it). A folder keeps its name and tree: `~/etd-downloads/out/…`. A name clash gets ` (2)`, ` (3)`. Short paths, so a Claude prompt stays readable. |
 | D4 | (Phase 2) How long does a machine keep a device's file? | Recommended: until the device has it, at most 7 days. |
 
 ## 4. Design
@@ -51,7 +51,7 @@ sender (app or etd)                        target machine's etd
 1. import file/folder into own FsStore
    as a Collection → root hash
 2. ── iroh-blobs PushRequest(root) ──────▶ intercept: peer is a member? store it
-3. ── et/1 Deliver { hash, name } ───────▶ export the Collection to ~/Downloads/etd/
+3. ── et/1 Deliver { hash, name } ───────▶ export the Collection to ~/etd-downloads/
                                            delete the blob (its tag)
 4. ◀── Delivered { paths } ─────────────
 5. type "<paths> " into the session (app), or print them (etd send)
@@ -106,7 +106,7 @@ Response::Delivered { paths: Vec<String>, typed: bool }
 |---|---|---|---|
 | F0 | A | Spike: iroh-blobs 0.103.1 + `FsStore` in et-link builds for iOS (device + simulator) with the netdev patch; push from a test endpoint into a test etd store | `scripts/build-ios.sh` passes; a 200 MB push arrives. If iOS fails: stop and ask the owner (fallback = the et/1 `Put` design, git history of this file) |
 | F1 | A | etd: `files.rs`, blobs handler with member check, `Deliver` with `session: None`, Downloads names, clean-up, PROTOCOL.md. Tests: file and folder delivered; resume after a cut at 50 %; a non-member is refused | `cargo test` passes |
-| F2 | A | `etd send <path>… <machine>` | From trigkey, a folder lands in gmktec's `~/Downloads/etd/`; deployed to trigkey + gmktec; etd tagged `v0.0.3` |
+| F2 | A | `etd send <path>… <machine>` | From trigkey, a folder lands in gmktec's `~/etd-downloads/`; deployed to trigkey + gmktec; etd tagged `v0.0.3` |
 | F3 | A | et-link `Link.send` with progress and cancel | et-link test: send from disk, resume after cancel |
 | F4 | A | `Deliver { session: Some }` and `etd send … machine:session`: type the paths into a manymux session through the agent protocol, without resizing it. Check manymux's protocol first; if typing needs an attach that resizes, report to the owner before building | `etd send x.png mac-mini:claude` from trigkey puts the path in the mac-mini Claude prompt |
 | F5 | B | Mac app §4.5 (drop on terminal, drop on machine, ⇧⌘S); remove `~/.cache/et-uploads` | Drag a 1 GB file onto a gmktec session in the Mac app: path typed, progress shown |
@@ -126,7 +126,7 @@ Time: about 2 days.
 
 ## 6. Tests (owner, C)
 
-1. From a trigkey terminal: `etd send ~/some-folder gmktec`; check `~/Downloads/etd/some-folder` on gmktec.
+1. From a trigkey terminal: `etd send ~/some-folder gmktec`; check `~/etd-downloads/some-folder` on gmktec.
 2. From the iPhone in a gmktec Claude session: send a PDF; the path is in the prompt; ask Claude to read it.
 3. iPhone on cellular only (relay path): the same as test 2 with a 100 MB file.
 4. Mac app: drag a 1 GB file onto a session; turn Wi-Fi off and on halfway; the send resumes.
