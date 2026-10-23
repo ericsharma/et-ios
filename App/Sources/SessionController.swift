@@ -94,14 +94,6 @@ final class MmPage {
     }
 }
 
-/// One machine on the Machines screen.
-struct MmMachine: Identifiable, Equatable, Sendable {
-    var name: String
-    var sessions: [MmSessionInfo]
-    var error: String?
-    var id: String { name }
-}
-
 /// Connects to one server, attaches to a tmux session in control mode, and
 /// keeps one `WindowPage` per tmux window.
 @MainActor @Observable

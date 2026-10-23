@@ -1093,22 +1093,6 @@ struct ShortcutKeys: View {
     }
 }
 
-enum AppInfo {
-    /// The git commit the build was made from, e.g. "673d1e7", for the
-    /// header ("dev" for local builds).
-    static var shortBuild: String {
-        Bundle.main.infoDictionary?["ETGitCommit"] as? String ?? "dev"
-    }
-
-    /// "E.T. 0.1 (202610151757) · 673d1e7", shown in the ⋯ menu.
-    static var buildLabel: String {
-        let info = Bundle.main.infoDictionary
-        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
-        let build = info?["CFBundleVersion"] as? String ?? "?"
-        return "E.T. \(version) (\(build)) · \(shortBuild)"
-    }
-}
-
 /// "Open in E.T.": pick the window a file goes to. E.T. uploads it and
 /// types its path there (no Enter).
 struct SendFileSheet: View {

@@ -10,3 +10,4 @@ xcuserdata/
 .build-app16/
 *.log
 App/Generated/
+.build-mac/

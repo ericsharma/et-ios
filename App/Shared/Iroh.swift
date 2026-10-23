@@ -442,29 +442,63 @@ private func mapped<T>(_ body: () async throws -> T) async throws -> T {
 
 /// The device's iroh key: 32 bytes in the Keychain, this device only,
 /// readable after the first unlock (PLAN-iroh §6.2). One key for all machines.
+///
+/// macOS: the data-protection keychain (the file-based login keychain asks
+/// "allow access?" after every update). It needs a provisioning profile,
+/// which a Developer ID build doesn't have: then the key is a 0600 file
+/// in the app's own Application Support folder.
 enum DeviceKey {
     private static let service = "xyz.ericsharma.et.iroh-key"
     private static let account = "default"
 
     static func loadOrCreate() throws -> Data {
-        let query: [String: Any] = [
+        #if os(macOS)
+        do {
+            return try keychainLoadOrCreate()
+        } catch let error as KeychainError where error.status == errSecMissingEntitlement {
+            return try fileLoadOrCreate()
+        }
+        #else
+        return try keychainLoadOrCreate()
+        #endif
+    }
+
+    #if os(macOS)
+    private static func fileLoadOrCreate() throws -> Data {
+        let url = AppDirectory.url.appendingPathComponent("iroh-key")
+        if let data = try? Data(contentsOf: url), data.count == 32 { return data }
+        let key = generateSecretKey()
+        try key.write(to: url, options: [.atomic])
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        return key
+    }
+    #endif
+
+    private static func keychainLoadOrCreate() throws -> Data {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecReturnData as String: true,
         ]
+        #if os(macOS)
+        query[kSecUseDataProtectionKeychain as String] = true
+        #endif
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         if status == errSecSuccess, let data = item as? Data, data.count == 32 { return data }
         guard status == errSecItemNotFound else { throw KeychainError(status: status) }
         let key = generateSecretKey()
-        let add: [String: Any] = [
+        var add: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
             kSecValueData as String: key,
         ]
+        #if os(macOS)
+        add[kSecUseDataProtectionKeychain as String] = true
+        #endif
         let added = SecItemAdd(add as CFDictionary, nil)
         guard added == errSecSuccess else { throw KeychainError(status: added) }
         return key

@@ -8,29 +8,46 @@
 
 /* Begin PBXBuildFile section */
 		0A0D3637C837954773B6B363 /* NetworkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10890B81C05CE555FD81D008 /* NetworkView.swift */; };
+		0AEEC656192348D8F9AC0E89 /* Iroh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4880DD1374C363AFA5C69F37 /* Iroh.swift */; };
+		13D385DF09D2AE2FD4144B08 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CB2856B21C534EA0CAE1C159 /* Assets.xcassets */; };
 		176CEB6F04458465BE3439DA /* KeyRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCBF94AC41590A9B15E7FAA /* KeyRow.swift */; };
 		1CF2C07C262A0FFE2738D263 /* VoiceInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 175E8D2F9B6999615A8AAF59 /* VoiceInput.swift */; };
+		2DD2565AA79A7249D6DAD7BA /* ETSSH in Frameworks */ = {isa = PBXBuildFile; productRef = A2F4FF65C9B840ED48A51F46 /* ETSSH */; };
 		31F3F13EE8608AD5117FAEC7 /* QRScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68B7189D418370DCE2A29810 /* QRScanner.swift */; };
 		39EA59E5D48AE69A7807B9A0 /* SelectMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FE7D921D5CAA4506B3FD10C /* SelectMode.swift */; };
 		3A3285F4C8B435AFADFA4F39 /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3251CE9C9BA08235AF09F96 /* Push.swift */; };
 		45D6BA62083244C784927078 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC2C774B86C691F339F5290 /* Views.swift */; };
+		5513D8628FF9265A5B7C110D /* DebugHooks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6567BD006FC3985DF01BE526 /* DebugHooks.swift */; };
+		58F3229B35D71250C678BC3D /* Iroh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4880DD1374C363AFA5C69F37 /* Iroh.swift */; };
 		5AF0ADD6EBFE20C5D372C10F /* Templates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E147244B49816415D5E26BA /* Templates.swift */; };
 		5DDBE00FB490CBC8C3CE2B31 /* SessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B7EB4283A5F1B4E8DAE0DCE /* SessionController.swift */; };
 		5DE693A03488FB808900B1A7 /* EtLink in Frameworks */ = {isa = PBXBuildFile; productRef = D46BA93F57438C4C1A4131E4 /* EtLink */; };
+		66C925D75EC77293B6451EAB /* AppInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4A3A124DA65B9FD17453340 /* AppInfo.swift */; };
+		67169DC0BE388E8F72DC49C4 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = E016E05FBF8DE467C1BC1F30 /* SwiftTerm */; };
 		6F005C5539A7B64474934977 /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = ACB31B6DE076A6AEE0E31967 /* ETCore */; };
 		7019904934883F3AD44F1675 /* Speaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD862AA08B0790FEA8C32121 /* Speaker.swift */; };
+		71DCD98736F4928BF2983F28 /* AppInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4A3A124DA65B9FD17453340 /* AppInfo.swift */; };
+		791E79EFC8C8971FEE5123D4 /* Fleet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C2F45FF4381091649F20834 /* Fleet.swift */; };
+		7ABFAB899E15B83CE5845EA0 /* Manymux.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BE76CB262FB7EA0605C99EB /* Manymux.swift */; };
 		7B7A1AB52E7AAEB0D5283959 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB367F7DC192EBCCA06508BC /* AppModel.swift */; };
 		7E75886C82FBA663C296E12F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 65A00CC919987D56EC6D81C2 /* Assets.xcassets */; };
+		8401EF3426B8C649284DC663 /* MainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89DB0886F532D6DAE2B499B3 /* MainWindow.swift */; };
 		893A4346740B9772C37B287C /* MachinesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15F85597F66DBB0CC3A093AF /* MachinesView.swift */; };
+		8EAA58E1D8A3A674820C9F67 /* ETMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C423DF1A7824BFB0B4AB4556 /* ETMacApp.swift */; };
 		92D2F2431FD1402AC2FB77A5 /* VolumeButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6643B444DEC1C52098247355 /* VolumeButtons.swift */; };
 		9883DC46C85AE06C00277FC1 /* ETSSH in Frameworks */ = {isa = PBXBuildFile; productRef = A3FE42A77BFB03B651F1C8C3 /* ETSSH */; };
-		B0C4E14269567F3757D629D8 /* Iroh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 934B8450ECC39D11B1F4B9F9 /* Iroh.swift */; };
+		9F8B8A411DBC4DA48493DEEE /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5F8C4691248A66EBFA192F2 /* PairingView.swift */; };
+		A6CF789B277F4329F0C57693 /* SessionTerminal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44366E16603D79FB4DCAF6D2 /* SessionTerminal.swift */; };
+		A773868D83637C7ACBA83714 /* VocabMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 591C2444EF4A2214A0249778 /* VocabMatcher.swift */; };
 		B3B645CBAE52AC315F4D26D1 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 78E36ABFF9A6F111E6BC39DD /* SwiftTerm */; };
+		B7B2B9BE3BD4B283F11398E5 /* VocabMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 591C2444EF4A2214A0249778 /* VocabMatcher.swift */; };
 		B9EF4532C1A648569D5AD074 /* TerminalHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */; };
 		C7D22526ADD3F1CB22E245DD /* Overview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36A4263F016A81FE6C5B2B5E /* Overview.swift */; };
+		C8B75C969CC365668A042C04 /* EtLink in Frameworks */ = {isa = PBXBuildFile; productRef = E8BC1D28CF427FA6638A620D /* EtLink */; };
 		D925AEB7EE1B1A2E8E25A3DF /* Copilot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23D00D38126433369DDB5E17 /* Copilot.swift */; };
-		E8AFF527A853BA6E7B3FB8B8 /* VocabMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADDE5B14C4968EB5B9AB03A5 /* VocabMatcher.swift */; };
+		DCC53456F454E5F2E4EB4A14 /* Manymux.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BE76CB262FB7EA0605C99EB /* Manymux.swift */; };
 		EB28BC4D4608DBE3C2FD9D80 /* Vocabulary.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5E31C39DDE31580DBCAB4E /* Vocabulary.swift */; };
+		EEBCAA1A936538064AF9140F /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = E77D439CE39322DFC4891B39 /* ETCore */; };
 		F8F1BACDD89A3936FDBA3DCA /* ETApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE328D04440F47561CB04404 /* ETApp.swift */; };
 /* End PBXBuildFile section */
 
@@ -43,21 +60,32 @@
 		175E8D2F9B6999615A8AAF59 /* VoiceInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInput.swift; sourceTree = "<group>"; };
 		23D00D38126433369DDB5E17 /* Copilot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Copilot.swift; sourceTree = "<group>"; };
 		36A4263F016A81FE6C5B2B5E /* Overview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Overview.swift; sourceTree = "<group>"; };
+		3A02635506A8CBB96DC1C6C9 /* ET-mac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ET-mac.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3FDD228A576819287E908B47 /* SwiftTerm */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SwiftTerm; path = ../Vendor/SwiftTerm; sourceTree = SOURCE_ROOT; };
+		44366E16603D79FB4DCAF6D2 /* SessionTerminal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTerminal.swift; sourceTree = "<group>"; };
+		4880DD1374C363AFA5C69F37 /* Iroh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Iroh.swift; sourceTree = "<group>"; };
+		4BE76CB262FB7EA0605C99EB /* Manymux.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Manymux.swift; sourceTree = "<group>"; };
+		591C2444EF4A2214A0249778 /* VocabMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VocabMatcher.swift; sourceTree = "<group>"; };
 		5E147244B49816415D5E26BA /* Templates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Templates.swift; sourceTree = "<group>"; };
+		6567BD006FC3985DF01BE526 /* DebugHooks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugHooks.swift; sourceTree = "<group>"; };
 		65A00CC919987D56EC6D81C2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6643B444DEC1C52098247355 /* VolumeButtons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeButtons.swift; sourceTree = "<group>"; };
 		68B7189D418370DCE2A29810 /* QRScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScanner.swift; sourceTree = "<group>"; };
 		775D2BD71278DE9B66655A0C /* EtLink */ = {isa = PBXFileReference; lastKnownFileType = folder; name = EtLink; path = ../Vendor/etd/apple/EtLink; sourceTree = SOURCE_ROOT; };
+		89DB0886F532D6DAE2B499B3 /* MainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindow.swift; sourceTree = "<group>"; };
 		929A6DF5668934E4FF4835DA /* ETCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ETCore; path = ../ETCore; sourceTree = SOURCE_ROOT; };
-		934B8450ECC39D11B1F4B9F9 /* Iroh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Iroh.swift; sourceTree = "<group>"; };
+		9C2F45FF4381091649F20834 /* Fleet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fleet.swift; sourceTree = "<group>"; };
 		9FE7D921D5CAA4506B3FD10C /* SelectMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectMode.swift; sourceTree = "<group>"; };
+		A4A3A124DA65B9FD17453340 /* AppInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInfo.swift; sourceTree = "<group>"; };
 		AAC2C774B86C691F339F5290 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
 		AB367F7DC192EBCCA06508BC /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
-		ADDE5B14C4968EB5B9AB03A5 /* VocabMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VocabMatcher.swift; sourceTree = "<group>"; };
+		C423DF1A7824BFB0B4AB4556 /* ETMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ETMacApp.swift; sourceTree = "<group>"; };
+		CB2856B21C534EA0CAE1C159 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D3251CE9C9BA08235AF09F96 /* Push.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Push.swift; sourceTree = "<group>"; };
 		DD862AA08B0790FEA8C32121 /* Speaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Speaker.swift; sourceTree = "<group>"; };
 		DE5E31C39DDE31580DBCAB4E /* Vocabulary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vocabulary.swift; sourceTree = "<group>"; };
 		EE328D04440F47561CB04404 /* ETApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ETApp.swift; sourceTree = "<group>"; };
+		F5F8C4691248A66EBFA192F2 /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
 		FFCBF94AC41590A9B15E7FAA /* KeyRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyRow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -73,16 +101,49 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F227A54D860D2C6EDD902EAC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EEBCAA1A936538064AF9140F /* ETCore in Frameworks */,
+				2DD2565AA79A7249D6DAD7BA /* ETSSH in Frameworks */,
+				67169DC0BE388E8F72DC49C4 /* SwiftTerm in Frameworks */,
+				C8B75C969CC365668A042C04 /* EtLink in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		14BF4662E9CBBE79EA851017 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				6567BD006FC3985DF01BE526 /* DebugHooks.swift */,
+				C423DF1A7824BFB0B4AB4556 /* ETMacApp.swift */,
+				9C2F45FF4381091649F20834 /* Fleet.swift */,
+				89DB0886F532D6DAE2B499B3 /* MainWindow.swift */,
+				F5F8C4691248A66EBFA192F2 /* PairingView.swift */,
+				44366E16603D79FB4DCAF6D2 /* SessionTerminal.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
 		59806B3A3A9AA44AF6BF3019 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
 				929A6DF5668934E4FF4835DA /* ETCore */,
 				775D2BD71278DE9B66655A0C /* EtLink */,
+				3FDD228A576819287E908B47 /* SwiftTerm */,
 			);
 			name = Packages;
+			sourceTree = "<group>";
+		};
+		8C07962CAA5077BBE4F4C3A7 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				CB2856B21C534EA0CAE1C159 /* Assets.xcassets */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		8CC7CBC42751C95F504943AC /* Sources */ = {
@@ -91,7 +152,6 @@
 				AB367F7DC192EBCCA06508BC /* AppModel.swift */,
 				23D00D38126433369DDB5E17 /* Copilot.swift */,
 				EE328D04440F47561CB04404 /* ETApp.swift */,
-				934B8450ECC39D11B1F4B9F9 /* Iroh.swift */,
 				FFCBF94AC41590A9B15E7FAA /* KeyRow.swift */,
 				15F85597F66DBB0CC3A093AF /* MachinesView.swift */,
 				10890B81C05CE555FD81D008 /* NetworkView.swift */,
@@ -104,7 +164,6 @@
 				5E147244B49816415D5E26BA /* Templates.swift */,
 				0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */,
 				AAC2C774B86C691F339F5290 /* Views.swift */,
-				ADDE5B14C4968EB5B9AB03A5 /* VocabMatcher.swift */,
 				DE5E31C39DDE31580DBCAB4E /* Vocabulary.swift */,
 				175E8D2F9B6999615A8AAF59 /* VoiceInput.swift */,
 				6643B444DEC1C52098247355 /* VolumeButtons.swift */,
@@ -120,9 +179,21 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
+		CB4B710CD5530F6336098BC3 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				A4A3A124DA65B9FD17453340 /* AppInfo.swift */,
+				4880DD1374C363AFA5C69F37 /* Iroh.swift */,
+				4BE76CB262FB7EA0605C99EB /* Manymux.swift */,
+				591C2444EF4A2214A0249778 /* VocabMatcher.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
 		CDFDE144CB13D7575C0F9986 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				3A02635506A8CBB96DC1C6C9 /* ET-mac.app */,
 				090F6A6A5A570B49BDA73AE9 /* ET.app */,
 			);
 			name = Products;
@@ -131,16 +202,50 @@
 		E30081932FC350E49AC67E58 = {
 			isa = PBXGroup;
 			children = (
+				F071F57C4703A1A1C169D1A1 /* Mac */,
 				59806B3A3A9AA44AF6BF3019 /* Packages */,
 				B3763F0955C58291DC8D648B /* Resources */,
+				CB4B710CD5530F6336098BC3 /* Shared */,
 				8CC7CBC42751C95F504943AC /* Sources */,
 				CDFDE144CB13D7575C0F9986 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
+		F071F57C4703A1A1C169D1A1 /* Mac */ = {
+			isa = PBXGroup;
+			children = (
+				8C07962CAA5077BBE4F4C3A7 /* Resources */,
+				14BF4662E9CBBE79EA851017 /* Sources */,
+			);
+			path = Mac;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		B24D5A53BA6DC05EB7B2DDA1 /* ET-mac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 26E2960590D3BCDB2A91C407 /* Build configuration list for PBXNativeTarget "ET-mac" */;
+			buildPhases = (
+				184B81382011B406BDDF4A26 /* Sources */,
+				F692F97F7837561B05830673 /* Resources */,
+				F227A54D860D2C6EDD902EAC /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "ET-mac";
+			packageProductDependencies = (
+				E77D439CE39322DFC4891B39 /* ETCore */,
+				A2F4FF65C9B840ED48A51F46 /* ETSSH */,
+				E016E05FBF8DE467C1BC1F30 /* SwiftTerm */,
+				E8BC1D28CF427FA6638A620D /* EtLink */,
+			);
+			productName = "ET-mac";
+			productReference = 3A02635506A8CBB96DC1C6C9 /* ET-mac.app */;
+			productType = "com.apple.product-type.application";
+		};
 		D7E2221DC5CFCB290C5A3D00 /* ET */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = F9B0C08F3FDADEF9705224D0 /* Build configuration list for PBXNativeTarget "ET" */;
@@ -173,6 +278,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					B24D5A53BA6DC05EB7B2DDA1 = {
+						DevelopmentTeam = 9MY2559FS4;
+						ProvisioningStyle = Automatic;
+					};
 					D7E2221DC5CFCB290C5A3D00 = {
 						DevelopmentTeam = 9MY2559FS4;
 						ProvisioningStyle = Automatic;
@@ -190,15 +299,16 @@
 			mainGroup = E30081932FC350E49AC67E58;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				D972A5EEDD00B5ECD33C75D6 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 				2095010AD733EA4E1483945C /* XCLocalSwiftPackageReference "../ETCore" */,
 				DAA4839E6AC1DB74C4BB05C3 /* XCLocalSwiftPackageReference "../Vendor/etd/apple/EtLink" */,
+				EA3F5AFC27C25F654A36E3DC /* XCLocalSwiftPackageReference "../Vendor/SwiftTerm" */,
 			);
 			preferredProjectObjectVersion = 54;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				D7E2221DC5CFCB290C5A3D00 /* ET */,
+				B24D5A53BA6DC05EB7B2DDA1 /* ET-mac */,
 			);
 		};
 /* End PBXProject section */
@@ -212,19 +322,46 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F692F97F7837561B05830673 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				13D385DF09D2AE2FD4144B08 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		184B81382011B406BDDF4A26 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				71DCD98736F4928BF2983F28 /* AppInfo.swift in Sources */,
+				5513D8628FF9265A5B7C110D /* DebugHooks.swift in Sources */,
+				8EAA58E1D8A3A674820C9F67 /* ETMacApp.swift in Sources */,
+				791E79EFC8C8971FEE5123D4 /* Fleet.swift in Sources */,
+				0AEEC656192348D8F9AC0E89 /* Iroh.swift in Sources */,
+				8401EF3426B8C649284DC663 /* MainWindow.swift in Sources */,
+				DCC53456F454E5F2E4EB4A14 /* Manymux.swift in Sources */,
+				9F8B8A411DBC4DA48493DEEE /* PairingView.swift in Sources */,
+				A6CF789B277F4329F0C57693 /* SessionTerminal.swift in Sources */,
+				B7B2B9BE3BD4B283F11398E5 /* VocabMatcher.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		287C36CAC568C69167B2298D /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				66C925D75EC77293B6451EAB /* AppInfo.swift in Sources */,
 				7B7A1AB52E7AAEB0D5283959 /* AppModel.swift in Sources */,
 				D925AEB7EE1B1A2E8E25A3DF /* Copilot.swift in Sources */,
 				F8F1BACDD89A3936FDBA3DCA /* ETApp.swift in Sources */,
-				B0C4E14269567F3757D629D8 /* Iroh.swift in Sources */,
+				58F3229B35D71250C678BC3D /* Iroh.swift in Sources */,
 				176CEB6F04458465BE3439DA /* KeyRow.swift in Sources */,
 				893A4346740B9772C37B287C /* MachinesView.swift in Sources */,
+				7ABFAB899E15B83CE5845EA0 /* Manymux.swift in Sources */,
 				0A0D3637C837954773B6B363 /* NetworkView.swift in Sources */,
 				C7D22526ADD3F1CB22E245DD /* Overview.swift in Sources */,
 				3A3285F4C8B435AFADFA4F39 /* Push.swift in Sources */,
@@ -235,7 +372,7 @@
 				5AF0ADD6EBFE20C5D372C10F /* Templates.swift in Sources */,
 				B9EF4532C1A648569D5AD074 /* TerminalHost.swift in Sources */,
 				45D6BA62083244C784927078 /* Views.swift in Sources */,
-				E8AFF527A853BA6E7B3FB8B8 /* VocabMatcher.swift in Sources */,
+				A773868D83637C7ACBA83714 /* VocabMatcher.swift in Sources */,
 				EB28BC4D4608DBE3C2FD9D80 /* Vocabulary.swift in Sources */,
 				1CF2C07C262A0FFE2738D263 /* VoiceInput.swift in Sources */,
 				92D2F2431FD1402AC2FB77A5 /* VolumeButtons.swift in Sources */,
@@ -319,11 +456,11 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -379,10 +516,10 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -410,9 +547,60 @@
 			};
 			name = Release;
 		};
+		D7C83C65C4D04A4B4DDED32C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ET_GIT_COMMIT = dev;
+				INFOPLIST_FILE = "Generated/Info-mac.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = xyz.ericsharma.et.mac;
+				PRODUCT_NAME = E.T.;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		E716D94DE1C6A660372B4D38 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ET_GIT_COMMIT = dev;
+				INFOPLIST_FILE = "Generated/Info-mac.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = xyz.ericsharma.et.mac;
+				PRODUCT_NAME = E.T.;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		26E2960590D3BCDB2A91C407 /* Build configuration list for PBXNativeTarget "ET-mac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E716D94DE1C6A660372B4D38 /* Debug */,
+				D7C83C65C4D04A4B4DDED32C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		51EC44C34C4A0307715EA2EF /* Build configuration list for PBXProject "ET" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -442,24 +630,20 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../Vendor/etd/apple/EtLink;
 		};
-/* End XCLocalSwiftPackageReference section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		D972A5EEDD00B5ECD33C75D6 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm.git";
-			requirement = {
-				kind = exactVersion;
-				version = 1.20.0;
-			};
+		EA3F5AFC27C25F654A36E3DC /* XCLocalSwiftPackageReference "../Vendor/SwiftTerm" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../Vendor/SwiftTerm;
 		};
-/* End XCRemoteSwiftPackageReference section */
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		78E36ABFF9A6F111E6BC39DD /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = D972A5EEDD00B5ECD33C75D6 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
+		};
+		A2F4FF65C9B840ED48A51F46 /* ETSSH */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ETSSH;
 		};
 		A3FE42A77BFB03B651F1C8C3 /* ETSSH */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -470,6 +654,18 @@
 			productName = ETCore;
 		};
 		D46BA93F57438C4C1A4131E4 /* EtLink */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = EtLink;
+		};
+		E016E05FBF8DE467C1BC1F30 /* SwiftTerm */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SwiftTerm;
+		};
+		E77D439CE39322DFC4891B39 /* ETCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ETCore;
+		};
+		E8BC1D28CF427FA6638A620D /* EtLink */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = EtLink;
 		};
