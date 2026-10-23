@@ -12,6 +12,7 @@ struct MainWindow: View {
     @State private var newName = ""
     @State private var ending: SessionRef?
     @State private var columns: NavigationSplitViewVisibility = .all
+    @State private var voice = VoiceInput()
 
     init(initial: SessionRef?) {
         _selection = State(initialValue: initial)
@@ -87,11 +88,16 @@ struct MainWindow: View {
         if setup.stage != .done {
             SetupView()
         } else {
-            if let selection {
-                TerminalScreen(selection: $selection)
-                    .id(selection)
-            } else {
-                Placeholder()
+            VStack(spacing: 0) {
+                SessionTabs(selection: $selection, newSession: { showingNewSession = true },
+                            rename: startRename, end: { ending = $0 })
+                Divider()
+                if let selection {
+                    TerminalScreen(selection: $selection, voice: voice)
+                        .id(selection)
+                } else {
+                    Placeholder()
+                }
             }
         }
     }
@@ -246,14 +252,21 @@ struct Placeholder: View {
 struct TerminalScreen: View {
     @Environment(Fleet.self) private var fleet
     @Binding var selection: SessionRef?
+    let voice: VoiceInput
     @State private var terminal: SessionTerminal?
 
     var body: some View {
-        ZStack {
-            Color(nsColor: Theme.background)
+        VStack(spacing: 0) {
+            ZStack {
+                Color(nsColor: Theme.background)
+                if let terminal {
+                    TerminalPane(terminal: terminal)
+                    overlay(for: terminal)
+                }
+            }
             if let terminal {
-                TerminalPane(terminal: terminal)
-                overlay(for: terminal)
+                Divider()
+                InputBar(terminal: terminal, voice: voice)
             }
         }
         .onAppear {

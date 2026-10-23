@@ -101,6 +101,8 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         ETGitCommit: $(ET_GIT_COMMIT)
         LSApplicationCategoryType: public.app-category.developer-tools
+        NSMicrophoneUsageDescription: E.T. uses the microphone when you click Dictate to speak text into the terminal.
+        NSSpeechRecognitionUsageDescription: E.T. turns your dictation into text on this Mac. Audio never leaves the Mac.
         # et://pair?t=… from `etd invite`.
         CFBundleURLTypes:
           - CFBundleURLName: xyz.ericsharma.et.mac.pair
@@ -108,6 +110,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: xyz.ericsharma.et.mac
+        # Hardened runtime: the microphone needs its entitlement.
+        CODE_SIGN_ENTITLEMENTS: Mac/ET-mac.entitlements
         PRODUCT_NAME: E.T.
         ENABLE_HARDENED_RUNTIME: YES
         # The etd build phase runs cargo and writes into the bundle.

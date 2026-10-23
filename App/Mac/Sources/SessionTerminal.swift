@@ -116,7 +116,7 @@ final class SessionTerminal: NSObject {
         })
         view.optionAsMetaKey = true
         view.onPasteImage = { [weak self] png in self?.pasteImage(png) }
-        view.onDropFiles = { [weak self] urls in self?.dropFiles(urls) }
+        view.onDropFiles = { [weak self] urls in self?.upload(urls) }
     }
 
     // MARK: - Font size (View → Bigger / Smaller)
@@ -289,6 +289,11 @@ final class SessionTerminal: NSObject {
         input?.yield(bytes)
     }
 
+    /// Gives the keyboard back to the terminal (after a toolbar button).
+    func focus() {
+        view.window?.makeFirstResponder(view)
+    }
+
     // MARK: - Images and files
 
     private func pasteImage(_ png: Data) {
@@ -299,11 +304,15 @@ final class SessionTerminal: NSObject {
         }
     }
 
-    /// Dropped files: images are pasted (uploaded, path typed); other files
-    /// are uploaded to ~/.cache/et-uploads on the session's machine and
-    /// their paths typed.
-    private func dropFiles(_ urls: [URL]) {
-        guard let handle, let fleet else { return }
+    /// Dropped or picked files: images are pasted (uploaded, path typed);
+    /// other files are uploaded to ~/.cache/et-uploads on the session's
+    /// machine and their paths typed.
+    func upload(_ urls: [URL]) {
+        guard let fleet else { return }
+        guard let handle else {
+            fleet.flash("\(ref.name) isn't attached")
+            return
+        }
         let images = ["png", "jpg", "jpeg", "gif", "webp"]
         Task {
             var paths: [String] = []
