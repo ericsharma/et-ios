@@ -2,12 +2,35 @@
 # E.T. for Mac, for download (docs/PLAN-macos.md §5, B4): Release build,
 # Developer ID Application + hardened runtime on etd, etd-ssh and E.T.app,
 # notarized with the App Store Connect API key, stapled, zipped.
-#   scripts/mac-release        → .build-mac/release/E.T.-<version>-<build>.zip
+#   scripts/mac-release            → .build-mac/release/E.T.-<version>-<build>.zip
+#   scripts/mac-release --publish  → and a GitHub release mac-<build> with it
+#   scripts/mac-release --publish-only <zip>   publish a zip made before
 # Needs the "Developer ID Application" identity in the signing keychain
 # (scripts/unlock-signing unlocks it). Not TestFlight: a sandboxed app
 # cannot run etd.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+
+# A GitHub release of the private repo: download it in a browser signed in
+# to GitHub. `gh` from PATH, else from nixpkgs; sign in once: gh auth login.
+publish() {
+  local zip=$1 name tag commit
+  name=$(basename "$zip")
+  tag="mac-$(echo "$name" | sed -n 's/.*-\([0-9]\{12\}\)\.zip$/\1/p')"
+  commit=$(git rev-parse HEAD)
+  local gh=(gh)
+  command -v gh >/dev/null || gh=(nix --extra-experimental-features "nix-command flakes" run nixpkgs#gh --)
+  "${gh[@]}" auth status >/dev/null 2>&1 || { echo "gh is not signed in: run \`${gh[*]} auth login\`" >&2; exit 1; }
+  "${gh[@]}" release create "$tag" "$zip" --repo ericsharma/et-ios --target "$commit" \
+    --title "E.T. for Mac ${tag#mac-}" \
+    --notes "Developer ID signed, notarized. Unzip, move E.T.app to Applications, open. sha256 $(shasum -a 256 "$zip" | cut -d' ' -f1)"
+  echo "Published: https://github.com/ericsharma/et-ios/releases/tag/$tag"
+}
+if [ "${1:-}" = "--publish-only" ]; then
+  publish "$2"
+  exit 0
+fi
+
 . scripts/asc.env
 scripts/unlock-signing
 export PATH="/opt/homebrew/bin:$PATH"
@@ -63,3 +86,6 @@ spctl -a -vv "$APP"
 rm "$OUT/notarize.zip"
 ditto -c -k --keepParent "$APP" "$ZIP"
 echo "OK: $ZIP (commit $COMMIT)"
+if [ "${1:-}" = "--publish" ]; then
+  publish "$ZIP"
+fi
