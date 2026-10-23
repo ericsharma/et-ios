@@ -9,7 +9,8 @@ import SwiftUI
 struct IncomingFile: Identifiable {
     let id = UUID()
     let name: String
-    let data: Data
+    /// Our own copy (SessionController.stage), deleted after the send.
+    let url: URL
 }
 
 /// An `et://pair` link waiting for the user to confirm it.
@@ -94,10 +95,11 @@ final class AppModel {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         do {
-            let data = try Data(contentsOf: url)
-            incomingFile = IncomingFile(name: url.lastPathComponent, data: data)
-            log.add("Opened file \(url.lastPathComponent) (\(data.count) bytes)")
-            // iOS copied it into our Inbox; the upload keeps its own copy.
+            // A copy on disk, not in memory: the file can be large.
+            let copy = try SessionController.stage(copyOf: url)
+            incomingFile = IncomingFile(name: url.lastPathComponent, url: copy)
+            log.add("Opened file \(url.lastPathComponent)")
+            // iOS copied it into our Inbox; the send uses its own copy.
             if url.path.contains("/Inbox/") { try? FileManager.default.removeItem(at: url) }
         } catch {
             log.add("Couldn't read opened file: \(error)")

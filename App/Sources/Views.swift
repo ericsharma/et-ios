@@ -808,7 +808,7 @@ struct SessionView: View {
         .animation(.snappy, value: session.bellBanner?.id)
         .overlay(alignment: .top) {
             if let status = session.uploadStatus, session.bellBanner == nil {
-                Label(status, systemImage: "photo")
+                Label(status, systemImage: "paperclip")
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(2)
                     .padding(.horizontal, 16).padding(.vertical, 10)
@@ -1093,8 +1093,9 @@ struct ShortcutKeys: View {
     }
 }
 
-/// "Open in E.T.": pick the window a file goes to. E.T. uploads it and
-/// types its path there (no Enter).
+/// "Open in E.T.": pick the window a file goes to. E.T. sends it to
+/// ~/etd-downloads on that window's machine and its path is typed there
+/// (no Enter).
 struct SendFileSheet: View {
     let session: SessionController
     let file: IncomingFile
@@ -1107,7 +1108,7 @@ struct SendFileSheet: View {
                     ForEach(session.windows) { page in
                         Button {
                             session.currentWindowID = page.id
-                            session.uploadFile(file.data, name: file.name, kind: "file", to: page)
+                            session.sendFiles([file.url], to: page, staged: true)
                             done()
                         } label: {
                             HStack {
@@ -1120,7 +1121,7 @@ struct SendFileSheet: View {
                 } header: {
                     Text("Send to window")
                 } footer: {
-                    Text("The file is uploaded to the server (and on to the host that window is ssh'd into), and its path is typed into the window, ready to send.")
+                    Text("The file goes to ~/etd-downloads on the window's machine, and its path is typed into the window, ready to send.")
                 }
             }
             .navigationTitle(file.name)

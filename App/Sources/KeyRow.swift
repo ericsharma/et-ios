@@ -24,9 +24,9 @@ enum KeyPreset: String, CaseIterable, Identifiable {
 enum Key: Hashable {
     case esc, tab, shiftTab, ctrl, up, down, left, right, enter, ctrlC, ctrlD
     case text(String)
-    /// Not a key: opens the photo picker (in the wheel on iPhone, where ✨
-    /// takes the bar's photo button).
-    case photo
+    /// Not keys: open the photo picker and the Files picker (in the wheel
+    /// on iPhone, where ✨ takes the bar's photo button).
+    case photo, file
 
     var title: String {
         switch self {
@@ -43,6 +43,7 @@ enum Key: Hashable {
         case .ctrlD: "^D"
         case .text(let t): t
         case .photo: "photo"
+        case .file: "file"
         }
     }
 
@@ -54,7 +55,7 @@ enum Key: Hashable {
         case .esc: [0x1B]
         case .tab: [0x09]
         case .shiftTab: Array("\u{1b}[Z".utf8)
-        case .ctrl, .photo: []
+        case .ctrl, .photo, .file: []
         case .up: Array((csi + "A").utf8)
         case .down: Array((csi + "B").utf8)
         case .right: Array((csi + "C").utf8)
@@ -77,6 +78,7 @@ struct KeyRow: View {
     let voice: VoiceInput
     @State private var photo: PhotosPickerItem?
     @State private var pickingPhoto = false
+    @State private var pickingFile = false
     @State private var ctrlState: CtrlState = .off
     @Environment(\.horizontalSizeClass) private var sizeClass
 
@@ -90,7 +92,7 @@ struct KeyRow: View {
 
     var body: some View {
         let preset = session.preset(for: page)
-        let wheelKeys = roomy ? preset.keys : [.photo] + preset.keys
+        let wheelKeys = roomy ? preset.keys : [.photo, .file] + preset.keys
         HStack(spacing: 0) {
             // Both sides have the same width, so the mic stays centered.
             HStack(spacing: 8) {
@@ -146,11 +148,19 @@ struct KeyRow: View {
             .tint(Theme.accent)
             .frame(width: 44, height: 40)
             if roomy {
-                barButton(systemName: "photo", active: false) {
-                    session.keyWheelOpen = false
-                    pickingPhoto = true
+                Menu {
+                    Button("Photo Library", systemImage: "photo") { pickingPhoto = true }
+                    Button("Files", systemImage: "folder") { pickingFile = true }
+                } label: {
+                    Image(systemName: "paperclip")
+                        .font(.system(size: 18, weight: .medium))
+                        .frame(width: 44, height: 40)
+                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
                 }
-                .accessibilityLabel("Send a screenshot or photo")
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .simultaneousGesture(TapGesture().onEnded { session.keyWheelOpen = false })
+                .accessibilityLabel("Send a photo or file")
             }
             barButton(systemName: "sparkles", active: session.copilotMode) {
                 session.keyWheelOpen = false
@@ -175,6 +185,13 @@ struct KeyRow: View {
         }
         .padding(.horizontal, 14)
         .photosPicker(isPresented: $pickingPhoto, selection: $photo, matching: .images)
+        // Any file, any size: sent to the window's machine (PLAN-files F6).
+        .fileImporter(isPresented: $pickingFile, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+            switch result {
+            case .success(let urls): session.sendFiles(urls, to: page, staged: false)
+            case .failure(let error): session.log.add("Files picker: \(error)")
+            }
+        }
         .onChange(of: photo) { _, item in
             guard let item else { return }
             photo = nil
@@ -222,9 +239,9 @@ struct KeyRow: View {
     }
 
     private func tap(_ key: Key) {
-        if key == .photo {
+        if key == .photo || key == .file {
             session.keyWheelOpen = false
-            pickingPhoto = true
+            if key == .photo { pickingPhoto = true } else { pickingFile = true }
             return
         }
         if key == .ctrl {
@@ -291,7 +308,11 @@ struct KeyWheel: View {
         let isCtrl = key == .ctrl
         let active = isCtrl && ctrlState != .off
         return Group {
-            if key == .photo { Image(systemName: "photo") } else { Text(key.title) }
+            switch key {
+            case .photo: Image(systemName: "photo")
+            case .file: Image(systemName: "doc")
+            default: Text(key.title)
+            }
         }
             .font(.system(size: 16, weight: .semibold, design: .monospaced))
             .frame(width: 62, height: 40)

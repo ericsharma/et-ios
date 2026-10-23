@@ -895,63 +895,114 @@ final class SessionController {
     /// Shown while an upload runs or after it finishes.
     private(set) var uploadStatus: String?
 
-    /// Uploads an image to the server and types its path into the window.
-    /// If the window is an ssh session (e.g. Claude on another machine), the
-    /// file is forwarded there over the window's own ssh destination, since
-    /// the program in the window reads it locally.
+    /// A photo from the key row. A manymux session gets it pasted (Claude
+    /// sees an image); a tmux window gets it sent like a file.
     func uploadImage(_ data: Data, fileExtension: String, to page: WindowPage) {
-        uploadFile(data, name: "image.\(fileExtension)", kind: "image", to: page)
-    }
-
-    /// Uploads a file to the server (and on to the host the window has
-    /// ssh'd into), then types its path into the window. `kind` is for the
-    /// status line ("image", "file").
-    func uploadFile(_ data: Data, name original: String, kind: String, to page: WindowPage) {
         if page.mm != nil {
-            pasteMm(data, name: original, kind: kind, to: page)
+            pasteMm(data, ext: fileExtension, to: page)
             return
         }
-        guard let connection, let client else { return }
-        Task {
-            uploadStatus = "Uploading \(kind)…"
-            do {
-                let stamp = Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false))
-                    .replacingOccurrences(of: ":", with: "")
-                let safe = String(original.map { $0.isLetter || $0.isNumber || "._-".contains($0) ? $0 : "_" })
-                let name = "et-\(stamp)-\(safe)"
-                let home = try await connection.run("printf '%s' \"$HOME\"").output
-                let dir = home + "/.cache/et-uploads"
-                _ = try await connection.run("mkdir -p \(TmuxCommand.quote(dir))")
-                let path = dir + "/" + name
-                try await connection.upload(data, to: path)
-                log.add("Uploaded \(data.count) bytes to \(path)")
+        do {
+            let stamp = Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false))
+                .replacingOccurrences(of: ":", with: "")
+            sendFiles([try Self.stage(data, name: "image-\(stamp).\(fileExtension)")], to: page, staged: true)
+        } catch {
+            flashUpload("Couldn't send: \(error.localizedDescription)")
+        }
+    }
 
-                var finalPath = path
-                if page.currentCommand == "ssh", let destination = try await sshDestination(of: page, client: client) {
-                    uploadStatus = "Sending to \(destination)…"
-                    let remote = "mkdir -p ~/.cache/et-uploads && cat > ~/.cache/et-uploads/\(name) && printf '%s' \"$HOME/.cache/et-uploads/\(name)\""
-                    let (output, code) = try await connection.run(
-                        "ssh -o BatchMode=yes -o ConnectTimeout=5 \(TmuxCommand.quote(destination)) \(TmuxCommand.quote(remote)) < \(TmuxCommand.quote(path))")
-                    if code == 0, let line = output.split(separator: "\n").last {
-                        finalPath = String(line)
-                        log.add("Forwarded to \(destination): \(finalPath)")
-                    } else {
-                        log.add("Forward to \(destination) failed (exit \(code)): \(output)")
-                        uploadStatus = "Couldn't forward to \(destination); left on \(server.displayName)"
+    /// Files to ~/etd-downloads on the window's machine (PLAN-files F6),
+    /// any type and size; the paths are typed into the window (quoted, a
+    /// space, no Enter) unless etd typed them. `staged`: our own copies,
+    /// deleted after.
+    func sendFiles(_ urls: [URL], to page: WindowPage, staged: Bool) {
+        guard !urls.isEmpty else { return }
+        let label = urls.count == 1 ? urls[0].lastPathComponent : "\(urls.count) files"
+        Task {
+            // The machine reads the files during the send.
+            let scoped = urls.filter { $0.startAccessingSecurityScopedResource() }
+            defer {
+                for url in scoped { url.stopAccessingSecurityScopedResource() }
+                if staged { for url in urls { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) } }
+            }
+            do {
+                let target = try await sendTarget(for: page)
+                uploadStatus = "Sending \(label) to \(target.machine)…"
+                log.add("Sending \(label) to \(target.machine)\(target.session.map { "/" + $0 } ?? "")")
+                let sent = try await target.host.sendFiles(urls.map(\.path), session: target.session) { done, total in
+                    guard total > 0 else { return }
+                    let percent = Int(Double(done) / Double(total) * 100)
+                    Task { @MainActor in
+                        if self.uploadStatus?.hasPrefix("Sending \(label)") == true {
+                            self.uploadStatus = "Sending \(label) to \(target.machine)… \(percent)%"
+                        }
                     }
                 }
-                // Type the path (no Enter), so the user can add a question.
-                send(Array((finalPath + " ").utf8), to: page)
-                if uploadStatus?.hasPrefix("Couldn't") != true {
-                    uploadStatus = "\(kind.prefix(1).uppercased() + kind.dropFirst()) path typed into \(page.name)"
+                log.add("Sent to \(target.machine): \(sent.paths.joined(separator: " "))\(sent.typed ? " (typed by etd)" : "")")
+                if !sent.typed, !sent.paths.isEmpty {
+                    send(Array((sent.paths.map(Self.shellQuoted).joined(separator: " ") + " ").utf8), to: page)
                 }
+                flashUpload("\(label) sent; path typed into \(page.name)")
             } catch {
-                log.add("Upload failed: \(error)")
-                uploadStatus = "Upload failed: \(error)"
+                log.add("Send failed: \(error)")
+                flashUpload("Couldn't send: \(Self.describeMm(error))")
             }
-            try? await Task.sleep(for: .seconds(4))
-            uploadStatus = nil
         }
+    }
+
+    /// Where a window's files go: a manymux session's machine (etd types
+    /// the paths there); for a tmux window, the machine its ssh points at
+    /// when that is a machine of the network, else this server.
+    private func sendTarget(for page: WindowPage) async throws -> (host: IrohHost, machine: String, session: String?) {
+        if let mm = page.mm {
+            let (host, api) = try route(mm.machine)
+            guard api == nil else { throw HostError.other("\(mm.machine) is reached by ssh; files can't be sent there yet") }
+            return (host, mm.machine, mm.name)
+        }
+        guard let hub = connection as? IrohHost else {
+            throw HostError.other("Sending files needs etd on \(server.displayName)")
+        }
+        if page.currentCommand == "ssh", let client,
+           let destination = try? await sshDestination(of: page, client: client) {
+            let name = String(destination.split(separator: "@").last ?? Substring(destination))
+            if networkMachines.contains(where: { $0.name == name }), let routed = try? route(name), routed.machine == nil {
+                return (routed.host, name, nil)
+            }
+            log.add("\(destination) isn't a machine of the network: sending to \(server.displayName)")
+        }
+        return (hub, hubName ?? server.displayName, nil)
+    }
+
+    private func flashUpload(_ text: String) {
+        uploadStatus = text
+        Task {
+            try? await Task.sleep(for: .seconds(4))
+            if uploadStatus == text { uploadStatus = nil }
+        }
+    }
+
+    static func shellQuoted(_ path: String) -> String {
+        path.allSatisfy { $0.isLetter || $0.isNumber || "/._-~".contains($0) } ? path : TmuxCommand.quote(path)
+    }
+
+    /// A copy of `data` in our temporary folder, for `sendFiles`.
+    static func stage(_ data: Data, name: String) throws -> URL {
+        let url = try stagingFolder().appendingPathComponent(name)
+        try data.write(to: url)
+        return url
+    }
+
+    /// A copy of a file in our temporary folder (same name), for `sendFiles`.
+    static func stage(copyOf file: URL) throws -> URL {
+        let url = try stagingFolder().appendingPathComponent(file.lastPathComponent)
+        try FileManager.default.copyItem(at: file, to: url)
+        return url
+    }
+
+    private static func stagingFolder() throws -> URL {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("et-send/" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder
     }
 
     /// The host an ssh session in this window points at ("gmktec",
@@ -2251,28 +2302,23 @@ extension SessionController {
     }
 
     /// Images go in manymux's PASTE frame: the session's machine saves the
-    /// file and types its path.
-    fileprivate func pasteMm(_ data: Data, name: String, kind: String, to page: WindowPage) {
-        var ext = (name as NSString).pathExtension.lowercased()
-        if ext == "jpeg" { ext = "jpg" }
+    /// file and types its path, and Claude sees it inline.
+    fileprivate func pasteMm(_ data: Data, ext: String, to page: WindowPage) {
+        let ext = ext.lowercased() == "jpeg" ? "jpg" : ext.lowercased()
         Task {
-            if !["png", "jpg", "gif", "webp"].contains(ext) {
-                uploadStatus = "Only images can go to a manymux session"
-            } else if let attachment = page.mm?.attachment, !page.readOnly {
-                uploadStatus = "Sending \(kind)…"
+            if let attachment = page.mm?.attachment, !page.readOnly {
+                uploadStatus = "Sending image…"
                 do {
                     try await attachment.paste(kind: ext, bytes: data)
                     log.add("Pasted \(data.count) bytes (\(ext)) into \(page.name)")
-                    uploadStatus = "\(kind.prefix(1).uppercased() + kind.dropFirst()) sent to \(page.name)"
+                    flashUpload("Image sent to \(page.name)")
                 } catch {
                     log.add("Paste failed: \(error)")
-                    uploadStatus = "Couldn't send: \(Self.describeMm(error))"
+                    flashUpload("Couldn't send: \(Self.describeMm(error))")
                 }
             } else {
-                uploadStatus = page.readOnly ? "View only" : "\(page.name) isn't attached"
+                flashUpload(page.readOnly ? "View only" : "\(page.name) isn't attached")
             }
-            try? await Task.sleep(for: .seconds(4))
-            uploadStatus = nil
         }
     }
 }
