@@ -39,7 +39,8 @@ cp -R ".build-mac/release-dd/Build/Products/Release/E.T..app" "$APP"
 echo "Checking signatures…"
 for bin in "$APP/Contents/MacOS/etd" "$APP/Contents/MacOS/etd-ssh" "$APP"; do
   codesign --verify --strict --verbose=1 "$bin"
-  codesign -dv "$bin" 2>&1 | grep -q "flags=0x10000(runtime)" || { echo "No hardened runtime: $bin" >&2; exit 1; }
+  INFO=$(codesign -dv "$bin" 2>&1)
+  case "$INFO" in *"(runtime)"*) ;; *) echo "No hardened runtime: $bin" >&2; exit 1 ;; esac
 done
 codesign --verify --deep --strict "$APP"
 
