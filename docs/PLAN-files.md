@@ -158,8 +158,8 @@ Time: F0 half a day, F1 1 day, F2 half a day, F3 half a day, F4 half a day (more
 | Step | Owner | What | Done when |
 |---|---|---|---|
 | S1 | A | DONE and DEPLOYED (etd v0.0.5 f33a1e3 on trigkey + gmktec, nixos-config e3b536c; `etd files` checked live; generated Swift checked). etd: delivery log, `Shared`, `Offer`, `Blobs`, `Share`, `Unshare`, `etd files`; et-link API; tests; deploy | `etd files` on trigkey lists files on trigkey and gmktec; et-link test fetches one |
-| S2 | B | Mac app: a Files section in the sidebar with the list and actions | Owner sends from the phone, sees it on the Mac, types it into another session |
-| S3 | B | iOS app: a Files screen (same list, Quick Look, actions) | Owner previews a PDF sent from the Mac |
+| S2 | B | COMMITTED (et-ios 07b0e2f; owner test pending). Mac app: a Files section in the sidebar with the list and actions | Owner sends from the phone, sees it on the Mac, types it into another session |
+| S3 | B | COMMITTED (et-ios 07b0e2f, iOS: … > Files; owner test pending). iOS app: a Files screen (same list, Quick Look, actions) | Owner previews a PDF sent from the Mac |
 
 Time: S1 about 1 day, S2 about 1 day, S3 about 1 day.
 
