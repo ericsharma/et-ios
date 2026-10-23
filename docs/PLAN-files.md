@@ -102,6 +102,40 @@ Response::Delivered { paths: Vec<String>, typed: bool }
 - Targeted pushes: the app writes its endpoint id into its device record (`~/.config/et/devices/*.json`); `NotifyFile { to, item }` (machines only) runs the push command with `ETD_KIND=file` and `ETD_TARGET`; `et-notify` sends only to that device.
 - Files screen on iOS (Received list, Quick Look, Share, Save to Files).
 
+### 4.7 Shared Files screen (owner choice A, 2026-10-23)
+
+Owner: "see all the files that are shared amongst the individual screens instead of having it just be injected directly into the terminal". Sending to a session still types the path; this screen adds a place to see every file and use it again.
+
+**What the owner sees** (Mac app and iPhone/iPad): one list, newest first, of everything sent to any machine. Each row: name, `from → to` (member names), when, size, a folder icon for a folder. Actions on a row:
+
+| Action | What happens |
+|---|---|
+| Tap | Preview (Quick Look): the device fetches the file from the machine into its caches folder |
+| Type into a session… | Pick a session on any machine. Same machine: etd types the path. Other machine: the file's machine sends it there first (no bytes through the phone), and the path is typed there |
+| Send to… | Pick a machine: sent machine to machine |
+| Copy path | The path on its machine |
+| Delete | Removed from that machine's `~/etd-downloads/` and from the list |
+
+**How it works**
+
+- Each etd writes a line to `deliveries.jsonl` (state directory) for each delivery: top-level path, size, folder or file, sender's member id and name, session, typed, time. No replication: the app asks every machine and merges the lists.
+- A row whose path is gone from disk (the owner deleted it) is not shown.
+- Bytes from a machine to a device: et/1 request `Blobs` makes the rest of its stream an iroh-blobs request, served by etd's provider with the same "offered hashes only" rule. So a device can fetch over the connection it opened, and nothing new listens.
+
+**Protocol (et/1, appended)**
+
+| # | Request | Answer |
+|---|---|---|
+| 19 | `Shared` | `SharedList([SharedItem { path, name, size, is_dir, from, from_id, received, session }])` |
+| 20 | `Offer { path }` (inside `~/etd-downloads/`) | `Offered { hash, total }`; the offer lasts while this stream is open |
+| 21 | `Blobs` | then an iroh-blobs request on the same stream |
+| 22 | `Share { path, to, session }` | `to` = this machine: type into `session`. Else send to `to` (as `etd send`), typed there. `Delivered` |
+| 23 | `Unshare { path }` | `Pong`; the file or folder and its log line are removed |
+
+**et-link**: `sharedFiles()`, `fetchFile(path, into, progress) -> local path`, `shareFile(path, to, session) -> Delivered`, `unshareFile(path)`.
+
+**CLI**: `etd files`: the list of every machine, as the app shows it.
+
 ## 5. Work
 
 ### Phase 1: files to machines and sessions
@@ -118,6 +152,16 @@ Response::Delivered { paths: Vec<String>, typed: bool }
 | F7 | B | iOS share extension (§4.5 second point); TestFlight | Share sheet → E.T. → gmktec → claude works from Photos and Files |
 
 Time: F0 half a day, F1 1 day, F2 half a day, F3 half a day, F4 half a day (more if manymux needs a change). F5 about 1 day, F6 half a day, F7 about 1 day. **First useful point: F0–F2**, about 2 days: `etd send` between machines, from any terminal or Claude session. Phase 1 in total: about 5 days.
+
+### Shared Files screen (§4.7)
+
+| Step | Owner | What | Done when |
+|---|---|---|---|
+| S1 | A | etd: delivery log, `Shared`, `Offer`, `Blobs`, `Share`, `Unshare`, `etd files`; et-link API; tests; deploy | `etd files` on trigkey lists files on trigkey and gmktec; et-link test fetches one |
+| S2 | B | Mac app: a Files section in the sidebar with the list and actions | Owner sends from the phone, sees it on the Mac, types it into another session |
+| S3 | B | iOS app: a Files screen (same list, Quick Look, actions) | Owner previews a PDF sent from the Mac |
+
+Time: S1 about 1 day, S2 about 1 day, S3 about 1 day.
 
 ### Phase 2: phone and iPad as receivers (nice to have)
 
