@@ -3,7 +3,7 @@
 # Developer ID Application + hardened runtime on etd, etd-ssh and E.T.app,
 # notarized with the App Store Connect API key, stapled, zipped.
 #   scripts/mac-release            → .build-mac/release/E.T.-<version>-<build>.zip
-#   scripts/mac-release --publish  → and a GitHub release mac-<build> with it
+#   scripts/mac-release --publish  → and a GitHub release mac-<build> with it (gh on trigkey)
 #   scripts/mac-release --publish-only <zip>   publish a zip made before
 # Needs the "Developer ID Application" identity in the signing keychain
 # (scripts/unlock-signing unlocks it). Not TestFlight: a sandboxed app
@@ -11,19 +11,30 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# A GitHub release of the private repo: download it in a browser signed in
-# to GitHub. `gh` from PATH, else from nixpkgs; sign in once: gh auth login.
+# A GitHub release of the private repo, made with trigkey's `gh` (signed in
+# there): trigkey pulls the zip over etd in 4 MiB pieces (etd-ssh carries
+# output only, at most 8 MiB per command), checks its sha256, then runs
+# `gh release create`. Download it in a browser signed in to GitHub.
 publish() {
-  local zip=$1 name tag commit
-  name=$(basename "$zip")
+  local zip=$1 name tag commit sum remote
+  zip=$(cd "$(dirname "$zip")" && pwd)/$(basename "$zip")
+  name=$(basename "$zip" | sed 's/^E\.T\./ET/')
   tag="mac-$(echo "$name" | sed -n 's/.*-\([0-9]\{12\}\)\.zip$/\1/p')"
   commit=$(git rev-parse HEAD)
-  local gh=(gh)
-  command -v gh >/dev/null || gh=(nix --extra-experimental-features "nix-command flakes" run nixpkgs#gh --)
-  "${gh[@]}" auth status >/dev/null 2>&1 || { echo "gh is not signed in: run \`${gh[*]} auth login\`" >&2; exit 1; }
-  "${gh[@]}" release create "$tag" "$zip" --repo ericsharma/et-ios --target "$commit" \
-    --title "E.T. for Mac ${tag#mac-}" \
-    --notes "Developer ID signed, notarized. Unzip, move E.T.app to Applications, open. sha256 $(shasum -a 256 "$zip" | cut -d' ' -f1)"
+  sum=$(shasum -a 256 "$zip" | cut -d' ' -f1)
+  local size pieces
+  size=$(wc -c < "$zip" | tr -d ' ')
+  pieces=$(( (size + 4194303) / 4194304 ))
+  remote="/tmp/et-release-$tag/$name"
+  # This machine's name in the network, for trigkey's etd-ssh.
+  local me
+  me=$(etd status --json | python3 -c 'import json,sys; s=json.load(sys.stdin); print(next(m["name"] for m in s["network"]["members"] if m["id"]==s["id"]))')
+  echo "Copying $name to trigkey ($pieces pieces)…"
+  etd-ssh trigkey -- "mkdir -p /tmp/et-release-$tag && : > $remote && for i in \$(seq 0 $((pieces - 1))); do etd-ssh $me -- \"dd if='$zip' bs=4194304 skip=\$i count=1 2>/dev/null\" >> $remote; done"
+  local got
+  got=$(etd-ssh trigkey -- "sha256sum $remote" | cut -d' ' -f1)
+  [ "$got" = "$sum" ] || { echo "Copy to trigkey is damaged ($got)." >&2; exit 1; }
+  etd-ssh trigkey -- "gh release create $tag $remote --repo ericsharma/et-ios --target $commit --title 'E.T. for Mac ${tag#mac-}' --notes 'Developer ID signed, notarized (commit ${commit:0:7}). Unzip, move E.T.app to Applications, open. sha256 $sum'; rm -rf /tmp/et-release-$tag"
   echo "Published: https://github.com/ericsharma/et-ios/releases/tag/$tag"
 }
 if [ "${1:-}" = "--publish-only" ]; then
