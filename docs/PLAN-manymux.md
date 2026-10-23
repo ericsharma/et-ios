@@ -84,7 +84,7 @@ On a manymux page, the image goes in manymux's own `PASTE` frame. The session's 
 |---|---|---|
 | C1 | Test TestFlight build 1 on the phone (list, open, type, new session on gmktec, view-only, image). | After B3 |
 | C2 | Start your real sessions in manymux (`mm new claude`, `mm new gmktec claude`, …) and use them for a day. | After C1 |
-| C3 | Decide when to stop the tmux session on trigkey. tmux stays installed. Then remove tmux-persist.nix and the et-notify tmux hook, from a shell outside tmux: removing the tmux-server unit runs its ExecStop (`kill-server`). | After C2 |
+| C3 | Done 2026-10-22: the tmux workspace is removed (nixos-config, after 1be68a4). Was: decide when to stop the tmux session on trigkey. tmux stays installed. Then remove tmux-persist.nix and the et-notify tmux hook, from a shell outside tmux: removing the tmux-server unit runs its ExecStop (`kill-server`). | After C2 |
 
 ### Order
 
