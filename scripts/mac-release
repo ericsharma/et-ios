@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# E.T. for Mac, for download (docs/PLAN-macos.md §5, B4): Release build,
+# Developer ID Application + hardened runtime on etd, etd-ssh and E.T.app,
+# notarized with the App Store Connect API key, stapled, zipped.
+#   scripts/mac-release        → .build-mac/release/E.T.-<version>-<build>.zip
+# Needs the "Developer ID Application" identity in the signing keychain
+# (scripts/unlock-signing unlocks it). Not TestFlight: a sandboxed app
+# cannot run etd.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+. scripts/asc.env
+scripts/unlock-signing
+export PATH="/opt/homebrew/bin:$PATH"
+
+IDENTITY=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application: [^"]*\)".*/\1/p' | head -1)
+[ -n "$IDENTITY" ] || { echo "No Developer ID Application identity in the keychain." >&2; exit 1; }
+echo "Signing as: $IDENTITY"
+
+BUILD=$(date -u +%Y%m%d%H%M)
+COMMIT=$(git rev-parse --short HEAD)
+git diff --quiet HEAD -- App ETCore Vendor scripts || COMMIT="$COMMIT-dirty"
+OUT=.build-mac/release
+rm -rf "$OUT" && mkdir -p "$OUT"
+
+(cd App && xcodegen generate -q)
+echo "Building $BUILD ($COMMIT)…"
+# The etd build phase signs etd and etd-ssh with the same identity, with
+# --timestamp (scripts/bundle-etd-mac.sh); Xcode signs the app last.
+xcodebuild -project App/ET.xcodeproj -scheme ET-mac -configuration Release \
+  -destination 'generic/platform=macOS' -derivedDataPath .build-mac/release-dd \
+  -clonedSourcePackagesDirPath .spm -skipPackagePluginValidation -skipMacroValidation \
+  CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$IDENTITY" DEVELOPMENT_TEAM="$ASC_TEAM_ID" \
+  OTHER_CODE_SIGN_FLAGS="--timestamp" CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
+  CURRENT_PROJECT_VERSION="$BUILD" ET_GIT_COMMIT="$COMMIT" build > "$OUT/build.log" 2>&1 \
+  || { grep -E 'error' "$OUT/build.log" | sort -u | head -20; exit 1; }
+APP="$OUT/E.T..app"
+cp -R ".build-mac/release-dd/Build/Products/Release/E.T..app" "$APP"
+
+echo "Checking signatures…"
+for bin in "$APP/Contents/MacOS/etd" "$APP/Contents/MacOS/etd-ssh" "$APP"; do
+  codesign --verify --strict --verbose=1 "$bin"
+  codesign -dv "$bin" 2>&1 | grep -q "flags=0x10000(runtime)" || { echo "No hardened runtime: $bin" >&2; exit 1; }
+done
+codesign --verify --deep --strict "$APP"
+
+VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$APP/Contents/Info.plist")
+ZIP="$OUT/E.T.-$VERSION-$BUILD.zip"
+ditto -c -k --keepParent "$APP" "$OUT/notarize.zip"
+echo "Notarizing (usually 1–10 min)…"
+xcrun notarytool submit "$OUT/notarize.zip" --key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" \
+  --issuer "$ASC_ISSUER_ID" --wait --timeout 30m > "$OUT/notarize.log" 2>&1 || true
+cat "$OUT/notarize.log" | tail -4
+if ! grep -q "status: Accepted" "$OUT/notarize.log"; then
+  ID=$(sed -n 's/^ *id: //p' "$OUT/notarize.log" | head -1)
+  [ -n "$ID" ] && xcrun notarytool log "$ID" --key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" | tail -40
+  echo "Notarization FAILED." >&2
+  exit 1
+fi
+xcrun stapler staple "$APP"
+xcrun stapler validate "$APP"
+spctl -a -vv "$APP"
+rm "$OUT/notarize.zip"
+ditto -c -k --keepParent "$APP" "$ZIP"
+echo "OK: $ZIP (commit $COMMIT)"

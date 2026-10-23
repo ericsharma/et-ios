@@ -12,6 +12,9 @@ for bin in etd etd-ssh; do
   if [ "$IDENTITY" = "-" ]; then
     codesign --force --sign - "$APP/Contents/MacOS/$bin"
   else
-    codesign --force --sign "$IDENTITY" --options runtime --timestamp=none "$APP/Contents/MacOS/$bin"
+    # A Developer ID build (scripts/mac-release) is notarized: secure timestamp.
+    TS="--timestamp=none"
+    case "${EXPANDED_CODE_SIGN_IDENTITY_NAME:-}" in *"Developer ID"*) TS="--timestamp" ;; esac
+    codesign --force --sign "$IDENTITY" --options runtime $TS "$APP/Contents/MacOS/$bin"
   fi
 done
