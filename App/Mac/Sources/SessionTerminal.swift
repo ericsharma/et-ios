@@ -23,9 +23,9 @@ extension NSColor {
     }
 }
 
-/// SwiftTerm's view, with images on the clipboard (⌘V) and dropped files
-/// pasted into the session: an image goes to the session's machine and its
-/// path is typed, the way a terminal does for a local file.
+/// SwiftTerm's view, with images on the clipboard (⌘V) pasted into the
+/// session (the image goes to the session's machine and its path is typed)
+/// and dropped files sent there, the way a terminal types a local file's path.
 final class ETTerminalView: TerminalView {
     var onPasteImage: ((Data) -> Void)?
     var onDropFiles: (([URL]) -> Void)?
@@ -167,7 +167,7 @@ final class SessionTerminal: NSObject {
         })
         view.optionAsMetaKey = true
         view.onPasteImage = { [weak self] png in self?.pasteImage(png) }
-        view.onDropFiles = { [weak self] urls in self?.upload(urls) }
+        view.onDropFiles = { [weak self] urls in self?.sendFiles(urls) }
     }
 
     // MARK: - Font size (View → Bigger / Smaller)
@@ -355,44 +355,18 @@ final class SessionTerminal: NSObject {
         }
     }
 
-    /// Dropped or picked files: images are pasted (uploaded, path typed);
-    /// other files are uploaded to ~/.cache/et-uploads on the session's
-    /// machine and their paths typed.
-    func upload(_ urls: [URL]) {
-        guard let fleet else { return }
-        guard let handle else {
-            fleet.flash("\(ref.name) isn't attached")
-            return
-        }
-        let images = ["png", "jpg", "jpeg", "gif", "webp"]
-        Task {
-            var paths: [String] = []
-            for url in urls {
-                let scoped = url.startAccessingSecurityScopedResource()
-                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-                guard let data = try? Data(contentsOf: url) else {
-                    fleet.flash("Couldn't read \(url.lastPathComponent)")
-                    continue
-                }
-                let ext = url.pathExtension.lowercased()
-                do {
-                    if images.contains(ext) {
-                        try await handle.paste(kind: ext == "jpeg" ? "jpg" : ext, bytes: data)
-                    } else {
-                        let path = try await fleet.upload(data, name: url.lastPathComponent, to: ref.machine)
-                        paths.append(path)
-                    }
-                } catch {
-                    fleet.flash("Upload failed: \(Fleet.describe(error))")
-                }
-            }
-            if !paths.isEmpty {
-                send(Array(paths.map(Self.shellQuoted).joined(separator: " ").utf8))
-            }
+    /// Dropped or picked files and folders: sent to ~/etd-downloads on the
+    /// session's machine, and their paths typed (quoted, then a space, no
+    /// Enter) unless etd typed them. Image data with no file (a drag from
+    /// a browser) is pasted as before.
+    func sendFiles(_ urls: [URL]) {
+        fleet?.send(urls, to: ref.machine, session: ref.name) { [weak self] delivered in
+            guard let self, !delivered.typed, !delivered.paths.isEmpty else { return }
+            send(Array((delivered.paths.map(Self.shellQuoted).joined(separator: " ") + " ").utf8))
         }
     }
 
-    private static func shellQuoted(_ path: String) -> String {
+    static func shellQuoted(_ path: String) -> String {
         path.allSatisfy { $0.isLetter || $0.isNumber || "/._-~".contains($0) } ? path : "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 }

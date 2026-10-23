@@ -43,6 +43,12 @@ struct ETMacApp: App {
                 .environment(setup)
         }
 
+        Window("Send Files", id: "send") {
+            SendFilesWindow()
+                .environment(fleet)
+        }
+        .windowResizability(.contentSize)
+
         Window("Debug Log", id: "log") {
             LogView()
                 .environment(fleet)

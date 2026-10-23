@@ -103,6 +103,12 @@ targets:
         LSApplicationCategoryType: public.app-category.developer-tools
         NSMicrophoneUsageDescription: E.T. uses the microphone when you click Dictate to speak text into the terminal.
         NSSpeechRecognitionUsageDescription: E.T. turns your dictation into text on this Mac. Audio never leaves the Mac.
+        # Any file or folder dropped on the Dock icon: File → Send File….
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Any file
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: None
+            LSItemContentTypes: [public.item]
         # et://pair?t=… from `etd invite`.
         CFBundleURLTypes:
           - CFBundleURLName: xyz.ericsharma.et.mac.pair

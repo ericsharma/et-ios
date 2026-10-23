@@ -84,7 +84,7 @@ struct InputBar: View {
         HStack(spacing: 0) {
             HStack(spacing: 8) {
                 barButton(systemName: "photo") { pickFiles() }
-                    .help("Upload files to \(terminal.ref.machine) and type their paths (⇧⌘U)")
+                    .help("Send files to \(terminal.ref.machine) and type their paths (⇧⌘U)")
                     .keyboardShortcut("u", modifiers: [.command, .shift])
             }
             .frame(width: sideWidth, alignment: .leading)
@@ -177,12 +177,12 @@ struct InputBar: View {
     private func pickFiles() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
-        panel.canChooseDirectories = false
+        panel.canChooseDirectories = true
         panel.allowsMultipleSelection = true
-        panel.message = "Upload to \(terminal.ref.machine): the paths are typed into \(terminal.ref.name)."
-        panel.prompt = "Upload"
+        panel.message = "Send to ~/etd-downloads on \(terminal.ref.machine): the paths are typed into \(terminal.ref.name)."
+        panel.prompt = "Send"
         let finish: (NSApplication.ModalResponse) -> Void = { response in
-            if response == .OK, !panel.urls.isEmpty { terminal.upload(panel.urls) }
+            if response == .OK, !panel.urls.isEmpty { terminal.sendFiles(panel.urls) }
             terminal.focus()
         }
         if let window = terminal.view.window {

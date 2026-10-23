@@ -37,6 +37,12 @@ final class Fleet {
     private(set) var notice: String?
     /// A session to show (a tapped notification); the front window takes it.
     var requestedRef: SessionRef?
+    /// File sends in progress, and finished machine sends still showing
+    /// their paths (PLAN-files F5).
+    private(set) var sends: [FileSend] = []
+    /// Files waiting for a machine: File → Send File…, or a drop on the Dock
+    /// icon. The Send Files window shows them.
+    var pendingSend: [URL] = []
     let log = DebugLog()
 
     /// Attached (or attaching) sessions. The newest few stay attached so
@@ -251,19 +257,70 @@ final class Fleet {
         return try await route.host.run(script)
     }
 
-    /// Uploads a file to ~/.cache/et-uploads on a machine; returns its path there.
-    func upload(_ data: Data, name original: String, to machine: String) async throws -> String {
-        let (host, api) = try route(machine)
-        guard api == nil else { throw HostError.other("\(machine) is reached by ssh; files can't be sent there yet") }
-        let stamp = Int(Date().timeIntervalSince1970)
-        let safe = String(original.map { $0.isLetter || $0.isNumber || "._-".contains($0) ? $0 : "_" })
-        let home = try await host.run("printf '%s' \"$HOME\"").output
-        let dir = home + "/.cache/et-uploads"
-        _ = try await host.run("mkdir -p \(TmuxCommand.quote(dir))")
-        let path = "\(dir)/et-\(stamp)-\(safe)"
-        try await host.upload(data, to: path)
-        log.add("Uploaded \(data.count) bytes to \(machine):\(path)")
-        return path
+    /// Sends local files and folders to ~/etd-downloads on a machine. It
+    /// shows on the session's terminal (`session`), or under the machine in
+    /// the sidebar; `delivered` runs when it is done.
+    @discardableResult
+    func send(_ urls: [URL], to machine: String, session: String?,
+              delivered: @escaping (Delivered) -> Void = { _ in }) -> FileSend? {
+        guard !urls.isEmpty else { return nil }
+        let host: IrohHost
+        do {
+            let (routed, api) = try route(machine)
+            guard api == nil else { throw HostError.other("\(machine) is reached by ssh; files can't be sent there yet") }
+            host = routed
+        } catch {
+            flash("Can't send to \(machine): \(Self.describe(error))")
+            return nil
+        }
+        let send = FileSend(machine: machine, session: session, names: urls.map(\.lastPathComponent))
+        sends.append(send)
+        log.add("Sending \(urls.count) item(s) to \(machine)\(session.map { "/" + $0 } ?? "")")
+        let paths = urls.map(\.path)
+        send.task = Task {
+            do {
+                let result = try await host.sendFiles(paths, session: session) { done, total in
+                    Task { @MainActor in send.progress(done: done, total: total) }
+                }
+                guard !send.cancelled else { return }
+                log.add("Sent to \(machine): \(result.paths.joined(separator: " "))\(result.typed ? " (typed by etd)" : "")")
+                if session == nil {
+                    send.paths = result.paths
+                } else {
+                    sends.removeAll { $0 === send }
+                }
+                delivered(result)
+            } catch {
+                guard !send.cancelled else { return }
+                log.add("Send to \(machine) failed: \(error)")
+                if session == nil {
+                    send.error = Self.describe(error)
+                } else {
+                    sends.removeAll { $0 === send }
+                    flash("Send failed: \(Self.describe(error))")
+                }
+            }
+        }
+        return send
+    }
+
+    /// Stops a send, or hides a finished one.
+    func dismiss(_ send: FileSend) {
+        if send.isRunning {
+            send.cancelled = true
+            send.task?.cancel()
+            log.add("Send to \(send.machine) cancelled")
+        }
+        sends.removeAll { $0 === send }
+    }
+
+    func sends(to machine: String, session: String?) -> [FileSend] {
+        sends.filter { $0.machine == machine && $0.session == session }
+    }
+
+    /// Files for the Send Files window (no duplicates).
+    func queueSend(_ urls: [URL]) {
+        for url in urls where !pendingSend.contains(url) { pendingSend.append(url) }
     }
 
     // MARK: - The etd network
@@ -646,4 +703,38 @@ final class DebugLog {
     }
 
     var text: String { lines.joined(separator: "\n") }
+}
+
+/// One `sendFiles` call: its progress, then its paths or error.
+@MainActor @Observable
+final class FileSend: Identifiable {
+    let machine: String
+    let session: String?
+    let names: [String]
+    private(set) var done: UInt64 = 0
+    private(set) var total: UInt64 = 0
+    /// Where the items landed (machine sends; session sends type them).
+    var paths: [String]?
+    var error: String?
+    @ObservationIgnored var cancelled = false
+    @ObservationIgnored var task: Task<Void, Never>?
+
+    init(machine: String, session: String?, names: [String]) {
+        self.machine = machine
+        self.session = session
+        self.names = names
+    }
+
+    var isRunning: Bool { paths == nil && error == nil }
+
+    var label: String { names.count == 1 ? names[0] : "\(names.count) items" }
+
+    /// 0…1, nil before the size is known.
+    var fraction: Double? { total == 0 ? nil : Double(done) / Double(total) }
+
+    func progress(done: UInt64, total: UInt64) {
+        guard isRunning else { return }
+        self.done = done
+        self.total = total
+    }
 }

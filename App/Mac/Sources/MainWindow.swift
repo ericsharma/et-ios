@@ -6,6 +6,7 @@ import SwiftUI
 struct MainWindow: View {
     @Environment(Fleet.self) private var fleet
     @Environment(Setup.self) private var setup
+    @Environment(\.openWindow) private var openWindow
     @State private var selection: SessionRef?
     @State private var showingNewSession = false
     @State private var renaming: SessionRef?
@@ -62,6 +63,12 @@ struct MainWindow: View {
             }
         }
         .animation(.default, value: fleet.notice)
+        // A drop on the Dock icon: pick a machine for it.
+        .onOpenURL { url in
+            guard url.isFileURL else { return }
+            fleet.queueSend([url])
+            openWindow(id: "send")
+        }
         .onChange(of: fleet.requestedRef) { _, ref in
             guard let ref else { return }
             selection = ref
@@ -138,6 +145,8 @@ struct Sidebar: View {
     @Binding var selection: SessionRef?
     let rename: (SessionRef) -> Void
     let end: (SessionRef) -> Void
+    /// The machine a drag of files is over.
+    @State private var dropTarget: String?
 
     var body: some View {
         List(selection: $selection) {
@@ -152,6 +161,7 @@ struct Sidebar: View {
                         let ref = SessionRef(machine: machine.name, name: info.name)
                         SessionRow(info: info)
                             .tag(ref)
+                            .dropDestination(for: URL.self) { urls, _ in drop(urls, on: machine.name) }
                             .contextMenu {
                                 Button("Open in New Window") { openWindow(value: ref) }
                                 Button("Rename…") { rename(ref) }
@@ -159,14 +169,35 @@ struct Sidebar: View {
                                 Button("End Session…", role: .destructive) { end(ref) }
                             }
                     }
+                    ForEach(fleet.sends(to: machine.name, session: nil)) { send in
+                        MachineSendRow(send: send)
+                    }
                 } header: {
+                    // Files dropped on a machine go to its ~/etd-downloads.
                     Text(machine.name)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4).padding(.vertical, 2)
+                        .background(dropTarget == machine.name ? Theme.accent.opacity(0.3) : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: 5))
+                        .dropDestination(for: URL.self) { urls, _ in
+                            drop(urls, on: machine.name)
+                        } isTargeted: { over in
+                            if over { dropTarget = machine.name } else if dropTarget == machine.name { dropTarget = nil }
+                        }
+                        .help("Drop files here to send them to \(machine.name)")
                 }
             }
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) { StatusLine() }
         .refreshable { await fleet.refreshMachines() }
+    }
+
+    private func drop(_ urls: [URL], on machine: String) -> Bool {
+        let files = urls.filter(\.isFileURL)
+        guard !files.isEmpty else { return false }
+        fleet.send(files, to: machine, session: nil)
+        return true
     }
 }
 
@@ -264,6 +295,7 @@ struct TerminalScreen: View {
                 if let terminal {
                     TerminalPane(terminal: terminal)
                     overlay(for: terminal)
+                    TerminalSends(ref: terminal.ref)
                     ListeningBubble(terminal: terminal, voice: voice)
                 }
             }
@@ -416,6 +448,12 @@ struct ETCommands: Commands {
             Button("New Session…") { actions?.newSession() }
                 .keyboardShortcut("t")
                 .disabled(actions == nil)
+            Button("Send File…") {
+                guard let urls = SendFilesWindow.pick() else { return }
+                fleet.queueSend(urls)
+                openWindow(id: "send")
+            }
+            .keyboardShortcut("s", modifiers: [.command, .shift])
         }
         CommandMenu("Session") {
             Button("Next Session") { actions?.step(1) }

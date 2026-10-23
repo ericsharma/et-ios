@@ -156,6 +156,13 @@ final class IrohHost: HostConnection, @unchecked Sendable {
         _ = try await mapped { try await host.upload(path: path, data: data) }
     }
 
+    /// Sends local files and folders to ~/etd-downloads on this machine
+    /// (PLAN-files F3). `session`: the manymux session the paths are for.
+    func sendFiles(_ paths: [String], session: String?,
+                   progress: @escaping @Sendable (UInt64, UInt64) -> Void) async throws -> Delivered {
+        try await mapped { try await host.sendFiles(paths: paths, session: session, progress: ProgressRelay(progress)) }
+    }
+
     func close() async {
         host.close()
     }
@@ -429,6 +436,19 @@ final class IrohControlChannel: ControlChannel, @unchecked Sendable {
     /// Closes tmux's stdin. tmux detaches; the session keeps running.
     func close() async {
         await control.finish()
+    }
+}
+
+/// `SendProgress` as a closure.
+private final class ProgressRelay: SendProgress {
+    private let update: @Sendable (UInt64, UInt64) -> Void
+
+    init(_ update: @escaping @Sendable (UInt64, UInt64) -> Void) {
+        self.update = update
+    }
+
+    func onProgress(done: UInt64, total: UInt64) {
+        update(done, total)
     }
 }
 
