@@ -36,7 +36,6 @@
 		7ABFAB899E15B83CE5845EA0 /* Manymux.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BE76CB262FB7EA0605C99EB /* Manymux.swift */; };
 		7B7A1AB52E7AAEB0D5283959 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB367F7DC192EBCCA06508BC /* AppModel.swift */; };
 		7E75886C82FBA663C296E12F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 65A00CC919987D56EC6D81C2 /* Assets.xcassets */; };
-		82FC49AD90B30580B19643B7 /* SendFilesStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EBA8A4527E74FD3E0F166E3 /* SendFilesStub.swift */; };
 		8401EF3426B8C649284DC663 /* MainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89DB0886F532D6DAE2B499B3 /* MainWindow.swift */; };
 		893A4346740B9772C37B287C /* MachinesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15F85597F66DBB0CC3A093AF /* MachinesView.swift */; };
 		8EAA58E1D8A3A674820C9F67 /* ETMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C423DF1A7824BFB0B4AB4556 /* ETMacApp.swift */; };
@@ -55,7 +54,6 @@
 		DCC53456F454E5F2E4EB4A14 /* Manymux.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BE76CB262FB7EA0605C99EB /* Manymux.swift */; };
 		EB28BC4D4608DBE3C2FD9D80 /* Vocabulary.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5E31C39DDE31580DBCAB4E /* Vocabulary.swift */; };
 		EEBCAA1A936538064AF9140F /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = E77D439CE39322DFC4891B39 /* ETCore */; };
-		EF90A78E7BD8218A8A6B0D32 /* SendFilesStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EBA8A4527E74FD3E0F166E3 /* SendFilesStub.swift */; };
 		F8F1BACDD89A3936FDBA3DCA /* ETApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE328D04440F47561CB04404 /* ETApp.swift */; };
 /* End PBXBuildFile section */
 
@@ -70,7 +68,6 @@
 		23D00D38126433369DDB5E17 /* Copilot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Copilot.swift; sourceTree = "<group>"; };
 		36A4263F016A81FE6C5B2B5E /* Overview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Overview.swift; sourceTree = "<group>"; };
 		3A02635506A8CBB96DC1C6C9 /* ET-mac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ET-mac.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		3EBA8A4527E74FD3E0F166E3 /* SendFilesStub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendFilesStub.swift; sourceTree = "<group>"; };
 		3FDD228A576819287E908B47 /* SwiftTerm */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SwiftTerm; path = ../Vendor/SwiftTerm; sourceTree = SOURCE_ROOT; };
 		44366E16603D79FB4DCAF6D2 /* SessionTerminal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTerminal.swift; sourceTree = "<group>"; };
 		4880DD1374C363AFA5C69F37 /* Iroh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Iroh.swift; sourceTree = "<group>"; };
@@ -205,7 +202,6 @@
 				A4A3A124DA65B9FD17453340 /* AppInfo.swift */,
 				4880DD1374C363AFA5C69F37 /* Iroh.swift */,
 				4BE76CB262FB7EA0605C99EB /* Manymux.swift */,
-				3EBA8A4527E74FD3E0F166E3 /* SendFilesStub.swift */,
 				591C2444EF4A2214A0249778 /* VocabMatcher.swift */,
 			);
 			path = Shared;
@@ -391,7 +387,6 @@
 				0AEEC656192348D8F9AC0E89 /* Iroh.swift in Sources */,
 				8401EF3426B8C649284DC663 /* MainWindow.swift in Sources */,
 				DCC53456F454E5F2E4EB4A14 /* Manymux.swift in Sources */,
-				EF90A78E7BD8218A8A6B0D32 /* SendFilesStub.swift in Sources */,
 				A6CF789B277F4329F0C57693 /* SessionTerminal.swift in Sources */,
 				02C471DF674A9FDDD8D315B1 /* SettingsView.swift in Sources */,
 				B49C06222B399FE2F004842A /* Setup.swift in Sources */,
@@ -418,7 +413,6 @@
 				3A3285F4C8B435AFADFA4F39 /* Push.swift in Sources */,
 				31F3F13EE8608AD5117FAEC7 /* QRScanner.swift in Sources */,
 				39EA59E5D48AE69A7807B9A0 /* SelectMode.swift in Sources */,
-				82FC49AD90B30580B19643B7 /* SendFilesStub.swift in Sources */,
 				5DDBE00FB490CBC8C3CE2B31 /* SessionController.swift in Sources */,
 				7019904934883F3AD44F1675 /* Speaker.swift in Sources */,
 				5AF0ADD6EBFE20C5D372C10F /* Templates.swift in Sources */,

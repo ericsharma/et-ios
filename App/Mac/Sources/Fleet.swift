@@ -262,7 +262,7 @@ final class Fleet {
     /// the sidebar; `delivered` runs when it is done.
     @discardableResult
     func send(_ urls: [URL], to machine: String, session: String?,
-              delivered: @escaping (Delivered) -> Void = { _ in }) -> FileSend? {
+              delivered: @escaping (SentFiles) -> Void = { _ in }) -> FileSend? {
         guard !urls.isEmpty else { return nil }
         let host: IrohHost
         do {
@@ -278,6 +278,10 @@ final class Fleet {
         log.add("Sending \(urls.count) item(s) to \(machine)\(session.map { "/" + $0 } ?? "")")
         let paths = urls.map(\.path)
         send.task = Task {
+            // The machine reads the files during the send: keep access
+            // to dropped files until it returns.
+            let scoped = urls.filter { $0.startAccessingSecurityScopedResource() }
+            defer { for url in scoped { url.stopAccessingSecurityScopedResource() } }
             do {
                 let result = try await host.sendFiles(paths, session: session) { done, total in
                     Task { @MainActor in send.progress(done: done, total: total) }
@@ -732,6 +736,7 @@ final class FileSend: Identifiable {
     /// 0…1, nil before the size is known.
     var fraction: Double? { total == 0 ? nil : Double(done) / Double(total) }
 
+    /// `done` comes from the machine and starts from 0 again on a resend.
     func progress(done: UInt64, total: UInt64) {
         guard isRunning else { return }
         self.done = done

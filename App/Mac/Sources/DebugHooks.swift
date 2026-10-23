@@ -6,6 +6,8 @@ import AppKit
 ///   --snapshot <file.png>     every 3 s, draw the front window into a PNG
 ///   --spawn <machine:command>  start a session and show it
 ///   --type <text>             after 6 s, type into the selected session
+///   --drop <file>             once the shown session is live, send the file
+///                             as a drop on its terminal does
 @MainActor
 enum DebugHooks {
     static func run(_ fleet: Fleet) {
@@ -38,6 +40,18 @@ enum DebugHooks {
                 try? await Task.sleep(for: .seconds(6))
                 for terminal in fleet.terminals.values where terminal.isVisible {
                     terminal.send(Array(text.replacingOccurrences(of: "\\n", with: "\r").utf8))
+                }
+            }
+        }
+        if let path = value("--drop") {
+            Task {
+                while true {
+                    try? await Task.sleep(for: .milliseconds(500))
+                    if let terminal = fleet.terminals.values.first(where: { $0.isVisible && $0.status == .live }) {
+                        fleet.log.add("Debug drop of \(path) on \(terminal.ref.id)")
+                        terminal.sendFiles([URL(fileURLWithPath: path)])
+                        return
+                    }
                 }
             }
         }

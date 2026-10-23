@@ -159,8 +159,11 @@ final class IrohHost: HostConnection, @unchecked Sendable {
     /// Sends local files and folders to ~/etd-downloads on this machine
     /// (PLAN-files F3). `session`: the manymux session the paths are for.
     func sendFiles(_ paths: [String], session: String?,
-                   progress: @escaping @Sendable (UInt64, UInt64) -> Void) async throws -> Delivered {
-        try await mapped { try await host.sendFiles(paths: paths, session: session, progress: ProgressRelay(progress)) }
+                   progress: @escaping @Sendable (UInt64, UInt64) -> Void) async throws -> SentFiles {
+        let delivered = try await mapped {
+            try await host.sendFiles(paths: paths, session: session, progress: ProgressRelay(progress))
+        }
+        return SentFiles(paths: delivered.paths, typed: delivered.typed)
     }
 
     func close() async {
@@ -437,6 +440,13 @@ final class IrohControlChannel: ControlChannel, @unchecked Sendable {
     func close() async {
         await control.finish()
     }
+}
+
+/// EtLink's `Delivered`: the top-level paths in ~/etd-downloads on the
+/// machine, and whether etd typed them into the session.
+struct SentFiles: Sendable {
+    var paths: [String]
+    var typed: Bool
 }
 
 /// `SendProgress` as a closure.
