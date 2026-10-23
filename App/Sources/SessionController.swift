@@ -232,6 +232,9 @@ final class SessionController {
     /// One event feed per machine connection: the hub's, and each network machine's.
     @ObservationIgnored private var mmEventFeeds: [String: MmEventFeed] = [:]
     @ObservationIgnored private var mmRefreshTask: Task<Void, Never>?
+    /// What the pending refresh lists: every machine, or only these.
+    @ObservationIgnored private var mmRefreshAll = false
+    @ObservationIgnored private var mmRefreshNames: Set<String> = []
 
     // The etd network (PLAN-network §4.7, N5)
     /// The network from the hub's etd; nil until loaded, or if its etd has none.
@@ -1539,10 +1542,11 @@ extension SessionController {
             self?.mmConnectionEnded(host, error: error)
         })
         startMmEvents(host, machine: hubName ?? hostName, hub: host)
-        // The ring (and Machines) stays current: every 5 s while connected.
+        // Each machine's events refresh its list; a full list every 30 s in
+        // case an event was missed. (Every `mm` call is an `mm agent` start.)
         tasks.append(Task {
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(5))
+                try? await Task.sleep(for: .seconds(30))
                 guard !Task.isCancelled, (self.connection as? IrohHost) === host else { return }
                 await self.refreshMachines()
             }
@@ -1633,9 +1637,9 @@ extension SessionController {
                         self.log.add("\(name): connection ended: \(error)")
                         self.dropMember(name)
                         self.mmHostErrors[name] = Self.describeMm(error)
-                        self.scheduleMmRefresh()
+                        self.scheduleMmRefresh(name)
                     })
-                    self.scheduleMmRefresh()
+                    self.scheduleMmRefresh(name)
                 } catch {
                     self.log.add("\(name): \(error)")
                     self.mmHostErrors[name] = Self.describeMm(error)
@@ -1711,9 +1715,7 @@ extension SessionController {
                         let (host, machine) = try route.get()
                         return (i, MmMachine(name: name, sessions: try await host.mmList(machine: machine)))
                     } catch {
-                        let text = Self.describeMm(error)
-                        let shown = !direct || text.hasPrefix("Not reachable") || text == "Connecting…" ? text : "Not reachable: \(text)"
-                        return (i, MmMachine(name: name, sessions: [], error: shown))
+                        return (i, MmMachine(name: name, sessions: [], error: Self.listError(error, direct: direct)))
                     }
                 }
             }
@@ -1725,6 +1727,32 @@ extension SessionController {
         if listed != machines { machines = listed }
         syncPages()
         if currentWindow == nil { await checkCheckpoint(host) }
+    }
+
+    /// One machine's list, after one of its events; the others stay as
+    /// they are. A machine not on the screen yet gets the full list.
+    private func refreshMachine(_ name: String) async {
+        guard let host = connection as? IrohHost else { return }
+        guard machines.contains(where: { $0.name == name }) else {
+            await refreshMachines()
+            return
+        }
+        let direct = networkMachines.contains { $0.name == name }
+        let listed: MmMachine
+        do {
+            let (target, machine) = try route(name)
+            listed = MmMachine(name: name, sessions: try await target.mmList(machine: machine))
+        } catch {
+            listed = MmMachine(name: name, sessions: [], error: Self.listError(error, direct: direct))
+        }
+        guard (connection as? IrohHost) === host, let i = machines.firstIndex(where: { $0.name == name }) else { return }
+        if machines[i] != listed { machines[i] = listed }
+        syncPages()
+    }
+
+    nonisolated private static func listError(_ error: any Error, direct: Bool) -> String {
+        let text = describeMm(error)
+        return !direct || text.hasPrefix("Not reachable") || text == "Connecting…" ? text : "Not reachable: \(text)"
     }
 
     /// Machines screen: compares the hub's checkpoint with the ring.
@@ -1773,13 +1801,22 @@ extension SessionController {
     }
 
     /// Events come in bursts (title changes); one list a second is enough.
-    private func scheduleMmRefresh() {
+    /// `machine`: only that machine's list; nil: every machine's.
+    private func scheduleMmRefresh(_ machine: String? = nil) {
+        if let machine { mmRefreshNames.insert(machine) } else { mmRefreshAll = true }
         guard mmRefreshTask == nil else { return }
         mmRefreshTask = Task {
             try? await Task.sleep(for: .seconds(1))
             mmRefreshTask = nil
+            let all = mmRefreshAll, names = mmRefreshNames
+            mmRefreshAll = false
+            mmRefreshNames = []
             guard !Task.isCancelled else { return }
-            await refreshMachines()
+            if all {
+                await refreshMachines()
+            } else {
+                for name in names.sorted() { await refreshMachine(name) }
+            }
         }
     }
 
@@ -2023,7 +2060,7 @@ extension SessionController {
             link.sessionSize = (cols, rows)
             page.terminal.setSize(cols: cols, rows: rows)
         case .event:
-            scheduleMmRefresh()
+            scheduleMmRefresh(link.machine)
         case .renamed(let name, let refused):
             if let name {
                 log.add("Renamed \(link.name) → \(name)")
@@ -2031,7 +2068,7 @@ extension SessionController {
                 link.name = name
                 page.name = name
                 mmPages[link.machine + "/" + name] = page
-                scheduleMmRefresh()
+                scheduleMmRefresh(link.machine)
             } else {
                 flash("Rename refused: \(refused ?? "?")")
             }
@@ -2121,12 +2158,14 @@ extension SessionController {
                 } catch {
                     guard alive() else { return }
                     self.log.add("manymux events (\(machine)): \(error)")
-                    try? await Task.sleep(for: .seconds(5))
+                    try? await Task.sleep(for: .seconds(2))
                 }
             }
         })
     }
 
+    /// A bell sets the page's dot (no list); a session that started, ended
+    /// or changed its title lists its machine again.
     private func mmEvent(_ event: MmEventInfo) {
         switch event.kind {
         case .bell, .notify:
@@ -2138,11 +2177,11 @@ extension SessionController {
             } else {
                 UINotificationFeedbackGenerator().notificationOccurred(.warning)
                 flash("\(event.machine)/\(event.session) needs you")
+                scheduleMmRefresh(event.machine)
             }
         case .titleChanged, .exited, .started:
-            break
+            scheduleMmRefresh(event.machine)
         }
-        scheduleMmRefresh()
     }
 
     func flash(_ text: String) {

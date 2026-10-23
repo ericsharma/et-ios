@@ -308,6 +308,9 @@ final class AppModel {
             if let session, session.isDisconnected, activeServerID != nil {
                 log.add("Foreground: reconnecting")
                 session.reconnect()
+            } else if let session, session.mode == .manymux {
+                // Kept connected in the background: lists may be stale.
+                Task { await session.refreshMachines() }
             }
         default:
             break
