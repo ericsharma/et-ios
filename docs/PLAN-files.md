@@ -74,7 +74,7 @@ Response::Delivered { paths: Vec<String>, typed: bool }
 
 ### 4.3 etd
 
-- `crates/etd/src/files.rs`: `FsStore` under the state directory (`blobs/`), the blobs protocol handler with `Intercept` (members of the network only, devices and machines), export to Downloads (D3), clean-up of blobs with no tag at start and each hour.
+- `crates/etd/src/files.rs`: `FsStore` under the state directory (`blobs/`), the blobs protocol handler with `Intercept` (members of the network only, devices and machines), export to `~/etd-downloads/` (D3), clean-up of blobs with no tag at start and each hour.
 - CLI (sends through the local etd over its socket, as `etd-ssh` does):
   - `etd send <path>… <machine>[:<session>]`. A path can be a file or a folder. Progress on stderr. Prints the paths on the target, one per line, so Claude can read them.
   - Names: machine names from `etd members`; `<session>` is the manymux session name on that machine.
@@ -105,7 +105,7 @@ Response::Delivered { paths: Vec<String>, typed: bool }
 | Step | Owner | What | Done when |
 |---|---|---|---|
 | F0 | A | Spike: iroh-blobs 0.103.1 + `FsStore` in et-link builds for iOS (device + simulator) with the netdev patch; push from a test endpoint into a test etd store | `scripts/build-ios.sh` passes; a 200 MB push arrives. If iOS fails: stop and ask the owner (fallback = the et/1 `Put` design, git history of this file) |
-| F1 | A | etd: `files.rs`, blobs handler with member check, `Deliver` with `session: None`, Downloads names, clean-up, PROTOCOL.md. Tests: file and folder delivered; resume after a cut at 50 %; a non-member is refused | `cargo test` passes |
+| F1 | A | etd: `files.rs`, blobs handler with member check, `Deliver` with `session: None`, names in `~/etd-downloads/`, clean-up, PROTOCOL.md. Tests: file and folder delivered; resume after a cut at 50 %; a non-member is refused | `cargo test` passes |
 | F2 | A | `etd send <path>… <machine>` | From trigkey, a folder lands in gmktec's `~/etd-downloads/`; deployed to trigkey + gmktec; etd tagged `v0.0.3` |
 | F3 | A | et-link `Link.send` with progress and cancel | et-link test: send from disk, resume after cancel |
 | F4 | A | `Deliver { session: Some }` and `etd send … machine:session`: type the paths into a manymux session through the agent protocol, without resizing it. Check manymux's protocol first; if typing needs an attach that resizes, report to the owner before building | `etd send x.png mac-mini:claude` from trigkey puts the path in the mac-mini Claude prompt |
