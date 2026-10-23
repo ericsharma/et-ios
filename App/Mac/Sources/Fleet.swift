@@ -243,6 +243,14 @@ final class Fleet {
         return (host, nil)
     }
 
+    /// Every machine with its own connection (hub and network machines),
+    /// by name: the Shared Files list asks each.
+    func directHosts() -> [String: IrohHost] {
+        var hosts = mmHosts
+        if let hubHost, let hubName { hosts[hubName] = hubHost }
+        return hosts
+    }
+
     /// The network's machines other than the hub, by name.
     private var networkMachines: [NetMember] {
         (network?.members ?? [])

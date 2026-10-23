@@ -318,6 +318,7 @@ struct SessionView: View {
     @State private var showLog = false
     @State private var showVocabulary = false
     @State private var showNetwork = false
+    @State private var showFiles = false
     /// Brief message under the header (e.g. no "Next:" to read).
     @State private var notice: String?
     @State private var showReadAloud = false
@@ -403,6 +404,13 @@ struct SessionView: View {
                 }
             }
         }
+        .sheet(isPresented: $showFiles) {
+            NavigationStack {
+                FilesView(session: session).toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { showFiles = false } }
+                }
+            }
+        }
         .sheet(isPresented: $showNetwork) {
             NavigationStack {
                 NetworkView(session: session).toolbar {
@@ -480,6 +488,8 @@ struct SessionView: View {
                     if session.server.isIroh {
                         Button("Network", systemImage: "point.3.connected.trianglepath.dotted") { showNetwork = true }
                             .disabled(session.state != .connected)
+                        Button("Files", systemImage: "folder") { showFiles = true }
+                            .disabled(session.state != .connected || session.mode != .manymux)
                     }
                     Button("Dictation words", systemImage: "character.book.closed") { showVocabulary = true }
                     Button(session.copilotMode ? "Close Copilot" : "Copilot", systemImage: "sparkles") { session.copilotMode.toggle() }

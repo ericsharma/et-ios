@@ -7,11 +7,13 @@ struct ETMacApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var fleet: Fleet
     @State private var setup: Setup
+    @State private var files: SharedFiles
 
     init() {
         let fleet = Fleet()
         _fleet = State(initialValue: fleet)
         _setup = State(initialValue: Setup(fleet: fleet))
+        _files = State(initialValue: SharedFiles(hosts: { fleet.directHosts() }, log: { fleet.log.add($0) }))
     }
 
     var body: some Scene {
@@ -20,6 +22,7 @@ struct ETMacApp: App {
             MainWindow(initial: ref)
                 .environment(fleet)
                 .environment(setup)
+                .environment(files)
                 .onAppear {
                     AppDelegate.fleet = fleet
                     if !AppDelegate.setupStarted {

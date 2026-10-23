@@ -1,4 +1,5 @@
 import ETCore
+import QuickLook
 import SwiftUI
 
 /// One window: every machine's sessions on the left, the selected session's
@@ -147,6 +148,8 @@ struct Sidebar: View {
     let end: (SessionRef) -> Void
     /// The machine a drag of files is over.
     @State private var dropTarget: String?
+    @Environment(SharedFiles.self) private var files
+    @State private var picking: SharedFilePick?
 
     var body: some View {
         List(selection: $selection) {
@@ -187,10 +190,62 @@ struct Sidebar: View {
                         .help("Drop files here to send them to \(machine.name)")
                 }
             }
+            filesSection
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) { StatusLine() }
         .refreshable { await fleet.refreshMachines() }
+        .quickLookPreview(Binding(get: { files.preview }, set: { files.preview = $0 }))
+        .sheet(item: $picking) { pick in
+            SharedFilePicker(pick: pick, files: files, machines: fleet.machines)
+        }
+        // The list again every 30 s, when connected, and after each send.
+        .task(id: fleet.phase) {
+            guard fleet.phase == .ready else { return }
+            while !Task.isCancelled {
+                files.reload()
+                try? await Task.sleep(for: .seconds(30))
+            }
+        }
+        .onChange(of: fleet.sends.count) { old, new in if new < old { files.reload() } }
+        .onChange(of: files.notice) { _, notice in
+            guard let notice else { return }
+            fleet.flash(notice)
+            files.notice = nil
+        }
+    }
+
+    /// Every file sent to any machine (PLAN-files §4.7): click for Quick
+    /// Look, right-click for the rest.
+    @ViewBuilder private var filesSection: some View {
+        Section {
+            if files.items.isEmpty {
+                Text(files.loading ? "Loading…" : "No files yet. Drop one on a machine or a terminal.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(files.items) { item in
+                SharedFileRow(item: item, progress: files.busy[item.id])
+                    .contentShape(Rectangle())
+                    .onTapGesture { files.open(item) }
+                    .contextMenu {
+                        SharedFileActions(item: item, files: files, machines: fleet.machines, picking: $picking)
+                    }
+                    .help(item.machine + ":" + item.path)
+            }
+            if !files.unanswered.isEmpty {
+                Text("Not answering: \(files.unanswered.joined(separator: ", "))")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        } header: {
+            HStack {
+                Text("Files")
+                Spacer()
+                if files.loading { ProgressView().controlSize(.mini) }
+                Button { files.reload() } label: { Image(systemName: "arrow.clockwise") }
+                    .buttonStyle(.borderless)
+                    .help("Refresh the file list")
+            }
+        }
     }
 
     private func drop(_ urls: [URL], on machine: String) -> Bool {

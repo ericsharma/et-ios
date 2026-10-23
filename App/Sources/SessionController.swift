@@ -1557,6 +1557,14 @@ extension SessionController {
         return (host, nil)
     }
 
+    /// Every machine with its own connection (hub and network machines),
+    /// by name: the Files screen asks each.
+    func directHosts() -> [String: IrohHost] {
+        var hosts = mmHosts
+        if let hub = connection as? IrohHost, let hubName { hosts[hubName] = hub }
+        return hosts
+    }
+
     /// The network's machines other than the hub, by name.
     private var networkMachines: [NetMember] {
         (network?.members ?? [])

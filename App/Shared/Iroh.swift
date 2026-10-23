@@ -166,6 +166,37 @@ final class IrohHost: HostConnection, @unchecked Sendable {
         return SentFiles(paths: delivered.paths, typed: delivered.typed)
     }
 
+    // MARK: - Shared files (PLAN-files §4.7)
+
+    /// The files sent to this machine that are still there, newest first.
+    func sharedFiles() async throws -> [SharedItem] {
+        try await mapped { try await host.sharedFiles() }.map {
+            SharedItem(machine: $0.machine, path: $0.path, name: $0.name, size: $0.size, isDir: $0.isDir,
+                       from: $0.from, received: Date(timeIntervalSince1970: TimeInterval($0.received)), session: $0.session)
+        }
+    }
+
+    /// Copies a shared file from this machine into the local folder `into`;
+    /// returns its local path.
+    func fetchFile(_ path: String, into folder: String,
+                   progress: @escaping @Sendable (UInt64, UInt64) -> Void) async throws -> String {
+        try await mapped { try await host.fetchFile(path: path, into: folder, progress: ProgressRelay(progress)) }
+    }
+
+    /// A shared file again: typed into `session` here (`to` = this
+    /// machine), or sent from here to `to` and typed there.
+    func shareFile(_ path: String, to machine: String, session: String?,
+                   progress: @escaping @Sendable (UInt64, UInt64) -> Void) async throws -> SentFiles {
+        let delivered = try await mapped {
+            try await host.shareFile(path: path, to: machine, session: session, progress: ProgressRelay(progress))
+        }
+        return SentFiles(paths: delivered.paths, typed: delivered.typed)
+    }
+
+    func unshareFile(_ path: String) async throws {
+        try await mapped { try await host.unshareFile(path: path) }
+    }
+
     func close() async {
         host.close()
     }
@@ -440,6 +471,22 @@ final class IrohControlChannel: ControlChannel, @unchecked Sendable {
     func close() async {
         await control.finish()
     }
+}
+
+/// EtLink's `SharedFile`: a file or folder sent to a machine.
+struct SharedItem: Sendable, Hashable, Identifiable {
+    /// The network's name for the machine it is on.
+    var machine: String
+    var path: String
+    var name: String
+    var size: UInt64
+    var isDir: Bool
+    /// Who sent it (member name).
+    var from: String
+    var received: Date
+    /// The session it was typed into, if any.
+    var session: String?
+    var id: String { machine + ":" + path }
 }
 
 /// EtLink's `Delivered`: the top-level paths in ~/etd-downloads on the
