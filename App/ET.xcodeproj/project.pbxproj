@@ -19,6 +19,7 @@
 		39EA59E5D48AE69A7807B9A0 /* SelectMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FE7D921D5CAA4506B3FD10C /* SelectMode.swift */; };
 		3A3285F4C8B435AFADFA4F39 /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3251CE9C9BA08235AF09F96 /* Push.swift */; };
 		45D6BA62083244C784927078 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC2C774B86C691F339F5290 /* Views.swift */; };
+		4CF65DB10F288E2D0C2D525B /* Bars.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19174F7966F0E207A7456BC3 /* Bars.swift */; };
 		5513D8628FF9265A5B7C110D /* DebugHooks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6567BD006FC3985DF01BE526 /* DebugHooks.swift */; };
 		58F3229B35D71250C678BC3D /* Iroh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4880DD1374C363AFA5C69F37 /* Iroh.swift */; };
 		5AF0ADD6EBFE20C5D372C10F /* Templates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E147244B49816415D5E26BA /* Templates.swift */; };
@@ -29,6 +30,7 @@
 		6F005C5539A7B64474934977 /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = ACB31B6DE076A6AEE0E31967 /* ETCore */; };
 		7019904934883F3AD44F1675 /* Speaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD862AA08B0790FEA8C32121 /* Speaker.swift */; };
 		71DCD98736F4928BF2983F28 /* AppInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4A3A124DA65B9FD17453340 /* AppInfo.swift */; };
+		77ED11F2C14086DA337E9883 /* VoiceInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB2420D4BA60D70DBDC8885A /* VoiceInput.swift */; };
 		791E79EFC8C8971FEE5123D4 /* Fleet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C2F45FF4381091649F20834 /* Fleet.swift */; };
 		7ABFAB899E15B83CE5845EA0 /* Manymux.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BE76CB262FB7EA0605C99EB /* Manymux.swift */; };
 		7B7A1AB52E7AAEB0D5283959 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB367F7DC192EBCCA06508BC /* AppModel.swift */; };
@@ -61,6 +63,7 @@
 		10890B81C05CE555FD81D008 /* NetworkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkView.swift; sourceTree = "<group>"; };
 		15F85597F66DBB0CC3A093AF /* MachinesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MachinesView.swift; sourceTree = "<group>"; };
 		175E8D2F9B6999615A8AAF59 /* VoiceInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInput.swift; sourceTree = "<group>"; };
+		19174F7966F0E207A7456BC3 /* Bars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bars.swift; sourceTree = "<group>"; };
 		23D00D38126433369DDB5E17 /* Copilot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Copilot.swift; sourceTree = "<group>"; };
 		36A4263F016A81FE6C5B2B5E /* Overview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Overview.swift; sourceTree = "<group>"; };
 		3A02635506A8CBB96DC1C6C9 /* ET-mac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ET-mac.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -89,6 +92,7 @@
 		D3251CE9C9BA08235AF09F96 /* Push.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Push.swift; sourceTree = "<group>"; };
 		DD862AA08B0790FEA8C32121 /* Speaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Speaker.swift; sourceTree = "<group>"; };
 		DE5E31C39DDE31580DBCAB4E /* Vocabulary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vocabulary.swift; sourceTree = "<group>"; };
+		EB2420D4BA60D70DBDC8885A /* VoiceInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInput.swift; sourceTree = "<group>"; };
 		EE328D04440F47561CB04404 /* ETApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ETApp.swift; sourceTree = "<group>"; };
 		F6F7CAF25144AE01A1FD0AB2 /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
 		FFCBF94AC41590A9B15E7FAA /* KeyRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyRow.swift; sourceTree = "<group>"; };
@@ -124,6 +128,7 @@
 		14BF4662E9CBBE79EA851017 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				19174F7966F0E207A7456BC3 /* Bars.swift */,
 				6567BD006FC3985DF01BE526 /* DebugHooks.swift */,
 				C423DF1A7824BFB0B4AB4556 /* ETMacApp.swift */,
 				9C2F45FF4381091649F20834 /* Fleet.swift */,
@@ -132,6 +137,7 @@
 				6FBEC799A622722D593EB86B /* SettingsView.swift */,
 				63189CD29B6FB5728F823465 /* Setup.swift */,
 				F6F7CAF25144AE01A1FD0AB2 /* SetupView.swift */,
+				EB2420D4BA60D70DBDC8885A /* VoiceInput.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -370,6 +376,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				71DCD98736F4928BF2983F28 /* AppInfo.swift in Sources */,
+				4CF65DB10F288E2D0C2D525B /* Bars.swift in Sources */,
 				5513D8628FF9265A5B7C110D /* DebugHooks.swift in Sources */,
 				8EAA58E1D8A3A674820C9F67 /* ETMacApp.swift in Sources */,
 				791E79EFC8C8971FEE5123D4 /* Fleet.swift in Sources */,
@@ -381,6 +388,7 @@
 				B49C06222B399FE2F004842A /* Setup.swift in Sources */,
 				1F53A5401133E4C36EBC1B23 /* SetupView.swift in Sources */,
 				B7B2B9BE3BD4B283F11398E5 /* VocabMatcher.swift in Sources */,
+				77ED11F2C14086DA337E9883 /* VoiceInput.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -586,6 +594,7 @@
 			buildSettings = {
 				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "Mac/ET-mac.entitlements";
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -608,6 +617,7 @@
 			buildSettings = {
 				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "Mac/ET-mac.entitlements";
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
