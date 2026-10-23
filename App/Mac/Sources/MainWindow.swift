@@ -93,7 +93,7 @@ struct MainWindow: View {
                             rename: startRename, end: { ending = $0 })
                 Divider()
                 if let selection {
-                    TerminalScreen(selection: $selection, voice: voice)
+                    TerminalScreen(selection: $selection, voice: voice, step: step)
                         .id(selection)
                 } else {
                     Placeholder()
@@ -253,6 +253,8 @@ struct TerminalScreen: View {
     @Environment(Fleet.self) private var fleet
     @Binding var selection: SessionRef?
     let voice: VoiceInput
+    /// Next / previous tab, for a horizontal swipe on the terminal.
+    let step: (Int) -> Void
     @State private var terminal: SessionTerminal?
 
     var body: some View {
@@ -273,6 +275,7 @@ struct TerminalScreen: View {
             guard let selection else { return }
             let t = fleet.terminal(for: selection)
             t.isVisible = true
+            t.view.onSwipe = step
             terminal = t
         }
         .onDisappear { terminal?.isVisible = false }

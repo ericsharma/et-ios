@@ -29,6 +29,14 @@ extension NSColor {
 final class ETTerminalView: TerminalView {
     var onPasteImage: ((Data) -> Void)?
     var onDropFiles: (([URL]) -> Void)?
+    /// A horizontal swipe (two fingers on a trackpad, one on a Magic
+    /// Mouse): +1 when the fingers move left (next tab), -1 when right.
+    var onSwipe: ((Int) -> Void)?
+    private var swipeX: CGFloat = 0
+    private var swipeY: CGFloat = 0
+    /// Set once this gesture switched tabs, or turned out to be a scroll.
+    private var swipeDecided = false
+    private var swipeIsHorizontal = false
 
     override init(frame: CGRect, font: NSFont?) {
         super.init(frame: frame, font: font)
@@ -44,6 +52,49 @@ final class ETTerminalView: TerminalView {
             return
         }
         super.paste(sender)
+    }
+
+    /// Horizontal gestures switch tabs; everything else scrolls as usual.
+    /// SwiftTerm's `scrollWheel` can't be overridden, so a local event
+    /// monitor sees the events first and swallows a swipe's.
+    private var scrollMonitor: Any?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let scrollMonitor { NSEvent.removeMonitor(scrollMonitor) }
+        scrollMonitor = nil
+        guard window != nil else { return }
+        scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            guard let self, event.window === self.window, self.onSwipe != nil, event.hasPreciseScrollingDeltas,
+                  self.bounds.contains(self.convert(event.locationInWindow, from: nil)) else { return event }
+            return self.swipe(event) ? nil : event
+        }
+    }
+
+    /// True when the event is part of a tab swipe (then it doesn't scroll).
+    private func swipe(_ event: NSEvent) -> Bool {
+        if event.phase.contains(.began) {
+            swipeX = 0
+            swipeY = 0
+            swipeDecided = false
+            swipeIsHorizontal = false
+        }
+        // The momentum after a swipe belongs to it.
+        if event.phase.isEmpty, !event.momentumPhase.isEmpty { return swipeIsHorizontal }
+        if !swipeDecided {
+            swipeX += event.scrollingDeltaX
+            swipeY += event.scrollingDeltaY
+            if abs(swipeY) > 12, abs(swipeY) > abs(swipeX) {
+                swipeDecided = true
+            } else if abs(swipeX) > 50, abs(swipeX) > 2 * abs(swipeY) {
+                swipeDecided = true
+                swipeIsHorizontal = true
+                // With natural scrolling the deltas follow the fingers.
+                let fingers = event.isDirectionInvertedFromDevice ? swipeX : -swipeX
+                onSwipe?(fingers < 0 ? 1 : -1)
+            }
+        }
+        return swipeIsHorizontal || (!swipeDecided && abs(swipeX) > abs(swipeY))
     }
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation { .copy }
