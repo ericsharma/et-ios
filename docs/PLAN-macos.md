@@ -1,6 +1,6 @@
 # Plan: E.T. for macOS (client of every machine, and a machine itself)
 
-Status: 2026-10-23, DRAFT. Decisions D1–D5 wait for the owner. The Mac agent already started a macOS app; it adapts its work to this plan when the owner accepts it.
+Status: 2026-10-23, DRAFT. Decisions D1–D5 wait for the owner. The Mac agent already started a macOS app; it adapts its work to this plan when the owner accepts it. Owner requests (2026-10-23): before the D4 test, the trigkey session walks the owner through removing etd, manymux and every related file from m1-air (§5.1), so the app is tested from zero; the app shows a screen with the choice **Start a new network** / **Join a network** (§4.3).
 
 Follows [PLAN-network.md](PLAN-network.md). The m1-air test on 2026-10-23 (prebuilt etd v0.0.1, `etd install`, `etd join`) is the manual version of what this app does by itself.
 
@@ -39,7 +39,7 @@ The first start does what we did by hand on m1-air, with no terminal:
 | D1 | How do we ship it? | **Developer ID + notarized zip** (`scripts/mac-release`), copied to each Mac. Sparkle auto-update later. | Mac App Store / TestFlight: impossible without the sandboxed, client-only app. |
 | D2 | Which identity does the app use? | **The app is a device member** that pairs itself with the etd on its own Mac (`etd invite --url` → `Link.pair`). No change to etd or et-link. A Mac shows twice in `etd members`: `m1-air` (machine) and `m1-air app` (device). | The app uses the machine's key through etd's local socket: one member per Mac, but et-link needs a second transport and etd needs a request set for local clients. About 2 days more. |
 | D3 | Where is the code? | **A new native macOS target (`ET-mac`) in this repo**: SwiftUI + AppKit, sharing ETCore, EtLink and SwiftTerm (it has an AppKit `TerminalView`). Platform-free parts of `App/Sources` move into a shared folder. | Mac Catalyst: fast, but the iPad keyboard handling and UI are wrong for a desktop terminal. A separate repo: copies code that then drifts. |
-| D4 | When an etd already runs on this Mac? | **Use it.** The app shows who manages it (Nix, `etd install`, or the app). For an `etd install` setup (m1-air), offer **Let E.T. manage etd**: the same key and network, no new join. Never for Nix. | Always install the app's own etd: two etds with one key on m1-mini and m1-air. |
+| D4 | When an etd already runs on this Mac? | **Use it.** The app shows who manages it (Nix, `etd install`, or the app). For an `etd install` setup, offer **Let E.T. manage etd**: the same key and network, no new join. Never for Nix. | Always install the app's own etd: two etds with one key on m1-mini and m1-air. |
 | D5 | Pushes to the Mac? | **Local notifications** from the network's events while the app runs. The app sends `Foreground` only while it is the active app, so the phone still gets pushes when you are not at the Mac. | APNs for macOS: a second push target in et-push, a macOS push entitlement and profile. Later, if needed. |
 
 ## 4. Design
@@ -64,13 +64,41 @@ The app talks to every machine, its own Mac too, over iroh with EtLink, as the i
 
 1. **Look.** Read `etd status --json` (A1) with the bundled CLI. Result: not running; running and managed by Nix / `etd install` / the app.
 2. **Make this Mac a machine** (when no etd runs): `SMAppService.agent(...).register()`. If the status is `requiresApproval`, show the button that opens Login Items and wait. Then run `etd install --no-service` (A1) for mm, the node and `MM_SSH`. Show each step with a check mark.
-3. **Network.** If this etd's network has only itself: **Join a network** (a text field for the link from `etd invite --machine`, or from **Invite → Machine** in the app on the phone; the app also opens `et://pair?…` links) runs `etd join <link> --name <name>`. Or **Start a new network**: nothing to do, this Mac is the first machine.
+3. **Network.** If this etd's network has only itself, show the **network choice screen** (§4.3). If it already has other members (an etd that was set up before), skip to step 4.
 4. **Pair the app.** `etd invite --url` → `Link.pair(url, "<machine> app")`. Save the server. No QR code.
 5. **Done.** Machines screen with every machine. **Invite** shows a QR code for a phone, or a link for a machine.
 
 Every step is idempotent: the app runs steps 1, 2 and 4 again at each start, and fixes what is missing (app moved: new `MM_SSH` path; agent removed in Login Items: ask again).
 
-### 4.3 Feature parity with the iPad app (SPEC §5)
+### 4.3 The network choice screen
+
+Shown in onboarding step 3, and later from Settings → **Network** while this Mac's network has only itself. Two large choices, side by side:
+
+```
+┌──────────────────────────────┐  ┌──────────────────────────────┐
+│  Start a new network         │  │  Join a network              │
+│  This Mac is the first       │  │  Add this Mac to the network │
+│  machine. Add your phone and │  │  of your other machines.     │
+│  other machines after.       │  │                              │
+└──────────────────────────────┘  └──────────────────────────────┘
+```
+
+**Start a new network**
+
+1. A field **Network name**, filled with this Mac's machine name. etd names the network after its first machine today; if the owner wants a free network name, that is an etd change (A3, optional).
+2. **Create** → the network exists (etd made it at its first start). The app pairs itself (step 4).
+3. Next screen: **Add your phone** shows the QR code from `etd invite` (device), with a short line: "Scan with the iPhone camera, or in E.T. → + → Scan QR code." **Skip** goes to Machines.
+
+**Join a network**
+
+1. A text field: "Paste the link from `etd invite --machine` on one of your machines, or from E.T. on your phone: Network → Invite → Machine." The app also fills it in when the user clicks an `et://pair?…` link. When the clipboard holds an `et://pair` link, the app offers **Paste** at once.
+2. A field **Name for this Mac**, filled with the host name in machine-name rules (letters, digits, `.`, `_`, `-`). Red text if a member already has the name.
+3. **Join** → `etd join <link> --name <name>`. A spinner, then the member list from the join output, or the error in plain words: link expired (10 minutes), link already used, the inviting machine is off.
+4. The app pairs itself (step 4) and opens Machines.
+
+A link for a phone or tablet (not `--machine`) in the field: show "This link is for a phone. Make one with `etd invite --machine`." The ticket does not say its kind today (`TicketInfo` has no kind), so A1 makes `etd join` fail with that exact reason, and the app shows it.
+
+### 4.4 Feature parity with the iPad app (SPEC §5)
 
 | iPad | Mac |
 |---|---|
@@ -91,16 +119,36 @@ Owners: **A** = the trigkey Claude session (etd), **B** = the Mac agent (app, bu
 | Step | Owner | What | Done when |
 |---|---|---|---|
 | M0 | C | Accept or change D1–D5 | This file says so |
-| A1 | A | `etd status --json` (pid, version, id, host, network name, member count, `exe` path, manager: nix / cli / app / unknown). `etd install --no-service`: mm, the node plist and `MM_SSH` only, with `etd-ssh` from next to the running `etd`. Unit tests. | etd tagged `v0.0.2`; the Mac agent updates `Vendor/etd` |
+| A1 | A | `etd join` fails with "this link is for a phone or tablet" for a device invite. `etd status --json` (pid, version, id, host, network name, member count, `exe` path, manager: nix / cli / app / unknown). `etd install --no-service`: mm, the node plist and `MM_SSH` only, with `etd-ssh` from next to the running `etd`. Unit tests. | etd tagged `v0.0.2`; the Mac agent updates `Vendor/etd` |
 | A2 | A | `ETD_LOG_FILE`: etd writes its log there (an SMAppService plist cannot name the user's home). | Same tag |
+| A3 | A | Optional: a network name chosen at **Start a new network** (today etd names the network after its first machine) | Only if the owner wants it |
 | B1 | B | `ET-mac` target (D3): shared code folder, macOS app shell, Machines + terminal over EtLink to an already paired machine | Attach to a trigkey session from the app on the Mac mini |
 | B2 | B | Bundle `etd` + `etd-ssh` (cargo build from `Vendor/etd` in the build), SMAppService agent, onboarding §4.2 with D4 detection | §6 test passes on the Mac mini |
-| B3 | B | Parity §4.3 | Owner's checklist in GUIDE.md |
+| B3 | B | Parity §4.4 | Owner's checklist in GUIDE.md |
 | B4 | B | `scripts/mac-release`: sign `etd`, `etd-ssh` and the app with Developer ID + hardened runtime, notarize with the ASC key (`scripts/asc-token`), staple, zip | A zip that opens with no Gatekeeper warning on m1-air |
-| C1 | C | Install on m1-air: the app finds the `etd install` setup and offers **Let E.T. manage etd**; the Mac stays `m1-air`; sessions survive | `mm ls` on trigkey still shows `m1-air/…` sessions after the switch |
-| C2 | C | A clean Mac (or a new macOS user account): download, open, approve, paste a link from the phone | The new machine and `… app` show in `etd members` on trigkey; no terminal used |
+| C1 | C + A | When B2 is ready: remove etd, manymux and every related file from m1-air, step by step with the trigkey session (§5.1) | Every check in §5.1 passes |
+| C2 | C | m1-air from zero: download the zip, open, approve in Login Items, **Join a network** with a link from trigkey or the phone, name `m1-air` | `m1-air` and `m1-air app` in `etd members` on trigkey; `mm ls` on trigkey shows an `m1-air/…` session; no terminal used on the laptop |
+| C3 | C | The Mac mini (Nix etd): open the app | It says "etd is managed by Nix", installs nothing, and pairs itself |
 
 Time: A1 + A2 about 2 hours. B1 about 1 day, B2 about 1 day, B3 2–3 days, B4 about half a day (the first notarization often fails on one missing signature).
+
+The **Let E.T. manage etd** takeover (D4, for an `etd install` setup) has no real Mac left to test on after C1. The automatic test (§6) covers it with a temporary CLI-style setup.
+
+### 5.1 Removing etd from m1-air (C1)
+
+The trigkey session walks the owner through this live, one step at a time, and checks each result. The only session on m1-air is `test`; stopping the node ends it.
+
+1. **On trigkey:** `etd revoke m1-air`. The other machines drop it, and the network moves to a new network key (N1b). Check: `etd members` has no `m1-air`; `~/.config/manymux/hosts.toml` has no `m1-air`.
+2. **On m1-air:** `~/.local/bin/etd uninstall`. It stops etd and removes both LaunchAgent plists and the `MM_SSH` block in `~/.zshenv`. It leaves the node running.
+3. **On m1-air:** stop the node: `launchctl bootout gui/$(id -u)/xyz.ericsharma.etd.manymux`. This ends the `test` session.
+4. **On m1-air:** remove the files:
+   ```sh
+   rm -f ~/.local/bin/etd ~/.local/bin/etd-ssh ~/.local/bin/mm
+   rm -rf ~/Library/Application\ Support/etd ~/Library/Application\ Support/manymux /tmp/manymux-$(id -u)
+   rm -f ~/Library/Logs/etd.log ~/Library/Logs/manymux-daemon.log
+   ```
+   Then open `~/.zshenv` and delete the 2 lines manymux's installer added (`# manymux: also read by …` and the `export PATH="…/.local/bin:$PATH"` under it), unless something else needs `~/.local/bin`.
+5. **Checks on m1-air**, in a new terminal: `command -v etd etd-ssh mm` prints nothing; `launchctl list | grep ericsharma` prints nothing; `ls ~/Library/LaunchAgents | grep ericsharma` prints nothing; `grep -n "etd\|manymux\|MM_SSH" ~/.zshenv` prints nothing.
 
 ## 6. Automatic test (B2)
 
@@ -109,6 +157,7 @@ Time: A1 + A2 about 2 hours. B1 about 1 day, B2 about 1 day, B3 2–3 days, B4 a
 1. A temporary `ETD_HOME` for a "hub" etd and one for the "new Mac", a temporary `ETD_SOCKET`, and `mm --socket <temp>` for the node. The test runs the bundled `etd` directly, not through SMAppService.
 2. Onboarding logic (a Swift module the app and the test share) against those directories: status → install `--no-service` → join with an invite from the hub → pair the app → `Link.network()` lists both machines and the device.
 3. `ExecOn` from the hub to the new Mac returns `hostname`.
+   A second case: a CLI-style setup (etd started by hand with its plist marker) → the takeover keeps the same id and network.
 4. Remove the temporary directories and stop only the processes the test started.
 
 Rules: never the real `~/Library/Application Support/etd`, never the real manymux node (no `mm restart`, `mm stop`, `mm update`), never `launchctl` on real labels. Strip `TMUX` from the environment. This one test, no simulator suite.
