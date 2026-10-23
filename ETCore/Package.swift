@@ -7,6 +7,7 @@ let package = Package(
     products: [
         .library(name: "ETCore", targets: ["ETCore"]),
         .library(name: "ETSSH", targets: ["ETSSH"]),
+        .library(name: "ETOnboarding", targets: ["ETOnboarding"]),
     ],
     dependencies: [
         // Vendored with small patches; see Vendor/Citadel/PATCHES.md.
@@ -20,6 +21,9 @@ let package = Package(
             "ETCore",
             .product(name: "Citadel", package: "Citadel"),
         ]),
+        /// E.T. for macOS: drives the bundled `etd` CLI (docs/PLAN-macos.md §4.2).
+        /// Shared by the app and scripts/mac-onboarding-test.
+        .target(name: "ETOnboarding"),
         .testTarget(
             name: "ETCoreTests",
             dependencies: ["ETCore"],

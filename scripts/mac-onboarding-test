@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# docs/PLAN-macos.md §6: E.T. for macOS onboarding (§4.2) without the UI,
+# against temporary etds. Never the real ~/Library/Application Support/etd,
+# never the real manymux node, never launchctl:
+# - every etd gets its own ETD_HOME, ETD_SOCKET and HOME;
+# - their login shell puts a wrapper `mm` first in PATH that adds
+#   `--socket $T/mm.sock`, so `mm agent` starts a temporary node;
+# - `etd install --no-service` only skips launchctl when a node already
+#   answers at /tmp/manymux-$UID, so the test stops if none does.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+unset TMUX TMUX_PANE
+
+REAL_SOCKET="/tmp/manymux-$(id -u)/manymux.sock"
+if ! python3 -c "import socket,sys; s=socket.socket(socket.AF_UNIX); s.connect(sys.argv[1])" "$REAL_SOCKET" 2>/dev/null; then
+  echo "No manymux node answers at $REAL_SOCKET: \`etd install --no-service\` would start one with launchctl. Not running." >&2
+  exit 2
+fi
+REAL_MM=$(command -v mm) || { echo "mm is not installed" >&2; exit 2; }
+
+ETD_BIN=$(scripts/build-etd-mac.sh)
+# Short: Unix socket paths are limited to 104 bytes.
+T=$(mktemp -d /tmp/etdt.XXXX)
+cleanup() {
+  if [ -f "$T/pids" ]; then
+    while read -r pid; do kill "$pid" 2>/dev/null || true; done < "$T/pids"
+  fi
+  # The temporary node, if `mm agent` started one.
+  pkill -f -- "--socket $T/mm.sock" 2>/dev/null || true
+  rm -rf "$T"
+}
+trap cleanup EXIT
+
+mkdir -p "$T/bin"
+cat > "$T/bin/mm" <<MM
+#!/bin/sh
+exec "$REAL_MM" "\$@" --socket "$T/mm.sock"
+MM
+cat > "$T/bin/login-sh" <<SH
+#!/bin/sh
+# etd runs "\$SHELL -l -c <script>" for its login environment.
+[ "\$1" = "-l" ] && shift
+export PATH="$T/bin:/run/current-system/sw/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+exec /bin/sh "\$@"
+SH
+chmod +x "$T/bin/mm" "$T/bin/login-sh"
+
+swift build -c release --package-path Tools/MacOnboardingTest > "$T/swift-build.log" 2>&1 \
+  || { tail -30 "$T/swift-build.log"; exit 1; }
+# install --no-service finds mm on PATH: the wrapper.
+PATH="$T/bin:$PATH" T="$T" ETD_BIN="$ETD_BIN" LOGIN_SH="$T/bin/login-sh" \
+  Tools/MacOnboardingTest/.build/release/MacOnboardingTest
