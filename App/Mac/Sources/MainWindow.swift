@@ -262,10 +262,10 @@ struct TerminalScreen: View {
                 if let terminal {
                     TerminalPane(terminal: terminal)
                     overlay(for: terminal)
+                    ListeningBubble(terminal: terminal, voice: voice)
                 }
             }
             if let terminal {
-                Divider()
                 InputBar(terminal: terminal, voice: voice)
             }
         }
