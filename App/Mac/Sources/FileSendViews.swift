@@ -123,7 +123,7 @@ struct SendFilesWindow: View {
                 Text("Send to ~/etd-downloads")
             }
             Picker("Machine", selection: $machine) {
-                ForEach(fleet.machines) { Text($0.name).tag($0.name) }
+                ForEach(fleet.machines) { Text(Nicknames.shared.machine($0.name)).tag($0.name) }
             }
         }
         .formStyle(.grouped)

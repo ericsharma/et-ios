@@ -378,7 +378,7 @@ struct ComposeSheet: View {
                     .padding(.horizontal, 12)
             }
                 .background(Theme.surface)
-                .navigationTitle(isClaude ? "Message to \(page.name)" : "Command for \(page.name)")
+                .navigationTitle(isClaude ? "Message to \(page.displayName)" : "Command for \(page.displayName)")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }

@@ -24,6 +24,7 @@
 		31F3F13EE8608AD5117FAEC7 /* QRScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68B7189D418370DCE2A29810 /* QRScanner.swift */; };
 		39EA59E5D48AE69A7807B9A0 /* SelectMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FE7D921D5CAA4506B3FD10C /* SelectMode.swift */; };
 		3A3285F4C8B435AFADFA4F39 /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3251CE9C9BA08235AF09F96 /* Push.swift */; };
+		3CD4F4B374AC427F2F7CC671 /* Nicknames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BAEF5D9D9F6E2D1930C94BD /* Nicknames.swift */; };
 		44546852A16838D9010F6492 /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = 3EC677F4C4423E9C7AF25E72 /* ETCore */; };
 		45D6BA62083244C784927078 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC2C774B86C691F339F5290 /* Views.swift */; };
 		47F9FA3B055E526E99C3DF25 /* SharedFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 897E5EE0F90FB3B7D643E059 /* SharedFiles.swift */; };
@@ -52,6 +53,7 @@
 		893A4346740B9772C37B287C /* MachinesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15F85597F66DBB0CC3A093AF /* MachinesView.swift */; };
 		8E50BB99C62A6704C3313196 /* SharedFilesViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E06F47B00D27F78A52913A1 /* SharedFilesViews.swift */; };
 		8EAA58E1D8A3A674820C9F67 /* ETMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C423DF1A7824BFB0B4AB4556 /* ETMacApp.swift */; };
+		907A38E66E596E6ACFB94585 /* Nicknames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BAEF5D9D9F6E2D1930C94BD /* Nicknames.swift */; };
 		92D2F2431FD1402AC2FB77A5 /* VolumeButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6643B444DEC1C52098247355 /* VolumeButtons.swift */; };
 		9413772FB394D001E403D5CF /* ETOnboarding in Frameworks */ = {isa = PBXBuildFile; productRef = 6C698F4751908DE96FEAE403 /* ETOnboarding */; };
 		9883DC46C85AE06C00277FC1 /* ETSSH in Frameworks */ = {isa = PBXBuildFile; productRef = A3FE42A77BFB03B651F1C8C3 /* ETSSH */; };
@@ -68,6 +70,7 @@
 		C8B75C969CC365668A042C04 /* EtLink in Frameworks */ = {isa = PBXBuildFile; productRef = E8BC1D28CF427FA6638A620D /* EtLink */; };
 		D925AEB7EE1B1A2E8E25A3DF /* Copilot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23D00D38126433369DDB5E17 /* Copilot.swift */; };
 		DCC53456F454E5F2E4EB4A14 /* Manymux.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BE76CB262FB7EA0605C99EB /* Manymux.swift */; };
+		E82A4932EA0D6AFA8F92AF9E /* Nicknames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BAEF5D9D9F6E2D1930C94BD /* Nicknames.swift */; };
 		EB28BC4D4608DBE3C2FD9D80 /* Vocabulary.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5E31C39DDE31580DBCAB4E /* Vocabulary.swift */; };
 		EBD84653806CD1F4B3F10156 /* ShareStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FBF0491C3AEC4AE125F75D8 /* ShareStore.swift */; };
 		EEBCAA1A936538064AF9140F /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = E77D439CE39322DFC4891B39 /* ETCore */; };
@@ -108,6 +111,7 @@
 		15F85597F66DBB0CC3A093AF /* MachinesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MachinesView.swift; sourceTree = "<group>"; };
 		175E8D2F9B6999615A8AAF59 /* VoiceInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInput.swift; sourceTree = "<group>"; };
 		19174F7966F0E207A7456BC3 /* Bars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bars.swift; sourceTree = "<group>"; };
+		1BAEF5D9D9F6E2D1930C94BD /* Nicknames.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Nicknames.swift; sourceTree = "<group>"; };
 		23D00D38126433369DDB5E17 /* Copilot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Copilot.swift; sourceTree = "<group>"; };
 		36A4263F016A81FE6C5B2B5E /* Overview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Overview.swift; sourceTree = "<group>"; };
 		36C085050613D51A5F16E4D3 /* ShareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareView.swift; sourceTree = "<group>"; };
@@ -284,6 +288,7 @@
 				A4A3A124DA65B9FD17453340 /* AppInfo.swift */,
 				4880DD1374C363AFA5C69F37 /* Iroh.swift */,
 				4BE76CB262FB7EA0605C99EB /* Manymux.swift */,
+				1BAEF5D9D9F6E2D1930C94BD /* Nicknames.swift */,
 				591C2444EF4A2214A0249778 /* VocabMatcher.swift */,
 			);
 			path = Shared;
@@ -509,6 +514,7 @@
 				0AEEC656192348D8F9AC0E89 /* Iroh.swift in Sources */,
 				8401EF3426B8C649284DC663 /* MainWindow.swift in Sources */,
 				DCC53456F454E5F2E4EB4A14 /* Manymux.swift in Sources */,
+				E82A4932EA0D6AFA8F92AF9E /* Nicknames.swift in Sources */,
 				A6CF789B277F4329F0C57693 /* SessionTerminal.swift in Sources */,
 				02C471DF674A9FDDD8D315B1 /* SettingsView.swift in Sources */,
 				B49C06222B399FE2F004842A /* Setup.swift in Sources */,
@@ -534,6 +540,7 @@
 				893A4346740B9772C37B287C /* MachinesView.swift in Sources */,
 				7ABFAB899E15B83CE5845EA0 /* Manymux.swift in Sources */,
 				0A0D3637C837954773B6B363 /* NetworkView.swift in Sources */,
+				3CD4F4B374AC427F2F7CC671 /* Nicknames.swift in Sources */,
 				C7D22526ADD3F1CB22E245DD /* Overview.swift in Sources */,
 				3A3285F4C8B435AFADFA4F39 /* Push.swift in Sources */,
 				31F3F13EE8608AD5117FAEC7 /* QRScanner.swift in Sources */,
@@ -560,6 +567,7 @@
 				BFC56E0C4CE90C8544693723 /* AppInfo.swift in Sources */,
 				09B34837EC8C57C54AA12295 /* Iroh.swift in Sources */,
 				273834FD679594F0EFD222D3 /* Manymux.swift in Sources */,
+				907A38E66E596E6ACFB94585 /* Nicknames.swift in Sources */,
 				B93916DB291AA31617776199 /* ShareModel.swift in Sources */,
 				F47146C7DDE2BF17032EF65D /* ShareStore.swift in Sources */,
 				5E1F84249444DFC50010EADD /* ShareView.swift in Sources */,

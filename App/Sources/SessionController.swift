@@ -51,6 +51,14 @@ final class WindowPage: Identifiable {
         mm = nil
     }
 
+    /// manymux: this device's nickname for the session, if any.
+    var mmNickname: String? {
+        mm.flatMap { Nicknames.shared.nickname(for: .session(machine: $0.machine, name: name)) }
+    }
+
+    /// The nickname, else the name.
+    var displayName: String { mmNickname ?? name }
+
     init(mm: MmPage, id: WindowID, terminal: TerminalHost) {
         self.id = id
         index = 0

@@ -525,15 +525,15 @@ struct SessionView: View {
             .accessibilityLabel("Machines")
             Menu {
                 ForEach(session.machines) { machine in
-                    Button(machine.name + (machine.sessions.isEmpty ? " (no sessions)" : "")) { session.openMachine(machine.name) }
+                    Button(Nicknames.shared.machine(machine.name) + (machine.sessions.isEmpty ? " (no sessions)" : "")) { session.openMachine(machine.name) }
                         .disabled(machine.name == session.mmMachineName)
                 }
             } label: {
-                Text(session.mmMachineName ?? "?")
+                Text(session.mmMachineName.map(Nicknames.shared.machine) ?? "?")
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
             }
-            Text(page.readOnly ? "\(page.name) · view only" : page.title.isEmpty ? page.name : page.title)
+            Text(page.readOnly ? "\(page.displayName) · view only" : page.mmNickname ?? (page.title.isEmpty ? page.name : page.title))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -803,7 +803,7 @@ struct SessionView: View {
                     session.currentWindowID = page.id
                     session.dismissBellBanner()
                 } label: {
-                    Label(page.id == session.currentWindowID ? "\(page.name) is done" : "\(page.name) needs you — tap to open",
+                    Label(page.id == session.currentWindowID ? "\(page.displayName) is done" : "\(page.displayName) needs you — tap to open",
                           systemImage: "bell.fill")
                         .font(.subheadline.weight(.semibold))
                         .padding(.horizontal, 16).padding(.vertical, 10)
@@ -918,6 +918,7 @@ struct WindowTabs: View {
     @State private var renaming: WindowPage?
     @State private var newName = ""
     @State private var closing: WindowPage?
+    @State private var nicknaming: NicknameTarget?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -933,9 +934,9 @@ struct WindowTabs: View {
                                     Circle().fill(Theme.accent).frame(width: 6, height: 6)
                                 }
                                 if let machine = page.mm?.machine {
-                                    Text(machine).font(.caption2).foregroundStyle(.secondary)
+                                    Text(Nicknames.shared.machine(machine)).font(.caption2).foregroundStyle(.secondary)
                                 }
-                                Text(page.name).font(.caption.monospaced())
+                                Text(page.displayName).font(.caption.monospaced())
                             }
                             .padding(.horizontal, 10).padding(.vertical, 5)
                             .background(selected ? Theme.accent.opacity(0.25) : Color.clear, in: Capsule())
@@ -944,7 +945,12 @@ struct WindowTabs: View {
                         .buttonStyle(.plain)
                         .id(page.id)
                         .contextMenu {
-                            Button("Rename…") { newName = page.name; renaming = page }
+                            if let link = page.mm {
+                                Button("Rename…") { nicknaming = .session(machine: link.machine, name: link.name) }
+                                Button("Rename on Machine…") { newName = page.name; renaming = page }
+                            } else {
+                                Button("Rename…") { newName = page.name; renaming = page }
+                            }
                             Button(page.mm == nil ? "New window…" : "New session…") { session.showNewWindow = true }
                             Button(page.mm == nil ? "Close window…" : "End session…", role: .destructive) { closing = page }
                         }
@@ -959,13 +965,14 @@ struct WindowTabs: View {
                 }
                 .padding(.horizontal, 12)
             }
-            .alert("Rename window", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            .alert(renaming?.mm == nil ? "Rename window" : "Rename on machine", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
                 TextField("Name", text: $newName)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
                 Button("Rename") { if let page = renaming { session.renameWindow(page, to: newName) } }
                 Button("Cancel", role: .cancel) {}
             }
-            .confirmationDialog("Close \(closing?.name ?? "")?", isPresented: Binding(get: { closing != nil }, set: { if !$0 { closing = nil } }), titleVisibility: .visible) {
+            .nicknameAlert($nicknaming)
+            .confirmationDialog("Close \(closing?.displayName ?? "")?", isPresented: Binding(get: { closing != nil }, set: { if !$0 { closing = nil } }), titleVisibility: .visible) {
                 Button(closing?.mm == nil ? "Close window" : "End session", role: .destructive) { if let page = closing { session.closeWindow(page) } }
             } message: {
                 Text(closing?.mm == nil ? "This kills the window and everything running in it, on the server."
@@ -1052,9 +1059,9 @@ struct WindowSidebar: View {
                         Color.clear.frame(width: 7, height: 7)
                     }
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(page.name).font(.body.monospaced())
+                        Text(page.displayName).font(.body.monospaced())
                         if let machine = page.mm?.machine {
-                            Text(machine + (page.title.isEmpty ? "" : " · \(page.title)"))
+                            Text(Nicknames.shared.machine(machine) + (page.title.isEmpty ? "" : " · \(page.title)"))
                                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         } else {
                             Text(page.currentCommand).font(.caption).foregroundStyle(.secondary)

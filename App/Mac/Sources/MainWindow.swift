@@ -13,6 +13,7 @@ struct MainWindow: View {
     @State private var renaming: SessionRef?
     @State private var newName = ""
     @State private var ending: SessionRef?
+    @State private var nicknaming: NicknameTarget?
     @State private var columns: NavigationSplitViewVisibility = .all
     @State private var voice = VoiceInput()
 
@@ -22,13 +23,13 @@ struct MainWindow: View {
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
-            Sidebar(selection: $selection, rename: startRename, end: { ending = $0 })
+            Sidebar(selection: $selection, rename: { nicknaming = $0 }, renameOnMachine: startRename, end: { ending = $0 })
                 .navigationSplitViewColumnWidth(min: 220, ideal: 270, max: 400)
         } detail: {
             detail
         }
         .navigationTitle(title)
-        .navigationSubtitle(selection?.machine ?? "")
+        .navigationSubtitle(selection.map { Nicknames.shared.machine($0.machine) } ?? "")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { showingNewSession = true } label: { Label("New Session", systemImage: "plus") }
@@ -39,7 +40,7 @@ struct MainWindow: View {
         .sheet(isPresented: $showingNewSession) {
             NewSessionSheet(defaultMachine: selection?.machine) { ref in selection = ref }
         }
-        .alert("Rename session", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+        .alert("Rename on \(renaming?.machine ?? "machine")", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $newName)
             Button("Rename") {
                 if let ref = renaming {
@@ -48,7 +49,10 @@ struct MainWindow: View {
                 }
             }
             Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Every device sees the new name.")
         }
+        .nicknameAlert($nicknaming)
         .confirmationDialog("End \(ending?.name ?? "")?", isPresented: Binding(get: { ending != nil }, set: { if !$0 { ending = nil } })) {
             Button("End Session", role: .destructive) { if let ref = ending { fleet.end(ref) } }
         } message: {
@@ -78,7 +82,9 @@ struct MainWindow: View {
         .focusedSceneValue(\.windowActions, WindowActions(
             selection: selection,
             newSession: { showingNewSession = true },
-            rename: { if let ref = selection { startRename(ref) } },
+            rename: { if let ref = selection { nicknaming = .session(ref) } },
+            renameMachine: { if let ref = selection { nicknaming = .machine(ref.machine) } },
+            renameOnMachine: { if let ref = selection { startRename(ref) } },
             end: { ending = selection },
             select: { selection = $0 },
             step: step
@@ -88,6 +94,7 @@ struct MainWindow: View {
 
     private var title: String {
         guard let selection else { return "E.T." }
+        if let nickname = Nicknames.shared.nickname(for: .session(selection)) { return nickname }
         let info = fleet.info(for: selection)
         return info.map { $0.title.isEmpty ? $0.name : $0.title } ?? selection.name
     }
@@ -98,7 +105,7 @@ struct MainWindow: View {
         } else {
             VStack(spacing: 0) {
                 SessionTabs(selection: $selection, newSession: { showingNewSession = true },
-                            rename: startRename, end: { ending = $0 })
+                            rename: { nicknaming = .session($0) }, renameOnMachine: startRename, end: { ending = $0 })
                 Divider()
                 if let selection {
                     TerminalScreen(selection: $selection, voice: voice, step: step)
@@ -129,6 +136,8 @@ struct WindowActions {
     var selection: SessionRef?
     var newSession: () -> Void
     var rename: () -> Void
+    var renameMachine: () -> Void
+    var renameOnMachine: () -> Void
     var end: () -> Void
     var select: (SessionRef) -> Void
     var step: (Int) -> Void
@@ -144,7 +153,8 @@ struct Sidebar: View {
     @Environment(Fleet.self) private var fleet
     @Environment(\.openWindow) private var openWindow
     @Binding var selection: SessionRef?
-    let rename: (SessionRef) -> Void
+    let rename: (NicknameTarget) -> Void
+    let renameOnMachine: (SessionRef) -> Void
     let end: (SessionRef) -> Void
     /// The machine a drag of files is over.
     @State private var dropTarget: String?
@@ -162,12 +172,13 @@ struct Sidebar: View {
                     }
                     ForEach(machine.sessions) { info in
                         let ref = SessionRef(machine: machine.name, name: info.name)
-                        SessionRow(info: info)
+                        SessionRow(info: info, nickname: Nicknames.shared.nickname(for: .session(ref)))
                             .tag(ref)
                             .dropDestination(for: URL.self) { urls, _ in drop(urls, on: machine.name) }
                             .contextMenu {
                                 Button("Open in New Window") { openWindow(value: ref) }
-                                Button("Rename…") { rename(ref) }
+                                Button("Rename…") { rename(.session(ref)) }
+                                Button("Rename on Machine…") { renameOnMachine(ref) }
                                 Divider()
                                 Button("End Session…", role: .destructive) { end(ref) }
                             }
@@ -177,7 +188,7 @@ struct Sidebar: View {
                     }
                 } header: {
                     // Files dropped on a machine go to its ~/etd-downloads.
-                    Text(machine.name)
+                    Text(Nicknames.shared.machine(machine.name))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 4).padding(.vertical, 2)
                         .background(dropTarget == machine.name ? Theme.accent.opacity(0.3) : Color.clear,
@@ -188,6 +199,9 @@ struct Sidebar: View {
                             if over { dropTarget = machine.name } else if dropTarget == machine.name { dropTarget = nil }
                         }
                         .help("Drop files here to send them to \(machine.name)")
+                        .contextMenu {
+                            Button("Rename Machine…") { rename(.machine(machine.name)) }
+                        }
                 }
             }
             filesSection
@@ -256,15 +270,16 @@ struct Sidebar: View {
     }
 }
 
-/// Title, then name · idle · attached; a red dot for a bell.
+/// Nickname or title, then name · idle · attached; a red dot for a bell.
 struct SessionRow: View {
     let info: MmSessionInfo
+    var nickname: String?
 
     var body: some View {
         HStack(spacing: 8) {
             Circle().fill(info.bells > 0 ? Theme.bell : Color.clear).frame(width: 7, height: 7)
             VStack(alignment: .leading, spacing: 1) {
-                Text(info.title.isEmpty ? info.name : info.title).lineLimit(1)
+                Text(nickname ?? (info.title.isEmpty ? info.name : info.title)).lineLimit(1)
                 HStack(spacing: 5) {
                     Text(info.name).font(.caption.monospaced())
                     Text("· \(Manymux.idleLabel(seconds: info.idleSecs))").font(.caption).monospacedDigit()
@@ -451,7 +466,7 @@ struct NewSessionSheet: View {
     var body: some View {
         Form {
             Picker("Machine", selection: $machine) {
-                ForEach(fleet.machines) { Text($0.name).tag($0.name) }
+                ForEach(fleet.machines) { Text(Nicknames.shared.machine($0.name)).tag($0.name) }
             }
             Picker("Run", selection: $kind) {
                 ForEach(Kind.allCases) { Text($0.rawValue).tag($0) }
@@ -520,6 +535,10 @@ struct ETCommands: Commands {
                 .keyboardShortcut("o", modifiers: [.command, .shift])
                 .disabled(actions?.selection == nil)
             Button("Rename…") { actions?.rename() }
+                .disabled(actions?.selection == nil)
+            Button("Rename Machine…") { actions?.renameMachine() }
+                .disabled(actions?.selection == nil)
+            Button("Rename on Machine…") { actions?.renameOnMachine() }
                 .disabled(actions?.selection == nil)
             Button("Fit to Window") {
                 if let ref = actions?.selection { fleet.terminals[ref]?.fitToWindow() }

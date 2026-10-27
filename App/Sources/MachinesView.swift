@@ -3,12 +3,14 @@ import SwiftUI
 
 /// The main screen for an iroh server (PLAN-manymux B3): the manymux
 /// sessions of every machine, the hub first. Tap opens a session page;
-/// long-press renames, ends, or opens view-only.
+/// long-press renames (on this device or on the machine), ends, or opens
+/// view-only. Long-press a machine's header to rename it on this device.
 struct MachinesView: View {
     @Bindable var session: SessionController
     @State private var renaming: Target?
     @State private var newName = ""
     @State private var ending: Target?
+    @State private var nicknaming: NicknameTarget?
 
     struct Target: Identifiable {
         let machine: String
@@ -45,10 +47,13 @@ struct MachinesView: View {
                     }
                     ForEach(machine.sessions) { info in
                         Button { session.openMm(machine: machine.name, name: info.name) } label: {
-                            MmSessionRow(info: info)
+                            MmSessionRow(info: info, nickname: Nicknames.shared.nickname(for: .session(machine: machine.name, name: info.name)))
                         }
                         .contextMenu {
                             Button("Rename…", systemImage: "pencil") {
+                                nicknaming = .session(machine: machine.name, name: info.name)
+                            }
+                            Button("Rename on Machine…", systemImage: "server.rack") {
                                 newName = info.name
                                 renaming = Target(machine: machine.name, name: info.name)
                             }
@@ -61,7 +66,10 @@ struct MachinesView: View {
                         }
                     }
                 } header: {
-                    Text(machine.name)
+                    Text(Nicknames.shared.machine(machine.name))
+                        .contextMenu {
+                            Button("Rename…", systemImage: "pencil") { nicknaming = .machine(machine.name) }
+                        }
                 }
             }
             Section {
@@ -84,11 +92,14 @@ struct MachinesView: View {
         } message: {
             Text(session.mmRestoreOutput ?? "")
         }
-        .alert("Rename session", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+        .nicknameAlert($nicknaming)
+        .alert("Rename on \(renaming?.machine ?? "machine")", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $newName)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
             Button("Rename") { if let t = renaming { session.renameMm(machine: t.machine, name: t.name, to: newName) } }
             Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Every device sees the new name.")
         }
         .confirmationDialog("End \(ending?.name ?? "")?", isPresented: Binding(get: { ending != nil }, set: { if !$0 { ending = nil } }),
                             titleVisibility: .visible) {
@@ -99,15 +110,17 @@ struct MachinesView: View {
     }
 }
 
-/// Title (the main line), then name · idle · attached; a red dot for bells.
+/// Nickname or title (the main line), then name · idle · attached; a red
+/// dot for bells.
 struct MmSessionRow: View {
     let info: MmSessionInfo
+    var nickname: String?
 
     var body: some View {
         HStack(spacing: 10) {
             Circle().fill(info.bells > 0 ? Color.red : Color.clear).frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 2) {
-                Text(info.title.isEmpty ? info.name : info.title)
+                Text(nickname ?? (info.title.isEmpty ? info.name : info.title))
                     .lineLimit(1)
                     .foregroundStyle(.primary)
                 HStack(spacing: 6) {
@@ -151,7 +164,7 @@ struct MmSpawnSheet: View {
         Form {
             Section("Machine") {
                 Picker("Machine", selection: $machine) {
-                    ForEach(session.machines) { Text($0.name).tag($0.name) }
+                    ForEach(session.machines) { Text(Nicknames.shared.machine($0.name)).tag($0.name) }
                 }
                 .pickerStyle(.inline)
                 .labelsHidden()

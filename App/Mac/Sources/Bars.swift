@@ -10,6 +10,7 @@ struct SessionTabs: View {
     @Binding var selection: SessionRef?
     let newSession: () -> Void
     let rename: (SessionRef) -> Void
+    let renameOnMachine: (SessionRef) -> Void
     let end: (SessionRef) -> Void
 
     var body: some View {
@@ -48,8 +49,8 @@ struct SessionTabs: View {
                 if info.bells > 0 {
                     Circle().fill(Theme.bell).frame(width: 6, height: 6)
                 }
-                Text(ref.machine).font(.caption2).foregroundStyle(.secondary)
-                Text(ref.name).font(.caption.monospaced())
+                Text(Nicknames.shared.machine(ref.machine)).font(.caption2).foregroundStyle(.secondary)
+                Text(Nicknames.shared.session(machine: ref.machine, name: ref.name)).font(.caption.monospaced())
             }
             .padding(.horizontal, 10).padding(.vertical, 4)
             .background(selected ? Theme.accent.opacity(0.25) : Color.clear, in: Capsule())
@@ -63,6 +64,7 @@ struct SessionTabs: View {
         .contextMenu {
             Button("Open in New Window") { openWindow(value: ref) }
             Button("Rename…") { rename(ref) }
+            Button("Rename on Machine…") { renameOnMachine(ref) }
             Divider()
             Button("End Session…", role: .destructive) { end(ref) }
         }

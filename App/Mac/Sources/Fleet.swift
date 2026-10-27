@@ -12,6 +12,10 @@ struct SessionRef: Hashable, Codable, Sendable {
     var id: String { machine + "/" + name }
 }
 
+extension NicknameTarget {
+    static func session(_ ref: SessionRef) -> Self { .session(machine: ref.machine, name: ref.name) }
+}
+
 /// App-wide state: the paired hub, every machine's sessions, and the
 /// attached terminals. The manymux half of the iOS app's SessionController,
 /// without tmux (PLAN-mac §3).

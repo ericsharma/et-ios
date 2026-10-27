@@ -110,7 +110,7 @@ struct CopilotView: View {
         HStack(spacing: 10) {
             Image(systemName: "sparkles").foregroundStyle(Theme.accent)
             VStack(alignment: .leading, spacing: 1) {
-                Text("Copilot · \(page.name)").font(.subheadline.weight(.semibold))
+                Text("Copilot · \(page.displayName)").font(.subheadline.weight(.semibold))
                 Text(isLoading ? "Reading transcript…" : "\(turns.count) exchanges on \(host) · swipe for other windows")
                     .font(.caption2).foregroundStyle(.secondary)
             }
@@ -327,7 +327,7 @@ struct CopilotView: View {
             }
         case .draft(let text):
             VStack(alignment: .leading, spacing: 8) {
-                Text("Draft for \(page.name) · edit before sending").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Text("Draft for \(page.displayName) · edit before sending").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 TextEditor(text: Binding(get: { text }, set: { self.output = .draft($0) }))
                     .font(.callout)
                     .frame(minHeight: 120, maxHeight: 260)
@@ -343,7 +343,7 @@ struct CopilotView: View {
                         UINotificationFeedbackGenerator().notificationOccurred(.success)
                         session.copilotMode = false
                     } label: {
-                        Label("Send to \(page.name)", systemImage: "paperplane.fill")
+                        Label("Send to \(page.displayName)", systemImage: "paperplane.fill")
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
