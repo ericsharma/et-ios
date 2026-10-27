@@ -1,5 +1,6 @@
 #if DEBUG
 import AppKit
+import SwiftUI
 
 /// Launch flags for testing on a headless Mac (debug builds only):
 ///   --open <machine/session>  select a session in the first window
@@ -8,6 +9,8 @@ import AppKit
 ///   --type <text>             after 6 s, type into the selected session
 ///   --drop <file>             once the shown session is live, send the file
 ///                             as a drop on its terminal does
+///   --offscreen               build the main window off screen (no display)
+///   --hittest                 after 10 s, log the view under the top 160 pt
 @MainActor
 enum DebugHooks {
     static func run(_ fleet: Fleet) {
@@ -69,6 +72,22 @@ enum DebugHooks {
                 }
             }
         }
+        if args.contains("--hittest") {
+            Task {
+                try? await Task.sleep(for: .seconds(10))
+                guard let window = offscreenWindow ?? NSApp.windows.first(where: { $0.contentView != nil && $0.frame.width > 300 }),
+                      let root = window.contentView?.superview else { return }
+                let h = root.bounds.height
+                for y in stride(from: 0, through: 160, by: 10) {
+                    var row: [String] = []
+                    for x in stride(from: 0, through: root.bounds.width, by: 100) {
+                        let p = CGPoint(x: x, y: root.isFlipped ? CGFloat(y) : h - CGFloat(y))
+                        row.append("\(Int(x)):\(root.hitTest(p).map { "\(type(of: $0))" } ?? "nil")")
+                    }
+                    fleet.log.add("hit y=\(y) " + row.joined(separator: " "))
+                }
+            }
+        }
         if let path = value("--snapshot") {
             Task {
                 while true {
@@ -79,8 +98,23 @@ enum DebugHooks {
         }
     }
 
+    static var offscreenWindow: NSWindow?
+
+    /// A window that never goes on screen (the Mac mini is headless), so
+    /// hit tests and snapshots run against the real views.
+    static func offscreen(_ root: some View, fleet: Fleet, setup: Setup) {
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1100, height: 700),
+                              styleMask: [.titled, .resizable, .closable, .fullSizeContentView], backing: .buffered, defer: false)
+        window.toolbar = NSToolbar()
+        window.contentViewController = NSHostingController(rootView: root)
+        window.setFrame(CGRect(x: 0, y: 0, width: 1100, height: 700), display: true)
+        offscreenWindow = window
+        setup.start()
+        run(fleet)
+    }
+
     static func snapshot(to url: URL) {
-        guard let window = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }),
+        guard let window = offscreenWindow ?? NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }),
               let view = window.contentView?.superview ?? window.contentView,
               let layer = view.layer else { return }
         let scale = window.backingScaleFactor

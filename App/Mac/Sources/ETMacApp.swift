@@ -13,7 +13,16 @@ struct ETMacApp: App {
         let fleet = Fleet()
         _fleet = State(initialValue: fleet)
         _setup = State(initialValue: Setup(fleet: fleet))
-        _files = State(initialValue: SharedFiles(hosts: { fleet.directHosts() }, log: { fleet.log.add($0) }))
+        let files = SharedFiles(hosts: { fleet.directHosts() }, log: { fleet.log.add($0) })
+        _files = State(initialValue: files)
+        #if DEBUG
+        if CommandLine.arguments.contains("--offscreen") {
+            let setup = _setup.wrappedValue
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                DebugHooks.offscreen(MainWindow(initial: nil).environment(fleet).environment(setup).environment(files), fleet: fleet, setup: setup)
+            }
+        }
+        #endif
     }
 
     var body: some Scene {

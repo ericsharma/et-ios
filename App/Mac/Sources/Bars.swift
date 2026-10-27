@@ -35,6 +35,10 @@ struct SessionTabs: View {
                 }
                 .padding(.horizontal, 10).padding(.vertical, 6)
             }
+            // Touching the toolbar, the scroll view grows up under it while
+            // its document view doesn't, so the tabs drew outside the
+            // document view and clicks never reached them.
+            .padding(.top, 1)
             .onChange(of: selection) { _, ref in
                 if let ref { withAnimation { proxy.scrollTo(ref, anchor: .center) } }
             }
