@@ -210,6 +210,8 @@ final class Logbook {
                 if let old = report.projects[i].sessions.first(where: { $0.key == key }) { role = old.role }
                 report.projects[i].sessions.removeAll { $0.key == key }
             }
+            // etd drops a project with no sessions left.
+            report.projects.removeAll { $0.sessions.isEmpty && $0.id != project }
             report.unassigned.removeAll { $0 == key }
             if let project, let i = report.projects.firstIndex(where: { $0.id == project }) {
                 report.projects[i].sessions.append(.init(key: key, role: role))

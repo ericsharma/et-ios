@@ -12,7 +12,11 @@ import SwiftUI
 ///                             as a drop on its terminal does
 ///   --logbook <id|report>     show a Logbook transcript (machine/session id,
 ///                             a session id on mac-mini, or machine/* for its
-///                             newest) or the report (and Refresh it)
+///                             newest), the report (and Refresh it), or
+///                             "last" (the last report, no Refresh)
+///   --logbook-grouping        with --logbook last: reject a proposal, rename
+///                             project 1, move a session of the last project
+///                             to none; then log the report
 ///   --logbook-send <m/s>      after 8 s, send the shown transcript's last
 ///                             turn (or report project 1) to machine/session
 ///   --logbook-earlier         with --logbook <id>: load the transcript, then
@@ -46,8 +50,23 @@ enum DebugHooks {
                     key = logbook.sessions.filter { $0.key.machine == key.machine }.max { $0.last < $1.last }?.key ?? key
                     fleet.log.add("Debug: Logbook \(key.id)")
                 }
-                fleet.requestedLogbook = page == "report" ? .report : .session(key)
+                fleet.requestedLogbook = page == "report" || page == "last" ? .report : .session(key)
                 if page == "report" { logbook?.refreshReport() }
+                guard page == "last", let logbook else { return }
+                while logbook.report == nil { try? await Task.sleep(for: .milliseconds(300)) }
+                @MainActor func dump(_ when: String) {
+                    let r = logbook.report!
+                    fleet.log.add("Debug: report \(r.id) \(when): projects " + r.projects.map { "\($0.name) [\($0.sessions.map(\.key).joined(separator: ", "))]" }.joined(separator: "; ")
+                                  + "; unassigned [\(r.unassigned.joined(separator: ", "))]; \(r.proposals.count) proposals")
+                }
+                dump("loaded")
+                guard args.contains("--logbook-grouping") else { return }
+                let r = logbook.report!
+                if let proposal = r.proposals.first { logbook.reject(proposal) }
+                if let first = r.projects.first { logbook.rename(project: first.id, to: first.name + " (renamed)") }
+                if let last = r.projects.last, let key = last.sessions.first?.key { logbook.move(session: key, to: nil) }
+                try? await Task.sleep(for: .seconds(5))
+                dump("after grouping")
             }
         }
         if let target = value("--logbook-send"), let page = value("--logbook") {
@@ -57,7 +76,7 @@ enum DebugHooks {
                 guard parts.count == 2, let logbook else { return }
                 let key = (LogbookKey(id: page) ?? LogbookKey(machine: "mac-mini", sessionId: page))
                 let transcript = logbook.transcript(key)
-                if page == "report", let report = logbook.report, let project = report.projects.first {
+                if page == "report" || page == "last", let report = logbook.report, let project = report.projects.first {
                     logbook.send(.reportSection(reportId: report.id, projectId: project.id), to: parts[0], session: parts[1])
                     return
                 }
