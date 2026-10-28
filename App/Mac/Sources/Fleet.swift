@@ -356,7 +356,7 @@ final class Fleet {
             let info = try await hub.network()
             guard hubHost === hub else { return }
             if info != network {
-                log.add("Network \(info.name): \(info.members.map(\.name).joined(separator: ", "))")
+                log.add("Network \(info.name): \(info.members.map(\.name).joined(separator: ", ")); archive: \(info.archive.joined(separator: ", "))")
                 network = info
             }
         } catch {
