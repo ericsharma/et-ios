@@ -1,6 +1,6 @@
 # Plan: Logbook — every Claude session of the network, in one place
 
-Status: 2026-10-28. D1–D10 ACCEPTED. L0 DONE (results in §5, L0). A: L1 (Rust) next. B: L2-B, L3-B and L4-B done on a stub (`App/Shared/LogbookStub.swift`): Mac sidebar Logbook, live transcript, report view with suggestions, Send to session. L5 (iOS/iPad) done on the stub, with 2 fixture transcripts; built, not run (no TestFlight until the stub is gone). Next for B: swap the stub for the real API when A bumps Vendor/etd.
+Status: 2026-10-28. D1–D10 ACCEPTED (D6 mechanism changed in L1, see §3). L0 DONE (results in §5, L0). A: L1 DONE on etd branch `logbook-l1`, not deployed (owner OK needed); next L2-A (read API in etd + et-link, then bump Vendor/etd). B: L2-B, L3-B and L4-B done on a stub (`App/Shared/LogbookStub.swift`): Mac sidebar Logbook, live transcript, report view with suggestions, Send to session. L5 (iOS/iPad) done on the stub, with 2 fixture transcripts; built, not run (no TestFlight until the stub is gone). Next for B: swap the stub for the real API when A bumps Vendor/etd.
 
 Follows [PLAN-network.md](PLAN-network.md) and [PLAN-files.md](PLAN-files.md). Work split as in those plans: **A** = the trigkey Claude session (etd, et-proto, et-link), **B** = the Mac agent (apps, builds), **C** = the owner (tests).
 
@@ -43,7 +43,7 @@ The owner works on one or two projects at the same time, with Claude sessions on
 | D3 | Watcher AI | **ACCEPTED (owner): headless Claude Code** (`claude -p`) on the archive machine, on the owner's subscription. |
 | D4 | Grouping | **ACCEPTED (owner): AI proposes, owner confirms.** Hard signals first (git repo, cwd, mm group). Confirmed choices are fixed input for the next report. |
 | D5 | Agents in v1 | **ACCEPTED (owner): Claude Code only**, behind a `Reader` trait so Codex / Gemini come later. |
-| D6 | Where logs live | **ACCEPTED: archive machines the owner chooses** (1 or more). Default: trigkey. Mechanism: add a **settings** part (`archive: Vec<EndpointId>`) to the signed network doc, so every machine and device knows the archive. Any change to the doc breaks postcard decoding, so all 3 machines update together (no users, no compatibility work). |
+| D6 | Where logs live | **ACCEPTED: archive machines the owner chooses** (1 or more). Default: trigkey. Mechanism CHANGED in L1 (2026-10-28): **not** in the network doc. The app's et-link also decodes that doc, so a new field there breaks the installed apps until they are rebuilt, and a signature adds no safety (every machine already has shell access to every other). Instead: `etd logbook archive on` on a machine (`logbook.json`), and `LogInfo` (any member asks any machine: "are you an archive?"). No coordinated deploy; an old etd simply does not answer. |
 | D7 | Sharing | **ACCEPTED (owner): app "Send to session"** only. No agent pull (MCP) and no watcher push in v1. |
 | D8 | Report cadence | **ACCEPTED (owner): on demand** (a Refresh button). Capture stays continuous, so the session view is live. |
 | D9 | What is kept | **ACCEPTED:** the **full** JSONL lines (tool calls and tool output included) on the archive. Views filter; the watcher gets a digest. |
@@ -75,15 +75,18 @@ app ── LogSessions / LogFollow / Report / LogSend ──▶ archive etd
 ### 4.2 Protocol (et/1, appended)
 
 ```
-Request::LogAppend   { key: LogKey, meta: Option<LogMeta>, offset: u64, bytes: Vec<u8> } // 24, machine → archive
-Request::LogSessions { since: u64 }                       // 25, list keys + meta + status
-Request::LogRead     { key: LogKey, from: u64 }           // 26, bytes from offset; then follows (live)
-Request::LogPause    { machine: String, session: String, paused: bool }  // 27
-Request::Report      { refresh: bool }                    // 28, Progress frames, then the report JSON
-Request::Grouping    { change: GroupChange }              // 29, owner confirms / fixes
-Request::LogSend     { selection: LogSelection, to: String, session: String } // 30
-Response::LogAck { offset }, LogList(Vec<LogEntry>), LogBytes(Vec<u8>), ReportJson(String)
+Request::LogInfo                                          // 24 DONE (L1), any member → any machine
+Request::LogAppend   { session_id, meta: LogMeta, offset: u64, bytes: Vec<u8> } // 25 DONE (L1), machine → archive
+Request::LogSessions { since: u64 }                       // 26, list keys + meta + status
+Request::LogRead     { key: LogKey, from: u64 }           // 27, bytes from offset; then follows (live)
+Request::LogPause    { machine: String, session: String, paused: bool }  // 28
+Request::Report      { refresh: bool }                    // 29, Progress frames, then the report JSON
+Request::Grouping    { change: GroupChange }              // 30, owner confirms / fixes
+Request::LogSend     { selection: LogSelection, to: String, session: String } // 31
+Response::LogInfo { archive, paused }, LogAck { offset } (DONE); LogList(Vec<LogEntry>), LogBytes(Vec<u8>), ReportJson(String)
 ```
+
+As built in L1 (etd `PROTOCOL.md`, "Logbook"): the archive keys a transcript by the **sender's member name** (a source cannot write as another machine). `offset` is in the source's file. Empty `bytes` = "where are you?" (and a `meta` update). An `offset` above the archive's = skipped bytes, stored as one line `{"type":"etd-gap","skipped":N}`: this is how **Do not record** works (the lines never leave the machine). Readers (Swift `Transcript.parse`) must ignore that line type.
 
 - `LogRead` follows: after the stored bytes it keeps the stream open and sends new bytes as they arrive (near real time, D2).
 - `LogSend`: the archive writes the selection as Markdown to `~/etd-downloads/logbook/<time>-<from>.md`, then runs the existing `Share { path, to, session }`. Nothing new on the target machine.
@@ -117,7 +120,7 @@ Two stages, so a refresh costs only what changed:
 
 ### 4.5 et-link (Rust, shared by both apps)
 
-The app finds the archive machine in `NetworkInfo.archive` and connects to it directly, as for any machine. This is the contract between A and B. The Mac agent writes a Swift stub with these exact names first (as `SendFilesStub.swift` in PLAN-files), and A makes the real one match.
+The app finds the archive machine in `NetworkInfo.archive` and connects to it directly, as for any machine. (et-link fills `archive` by sending `LogInfo` to each machine, in parallel with a short time limit; the Swift contract does not change with the D6 mechanism change.) This is the contract between A and B. The Mac agent writes a Swift stub with these exact names first (as `SendFilesStub.swift` in PLAN-files), and A makes the real one match.
 
 ```rust
 // NetworkInfo gains:
@@ -201,9 +204,11 @@ Times are for the agent that runs the step. ✅ = owner can see it work.
 | 50-digest report (7.7k words in) | **104 s**, 25.7k tokens in, 11.5k tokens out, 1 turn, valid JSON with no code fence. 19 projects, 2 unassigned, 5 sensible proposals (split / merge / close). API-equal cost $0.42 (on the subscription: counts against its limits). | Watcher command: `claude -p --tools "" --no-session-persistence --strict-mcp-config --output-format json`, prompt on stdin. Time goes mostly to output: keep fields short. Progress UI must allow ~2 min. |
 | Owner's `~/.claude/CLAUDE.md` | Loads into `claude -p` (the no-tools answer ended with "Next: …" in the owner's style). The JSON report was still clean. | Keep it (the report then uses the owner's writing style). Validate the JSON; on a parse error, retry once with "JSON only". |
 
-### Phase L1 — capture + archive (A, ~1 day)
+### Phase L1 — capture + archive (A, ~1 day) — DONE 2026-10-28, NOT DEPLOYED
 
-1. Network settings record with `archive` (D6) + `etd archive <machine>` command.
+etd branch `logbook-l1` (745eade, not pushed): `crates/etd/src/logbook/` (capture.rs, claude.rs, store.rs, mod.rs), `LogInfo` (24) + `LogAppend` (25), `etd logbook`, `etd logbook archive on|off`. Tests: unit tests + `tests/logbook.rs` (real `sh` leader + `sleep` agent: orphan skipped, half lines wait, restart sends nothing twice, pause leaves a gap, end = `gone`). Live check on trigkey with a throwaway `ETD_HOME`: this session's transcript (2.6 MB) archived in < 1 s, byte-identical, mode 0600. Archive store: `~/.local/share/etd/logbook/<machine>/<session id>.jsonl` + `index.json`. Not done: back-fill of the transcript before a `--resume` (only live transcripts are sent).
+
+1. ~~Network settings record with `archive` (D6) + `etd archive <machine>` command.~~ Built as `etd logbook archive on` + `LogInfo` (D6 change).
 2. `logbook/capture.rs` + `ClaudeReader`, unit tests with fixture JSONL and a fake process tree.
 3. `LogAppend` / `LogAck` + `store.rs`; resume after a dropped connection (test: cut mid-batch).
 4. `etd logbook status`. Deploy trigkey + gmktec (nixos-config); mac-mini needs darwin-rebuild (B). ✅ `etd logbook status` on trigkey shows sessions from all 3 machines.
