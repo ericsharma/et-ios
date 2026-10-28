@@ -10,7 +10,7 @@ import SwiftUI
 ///   --drop <file>             once the shown session is live, send the file
 ///                             as a drop on its terminal does
 ///   --logbook <id|report>     show a Logbook transcript (Claude session id
-///                             on mac-mini) or the report
+///                             on mac-mini) or the report (and Refresh it)
 ///   --size <W>x<H>            the offscreen window's size (default 1100x700)
 ///   --offscreen               build the main window off screen (no display)
 ///   --hittest                 after 10 s, log the view under the top 160 pt
@@ -35,6 +35,7 @@ enum DebugHooks {
                 while fleet.phase != .ready { try? await Task.sleep(for: .milliseconds(300)) }
                 try? await Task.sleep(for: .seconds(1))
                 fleet.requestedLogbook = page == "report" ? .report : .session(LogbookKey(machine: "mac-mini", sessionId: page))
+                if page == "report" { logbook?.refreshReport() }
             }
         }
         if let spec = value("--spawn") {
@@ -109,6 +110,7 @@ enum DebugHooks {
     }
 
     static var offscreenWindow: NSWindow?
+    static var logbook: Logbook?
 
     /// A window that never goes on screen (the Mac mini is headless), so
     /// hit tests and snapshots run against the real views.

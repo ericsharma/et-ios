@@ -18,6 +18,7 @@ struct LogbookSection: View {
 
     var body: some View {
         Section {
+            reportRow
             if let error = logbook.error, logbook.sessions.isEmpty {
                 Text(error).font(.caption).foregroundStyle(.secondary).lineLimit(3)
             } else if logbook.loaded && logbook.groups.isEmpty {
@@ -61,6 +62,41 @@ struct LogbookSection: View {
         }
     }
 
+    /// "Report (12 min ago)", the suggestions, and Refresh.
+    private var reportRow: some View {
+        let open = page == .report
+        return HStack(spacing: 6) {
+            Image(systemName: "doc.text.magnifyingglass").foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                if let report = logbook.report {
+                    Text("Report (\(report.takenDate.formatted(.relative(presentation: .named))))").lineLimit(1)
+                    if !report.proposals.isEmpty {
+                        Text("⚠ \(report.proposals.count) suggestion\(report.proposals.count == 1 ? "" : "s")")
+                            .font(.caption).foregroundStyle(.orange)
+                    }
+                } else {
+                    Text("Report")
+                }
+                if let run = logbook.run {
+                    ProgressView(value: run.fraction ?? 0).controlSize(.mini)
+                }
+            }
+            Spacer()
+            Button { logbook.refreshReport() } label: { Image(systemName: "arrow.clockwise.circle") }
+                .buttonStyle(.borderless)
+                .disabled(logbook.run != nil)
+                .help("Make a new report (1–3 min)")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .padding(.horizontal, 4).padding(.vertical, 2)
+        .background(open ? Color.accentColor.opacity(0.25) : .clear, in: RoundedRectangle(cornerRadius: 5))
+        .onTapGesture {
+            selection = nil
+            page = .report
+        }
+    }
+
     private func row(_ session: LogbookSession, role: String?) -> some View {
         let open = page == .session(session.key)
         return LogbookSessionRow(session: session, role: role)
@@ -98,7 +134,9 @@ struct LogbookDetail: View {
         case .session(let key):
             LogbookTranscriptView(key: key, logbook: logbook, machines: fleet.machines)
         case .report:
-            EmptyView()
+            LogbookReportView(logbook: logbook, machines: fleet.machines) { key in
+                fleet.requestedLogbook = .session(key)
+            }
         }
     }
 }

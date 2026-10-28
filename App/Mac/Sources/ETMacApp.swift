@@ -19,6 +19,9 @@ struct ETMacApp: App {
         let logbook = Logbook(archive: { fleet.archiveHost() }, log: { fleet.log.add($0) })
         _logbook = State(initialValue: logbook)
         #if DEBUG
+        DebugHooks.logbook = logbook
+        #endif
+        #if DEBUG
         if CommandLine.arguments.contains("--offscreen") {
             let setup = _setup.wrappedValue
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
