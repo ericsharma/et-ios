@@ -1,6 +1,6 @@
 # Plan: Logbook — every Claude session of the network, in one place
 
-Status: 2026-10-28. D1–D10 ACCEPTED. Nothing built yet. A starts L0 + L1 (Rust). B starts the Mac UI (L2–L4) on a stub of the §4.5 API.
+Status: 2026-10-28. D1–D10 ACCEPTED. L0 DONE (results in §5, L0; trigkey, gmktec and mac-mini all checked, so B can skip its L0 step). Next: A does L1 (Rust). B does the Mac UI (L2–L4) on a stub of the §4.5 API.
 
 Follows [PLAN-network.md](PLAN-network.md) and [PLAN-files.md](PLAN-files.md). Work split as in those plans: **A** = the trigkey Claude session (etd, et-proto, et-link), **B** = the Mac agent (apps, builds), **C** = the owner (tests).
 
@@ -56,8 +56,9 @@ The owner works on one or two projects at the same time, with Claude sessions on
 ```
 each machine's etd                                   archive machine's etd (trigkey)
 1. every 2 s: own mm node Ls → session pids
-2. walk process tree → claude pids
-3. ~/.claude/sessions/<pid>.json → sessionId, cwd, status
+2. ~/.claude/sessions/<pid>.json (live pids) → walk up parents to a
+   session pid from step 1; none = orphan, skip (L0)
+3. re-read each pid file → sessionId (changes on /clear), cwd, status
 4. tail ~/.claude/projects/<slug>/<id>.jsonl from offset
 5. ── et/1 LogAppend { key, offset, bytes } ────────▶ append to logbook/<machine>/<id>.jsonl
 6.                         ◀── LogAck { offset } ── fsync, update index.json
@@ -111,7 +112,7 @@ Two stages, so a refresh costs only what changed:
 ```
 
 - The prompt says the core rule: **same goal → one project, even across repos; same repo with different goals → two projects.**
-- Runs in `~/.local/share/etd/logbook/watcher/` with `--allowedTools` empty (read-only text task, no file or shell tools).
+- Runs in `~/.local/share/etd/logbook/watcher/` as `claude -p --tools "" --no-session-persistence --strict-mcp-config --output-format json`, prompt on stdin (L0: no tools, no transcript of its own, ~2 min for 50 digests). Not `--bare` (no login there).
 - One report at a time; a second Refresh joins the running one.
 
 ### 4.5 et-link (Rust, shared by both apps)
@@ -187,6 +188,19 @@ Times are for the agent that runs the step. ✅ = owner can see it work.
 2. Measure transcript growth: bytes/day over the existing `~/.claude/projects` on the 3 machines.
 3. Run `claude -p` with a 50-digest prompt on trigkey: time, and whether `--allowedTools ""` blocks all tools.
 
+**L0 results (2026-10-28, A):**
+
+| Check | Result | Effect on the design |
+|---|---|---|
+| Process tree, trigkey + gmktec | `claude` is the **direct child** of the `mm` node (the session leader, started by `ws`). | Simple case works. |
+| Process tree, mac-mini | Live session: `claude` ← `sh -mc …` ← `mm` node (one wrapper level). Also **2 orphan `claude` processes** with PPID 1, no tty, from sessions that ended on 2026-10-23. Their pid files still say `status: busy`. One orphan has `MM_SESSION=claude2`, the same as the live session. | Map by **walking up the parents until a live manymux session leader** (from the node's `List`). Do **not** use `MM_SESSION`: orphans keep it. A Claude process with no live session above it is skipped. |
+| Session id | The pid file's `sessionId` **changes** while the process runs (after `/clear`), and `--resume <id>` starts with a **new** id. Example mac-mini pid 4435: started `--resume 14bbbb56…`, now `fcca3b1b…` (new file, 2026-10-28). | Read the pid file again at each poll. A new id under the same (machine, mm session) = a new key with `previous` = the old id. |
+| Transcript size | Largest seen: **12.2 MB** (one mac-mini session). Total: trigkey 114 MB / 36 files, mac-mini 183 MB / 35, gmktec 10 MB / 14. Written in the last 7 days: 44 + 66 + 0.6 MB ≈ **16 MB/day** for the network. | Archive reaches the D10 mark (5 GB) in about 10 months. First sync of old transcripts: do **not** back-fill; start at the files that are live when L1 is deployed. |
+| `claude -p --tools ""` | Blocks every tool: it could not read a file or run `hostname`, and said so. | Use it for the watcher. |
+| `claude -p --bare` | Fails: `Not logged in` (bare mode does not use the subscription login). | Do not use `--bare`. |
+| 50-digest report (7.7k words in) | **104 s**, 25.7k tokens in, 11.5k tokens out, 1 turn, valid JSON with no code fence. 19 projects, 2 unassigned, 5 sensible proposals (split / merge / close). API-equal cost $0.42 (on the subscription: counts against its limits). | Watcher command: `claude -p --tools "" --no-session-persistence --strict-mcp-config --output-format json`, prompt on stdin. Time goes mostly to output: keep fields short. Progress UI must allow ~2 min. |
+| Owner's `~/.claude/CLAUDE.md` | Loads into `claude -p` (the no-tools answer ended with "Next: …" in the owner's style). The JSON report was still clean. | Keep it (the report then uses the owner's writing style). Validate the JSON; on a parse error, retry once with "JSON only". |
+
 ### Phase L1 — capture + archive (A, ~1 day)
 
 1. Network settings record with `archive` (D6) + `etd archive <machine>` command.
@@ -228,5 +242,5 @@ Times are for the agent that runs the step. ✅ = owner can see it work.
 | Transcripts contain secrets (tool output of `sops -d`, tokens, `.env`) and are now copied to the archive | A second place to leak from | Archive files mode 0600; members only (same trust as shell access, SECURITY.md); **Do not record**; doc the risk in SECURITY.md. No redaction in v1 (owner wants full output). |
 | `claude -p` reports use subscription limits | Refresh can fail or slow down other sessions | Stage-1 cache; show the last report and the error; on demand only (D8). |
 | Claude Code changes its JSONL or `sessions/*.json` format | Capture stops or parses badly | Store raw bytes (parsing is only for views); reader logs the Claude `version`; a fixture test per seen version. |
-| Large transcripts (5 MB+) on a phone | Slow view, high data use | `LogRead` with a `from` offset; iOS loads the last 200 turns first. |
+| Large transcripts (12 MB seen) on a phone | Slow view, high data use | `LogRead` with a `from` offset; iOS loads the last 200 turns first. |
 | Network doc change (D6) needs all machines updated together | A machine on old etd cannot read the doc | Deploy trigkey + gmktec + mac-mini in one go; m1-air / others re-install. |
