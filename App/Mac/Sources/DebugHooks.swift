@@ -21,6 +21,7 @@ import SwiftUI
 ///                             turn (or report project 1) to machine/session
 ///   --logbook-earlier         with --logbook <id>: load the transcript, then
 ///                             Load earlier twice, logging each step
+///   --agents                  show the Agents page
 ///   --size <W>x<H>            the offscreen window's size (default 1100x700)
 ///   --offscreen               build the main window off screen (no display)
 ///   --hittest                 after 10 s, log the view under the top 160 pt
@@ -38,6 +39,12 @@ enum DebugHooks {
                     while fleet.phase != .ready { try? await Task.sleep(for: .milliseconds(300)) }
                     fleet.requestedRef = SessionRef(machine: parts[0], name: parts[1])
                 }
+            }
+        }
+        if args.contains("--agents") {
+            Task {
+                while fleet.phase != .ready { try? await Task.sleep(for: .milliseconds(300)) }
+                fleet.requestedLogbook = .agents
             }
         }
         if let page = value("--logbook") {

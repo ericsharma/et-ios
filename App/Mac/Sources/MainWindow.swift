@@ -30,10 +30,17 @@ struct MainWindow: View {
         } detail: {
             detail
         }
-        .navigationTitle(logbookPage == nil ? title : "Logbook")
+        .navigationTitle(logbookPage == nil ? title : logbookPage == .agents ? "Agents" : "Logbook")
         .navigationSubtitle(logbookPage == nil ? selection.map { Nicknames.shared.machine($0.machine) } ?? "" : logbookSubtitle)
         .onChange(of: selection) { _, ref in if ref != nil { logbookPage = nil } }
         .toolbar {
+            // Also in the sidebar, under Files (it can be below the fold).
+            ToolbarItemGroup(placement: .navigation) {
+                Button { selection = nil; logbookPage = .agents } label: { Label("Agents", systemImage: "person.2.wave.2") }
+                    .help("Agents: every Claude, its login and usage limits")
+                Button { selection = nil; logbookPage = .report } label: { Label("Logbook", systemImage: "book.pages") }
+                    .help("Logbook: the report and every Claude transcript")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button { showingNewSession = true } label: { Label("New Session", systemImage: "plus") }
                     .help("New Session (⌘T)")
@@ -114,7 +121,7 @@ struct MainWindow: View {
         switch logbookPage {
         case .session(let key): logbook.session(key)?.label ?? key.id
         case .report: "Report"
-        case nil: ""
+        case .agents, nil: ""
         }
     }
 
@@ -229,6 +236,7 @@ struct Sidebar: View {
                 }
             }
             filesSection
+            AgentsSection(selection: $selection, page: $logbookPage)
             LogbookSection(selection: $selection, page: $logbookPage)
         }
         .listStyle(.sidebar)
@@ -396,6 +404,7 @@ struct TerminalScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if let selection { TerminalAgentStrip(ref: selection) }
             ZStack {
                 Color(nsColor: Theme.background)
                 if let terminal {

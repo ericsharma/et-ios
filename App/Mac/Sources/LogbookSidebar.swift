@@ -1,9 +1,11 @@
 import SwiftUI
 
-/// What the Logbook shows in place of the terminal.
+/// What the Logbook (or Agents) shows in place of the terminal.
 enum LogbookPage: Hashable {
     case session(LogbookKey)
     case report
+    /// Every machine's Claude agents and usage limits (PLAN-agents).
+    case agents
 }
 
 /// The sidebar's Logbook section, under Files: the sessions grouped by repo
@@ -118,6 +120,7 @@ struct LogbookSection: View {
 struct LogbookDetail: View {
     @Environment(Fleet.self) private var fleet
     @Environment(Logbook.self) private var logbook
+    @Environment(Agents.self) private var agents
     let page: LogbookPage
 
     var body: some View {
@@ -127,6 +130,10 @@ struct LogbookDetail: View {
         case .report:
             LogbookReportView(logbook: logbook, machines: fleet.machines) { key in
                 fleet.requestedLogbook = .session(key)
+            }
+        case .agents:
+            AgentsPage(agents: agents, title: { logbook.title(for: $0) }) { agent in
+                fleet.requestedRef = SessionRef(machine: agent.machine, name: agent.mmSession)
             }
         }
     }

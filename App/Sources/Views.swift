@@ -319,6 +319,9 @@ struct SessionView: View {
     @State private var showVocabulary = false
     @State private var showNetwork = false
     @State private var showLogbook = false
+    @State private var showAgents = false
+    /// Made on first use (PLAN-agents).
+    @State private var agents: Agents?
     @State private var showFiles = false
     /// Brief message under the header (e.g. no "Next:" to read).
     @State private var notice: String?
@@ -415,6 +418,16 @@ struct SessionView: View {
         .sheet(isPresented: $showLogbook) {
             LogbookScreen(session: session) { showLogbook = false }
         }
+        .sheet(isPresented: $showAgents) {
+            if let agents {
+                AgentsScreen(agents: agents, open: { session.openMm(machine: $0.machine, name: $0.mmSession) }) { showAgents = false }
+            }
+        }
+        .onAppear {
+            if agents == nil, session.server.isIroh {
+                agents = Agents(hosts: { [session] in session.directHosts() }, log: { [session] in session.log.add($0) })
+            }
+        }
         .sheet(isPresented: $showNetwork) {
             NavigationStack {
                 NetworkView(session: session).toolbar {
@@ -495,6 +508,8 @@ struct SessionView: View {
                         Button("Files", systemImage: "folder") { showFiles = true }
                             .disabled(session.state != .connected || session.mode != .manymux)
                         Button("Logbook", systemImage: "book.pages") { showLogbook = true }
+                            .disabled(session.state != .connected || session.mode != .manymux)
+                        Button("Agents", systemImage: "person.2.wave.2") { showAgents = true }
                             .disabled(session.state != .connected || session.mode != .manymux)
                     }
                     Button("Dictation words", systemImage: "character.book.closed") { showVocabulary = true }
@@ -684,7 +699,12 @@ struct SessionView: View {
                 .overlay(alignment: .top) { mmNoticeView }
                 .animation(.snappy, value: session.mmNotice)
         } else {
-            stateContent
+            VStack(spacing: 0) {
+                if session.mode == .manymux, session.state == .connected, let agents, let mm = session.currentWindow?.mm {
+                    SessionAgentStrip(agents: agents, machine: mm.machine, name: mm.name)
+                }
+                stateContent
+            }
         }
     }
 
