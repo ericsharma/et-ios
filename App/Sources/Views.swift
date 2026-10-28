@@ -318,6 +318,7 @@ struct SessionView: View {
     @State private var showLog = false
     @State private var showVocabulary = false
     @State private var showNetwork = false
+    @State private var showLogbook = false
     @State private var showFiles = false
     /// Brief message under the header (e.g. no "Next:" to read).
     @State private var notice: String?
@@ -411,6 +412,9 @@ struct SessionView: View {
                 }
             }
         }
+        .sheet(isPresented: $showLogbook) {
+            LogbookScreen(session: session) { showLogbook = false }
+        }
         .sheet(isPresented: $showNetwork) {
             NavigationStack {
                 NetworkView(session: session).toolbar {
@@ -489,6 +493,8 @@ struct SessionView: View {
                         Button("Network", systemImage: "point.3.connected.trianglepath.dotted") { showNetwork = true }
                             .disabled(session.state != .connected)
                         Button("Files", systemImage: "folder") { showFiles = true }
+                            .disabled(session.state != .connected || session.mode != .manymux)
+                        Button("Logbook", systemImage: "book.pages") { showLogbook = true }
                             .disabled(session.state != .connected || session.mode != .manymux)
                     }
                     Button("Dictation words", systemImage: "character.book.closed") { showVocabulary = true }

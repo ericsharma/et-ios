@@ -1573,6 +1573,13 @@ extension SessionController {
         return hosts
     }
 
+    /// The Logbook's archive machine (PLAN-logbook D6): the network's first
+    /// archive if it is connected, else the hub.
+    func archiveHost() -> IrohHost? {
+        let hosts = directHosts()
+        return network?.archive.lazy.compactMap { hosts[$0] }.first ?? connection as? IrohHost
+    }
+
     /// The network's machines other than the hub, by name.
     private var networkMachines: [NetMember] {
         (network?.members ?? [])

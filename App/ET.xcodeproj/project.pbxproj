@@ -9,11 +9,13 @@
 /* Begin PBXBuildFile section */
 		010B450E8B06F554C36BBE3A /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF38856E7DA96D98C428743 /* ShareViewController.swift */; };
 		02C471DF674A9FDDD8D315B1 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FBEC799A622722D593EB86B /* SettingsView.swift */; };
+		06C75A0855A9879B1E1BBF0B /* LogbookViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 747ECEA05C1D9344EE1626D8 /* LogbookViews.swift */; };
 		09B34837EC8C57C54AA12295 /* Iroh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4880DD1374C363AFA5C69F37 /* Iroh.swift */; };
 		0A0D3637C837954773B6B363 /* NetworkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10890B81C05CE555FD81D008 /* NetworkView.swift */; };
 		0AEEC656192348D8F9AC0E89 /* Iroh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4880DD1374C363AFA5C69F37 /* Iroh.swift */; };
 		0B985BB0144DDD591666D775 /* LogbookStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = A12B3013FA934A58F5CED94E /* LogbookStub.swift */; };
 		0CD25A29164D993D0A882B28 /* LogbookSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 035D3E3B25F955FFF0740357 /* LogbookSidebar.swift */; };
+		117B4457888342904D45BA28 /* LogbookSendViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54E5B96C3B3539B1C7B53F03 /* LogbookSendViews.swift */; };
 		129167D900DCDB1EF68F3C66 /* VocabMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 591C2444EF4A2214A0249778 /* VocabMatcher.swift */; };
 		13D385DF09D2AE2FD4144B08 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CB2856B21C534EA0CAE1C159 /* Assets.xcassets */; };
 		176CEB6F04458465BE3439DA /* KeyRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCBF94AC41590A9B15E7FAA /* KeyRow.swift */; };
@@ -44,6 +46,7 @@
 		66C925D75EC77293B6451EAB /* AppInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4A3A124DA65B9FD17453340 /* AppInfo.swift */; };
 		67169DC0BE388E8F72DC49C4 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = E016E05FBF8DE467C1BC1F30 /* SwiftTerm */; };
 		67C604DB4A8A22B61AB66066 /* LogbookTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DCA81B266760544B175CB11 /* LogbookTypes.swift */; };
+		68664758EC86B0B913F56E2E /* Logbook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD3B63BE81D334271055BEF /* Logbook.swift */; };
 		6A226C0A622AFF40D7590C07 /* LogbookViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 747ECEA05C1D9344EE1626D8 /* LogbookViews.swift */; };
 		6BF6D002CAD9907E777E8EED /* ETSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 11602F37CD401485C3D66840 /* ETSSH */; };
 		6F005C5539A7B64474934977 /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = ACB31B6DE076A6AEE0E31967 /* ETCore */; };
@@ -53,6 +56,7 @@
 		77ED11F2C14086DA337E9883 /* VoiceInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB2420D4BA60D70DBDC8885A /* VoiceInput.swift */; };
 		791E79EFC8C8971FEE5123D4 /* Fleet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C2F45FF4381091649F20834 /* Fleet.swift */; };
 		7A66CC527EA1D8C14DB89D3C /* FileSendViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75096092B60CEDCA629164FC /* FileSendViews.swift */; };
+		7A7F101709903D184289DD2D /* LogbookScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5138868F50A2A58985ECCF8A /* LogbookScreen.swift */; };
 		7ABFAB899E15B83CE5845EA0 /* Manymux.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BE76CB262FB7EA0605C99EB /* Manymux.swift */; };
 		7B7A1AB52E7AAEB0D5283959 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB367F7DC192EBCCA06508BC /* AppModel.swift */; };
 		7E75886C82FBA663C296E12F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 65A00CC919987D56EC6D81C2 /* Assets.xcassets */; };
@@ -77,14 +81,17 @@
 		BFC56E0C4CE90C8544693723 /* AppInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4A3A124DA65B9FD17453340 /* AppInfo.swift */; };
 		C7D22526ADD3F1CB22E245DD /* Overview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36A4263F016A81FE6C5B2B5E /* Overview.swift */; };
 		C8B75C969CC365668A042C04 /* EtLink in Frameworks */ = {isa = PBXBuildFile; productRef = E8BC1D28CF427FA6638A620D /* EtLink */; };
+		D4AB5BC720B667241E1C6981 /* logbook-1.jsonl in Resources */ = {isa = PBXBuildFile; fileRef = FAB9E1D403A1FD2BE046D89D /* logbook-1.jsonl */; };
 		D925AEB7EE1B1A2E8E25A3DF /* Copilot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23D00D38126433369DDB5E17 /* Copilot.swift */; };
 		DCC53456F454E5F2E4EB4A14 /* Manymux.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BE76CB262FB7EA0605C99EB /* Manymux.swift */; };
+		DD266A0ED5126B581EA61465 /* LogbookReportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDB766205ACA88AFE4503F86 /* LogbookReportViews.swift */; };
 		E82A4932EA0D6AFA8F92AF9E /* Nicknames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BAEF5D9D9F6E2D1930C94BD /* Nicknames.swift */; };
 		E8DCE9C2F73F714AE6BBCAA6 /* LogbookTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DCA81B266760544B175CB11 /* LogbookTypes.swift */; };
 		E9E11AA1FFD106C37C885F01 /* LogbookReportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDB766205ACA88AFE4503F86 /* LogbookReportViews.swift */; };
 		EB28BC4D4608DBE3C2FD9D80 /* Vocabulary.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5E31C39DDE31580DBCAB4E /* Vocabulary.swift */; };
 		EBD84653806CD1F4B3F10156 /* ShareStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FBF0491C3AEC4AE125F75D8 /* ShareStore.swift */; };
 		EEBCAA1A936538064AF9140F /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = E77D439CE39322DFC4891B39 /* ETCore */; };
+		F331B36B18CF81ECFDB48478 /* logbook-2.jsonl in Resources */ = {isa = PBXBuildFile; fileRef = 331A7CFDB3F78D1F6BD9F5C6 /* logbook-2.jsonl */; };
 		F47146C7DDE2BF17032EF65D /* ShareStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FBF0491C3AEC4AE125F75D8 /* ShareStore.swift */; };
 		F8F1BACDD89A3936FDBA3DCA /* ETApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE328D04440F47561CB04404 /* ETApp.swift */; };
 /* End PBXBuildFile section */
@@ -126,6 +133,7 @@
 		1BAEF5D9D9F6E2D1930C94BD /* Nicknames.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Nicknames.swift; sourceTree = "<group>"; };
 		23D00D38126433369DDB5E17 /* Copilot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Copilot.swift; sourceTree = "<group>"; };
 		2DCA81B266760544B175CB11 /* LogbookTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogbookTypes.swift; sourceTree = "<group>"; };
+		331A7CFDB3F78D1F6BD9F5C6 /* logbook-2.jsonl */ = {isa = PBXFileReference; path = "logbook-2.jsonl"; sourceTree = "<group>"; };
 		36A4263F016A81FE6C5B2B5E /* Overview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Overview.swift; sourceTree = "<group>"; };
 		36C085050613D51A5F16E4D3 /* ShareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareView.swift; sourceTree = "<group>"; };
 		3A02635506A8CBB96DC1C6C9 /* ET-mac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ET-mac.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -134,6 +142,7 @@
 		44366E16603D79FB4DCAF6D2 /* SessionTerminal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTerminal.swift; sourceTree = "<group>"; };
 		4880DD1374C363AFA5C69F37 /* Iroh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Iroh.swift; sourceTree = "<group>"; };
 		4BE76CB262FB7EA0605C99EB /* Manymux.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Manymux.swift; sourceTree = "<group>"; };
+		5138868F50A2A58985ECCF8A /* LogbookScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogbookScreen.swift; sourceTree = "<group>"; };
 		54E5B96C3B3539B1C7B53F03 /* LogbookSendViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogbookSendViews.swift; sourceTree = "<group>"; };
 		591C2444EF4A2214A0249778 /* VocabMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VocabMatcher.swift; sourceTree = "<group>"; };
 		5E06F47B00D27F78A52913A1 /* SharedFilesViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedFilesViews.swift; sourceTree = "<group>"; };
@@ -170,6 +179,7 @@
 		EDB766205ACA88AFE4503F86 /* LogbookReportViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogbookReportViews.swift; sourceTree = "<group>"; };
 		EE328D04440F47561CB04404 /* ETApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ETApp.swift; sourceTree = "<group>"; };
 		F6F7CAF25144AE01A1FD0AB2 /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
+		FAB9E1D403A1FD2BE046D89D /* logbook-1.jsonl */ = {isa = PBXFileReference; path = "logbook-1.jsonl"; sourceTree = "<group>"; };
 		FFCBF94AC41590A9B15E7FAA /* KeyRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyRow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -229,6 +239,15 @@
 			path = Sources;
 			sourceTree = "<group>";
 		};
+		1D23EADD45B8D344A39FD5A1 /* LogbookFixtures */ = {
+			isa = PBXGroup;
+			children = (
+				FAB9E1D403A1FD2BE046D89D /* logbook-1.jsonl */,
+				331A7CFDB3F78D1F6BD9F5C6 /* logbook-2.jsonl */,
+			);
+			path = LogbookFixtures;
+			sourceTree = "<group>";
+		};
 		59806B3A3A9AA44AF6BF3019 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
@@ -275,6 +294,7 @@
 				EE328D04440F47561CB04404 /* ETApp.swift */,
 				84694A6364E84BA9ACFD2E2B /* FilesView.swift */,
 				FFCBF94AC41590A9B15E7FAA /* KeyRow.swift */,
+				5138868F50A2A58985ECCF8A /* LogbookScreen.swift */,
 				15F85597F66DBB0CC3A093AF /* MachinesView.swift */,
 				10890B81C05CE555FD81D008 /* NetworkView.swift */,
 				36A4263F016A81FE6C5B2B5E /* Overview.swift */,
@@ -308,6 +328,7 @@
 			isa = PBXGroup;
 			children = (
 				65A00CC919987D56EC6D81C2 /* Assets.xcassets */,
+				1D23EADD45B8D344A39FD5A1 /* LogbookFixtures */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -498,6 +519,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				7E75886C82FBA663C296E12F /* Assets.xcassets in Resources */,
+				D4AB5BC720B667241E1C6981 /* logbook-1.jsonl in Resources */,
+				F331B36B18CF81ECFDB48478 /* logbook-2.jsonl in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -577,8 +600,13 @@
 				2A2EBF9E28BA7866D10E4FAB /* FilesView.swift in Sources */,
 				58F3229B35D71250C678BC3D /* Iroh.swift in Sources */,
 				176CEB6F04458465BE3439DA /* KeyRow.swift in Sources */,
+				68664758EC86B0B913F56E2E /* Logbook.swift in Sources */,
+				DD266A0ED5126B581EA61465 /* LogbookReportViews.swift in Sources */,
+				7A7F101709903D184289DD2D /* LogbookScreen.swift in Sources */,
+				117B4457888342904D45BA28 /* LogbookSendViews.swift in Sources */,
 				0B985BB0144DDD591666D775 /* LogbookStub.swift in Sources */,
 				E8DCE9C2F73F714AE6BBCAA6 /* LogbookTypes.swift in Sources */,
+				06C75A0855A9879B1E1BBF0B /* LogbookViews.swift in Sources */,
 				893A4346740B9772C37B287C /* MachinesView.swift in Sources */,
 				7ABFAB899E15B83CE5845EA0 /* Manymux.swift in Sources */,
 				0A0D3637C837954773B6B363 /* NetworkView.swift in Sources */,

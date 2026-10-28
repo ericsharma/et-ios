@@ -1,6 +1,6 @@
 # Plan: Logbook — every Claude session of the network, in one place
 
-Status: 2026-10-28. D1–D10 ACCEPTED. L0 DONE (results in §5, L0). A: L1 (Rust) next. B: L2-B, L3-B and L4-B done on a stub (`App/Shared/LogbookStub.swift`): Mac sidebar Logbook, live transcript, report view with suggestions, Send to session. Next for B: L5 (iOS) on the stub.
+Status: 2026-10-28. D1–D10 ACCEPTED. L0 DONE (results in §5, L0). A: L1 (Rust) next. B: L2-B, L3-B and L4-B done on a stub (`App/Shared/LogbookStub.swift`): Mac sidebar Logbook, live transcript, report view with suggestions, Send to session. L5 (iOS/iPad) done on the stub, with 2 fixture transcripts; built, not run (no TestFlight until the stub is gone). Next for B: swap the stub for the real API when A bumps Vendor/etd.
 
 Follows [PLAN-network.md](PLAN-network.md) and [PLAN-files.md](PLAN-files.md). Work split as in those plans: **A** = the trigkey Claude session (etd, et-proto, et-link), **B** = the Mac agent (apps, builds), **C** = the owner (tests).
 

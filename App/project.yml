@@ -25,7 +25,7 @@ targets:
     platform: iOS
     # xcodegen picks the build phase by file type, so the asset catalog
     # (app icon) is listed under sources too.
-    sources: [Sources, Shared, ShareKit, FilesUI, Resources]
+    sources: [Sources, Shared, ShareKit, FilesUI, LogbookUI, Resources]
     dependencies:
       - target: ETShare
       - package: ETCore
