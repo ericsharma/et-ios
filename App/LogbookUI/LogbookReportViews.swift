@@ -14,6 +14,10 @@ struct LogbookReportView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 header
+                if let error = logbook.reportError {
+                    Label("Refresh failed: \(error)", systemImage: "exclamationmark.triangle")
+                        .font(.callout).foregroundStyle(.orange).textSelection(.enabled)
+                }
                 if let report = logbook.report {
                     if !report.proposals.isEmpty { proposals(report) }
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 14, alignment: .top)], spacing: 14) {

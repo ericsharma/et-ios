@@ -12,6 +12,8 @@ final class Logbook {
     private(set) var report: LogbookReport?
     /// A Refresh in progress.
     private(set) var run: ReportRun?
+    /// Why the last Refresh failed.
+    private(set) var reportError: String?
     private(set) var loaded = false
     private(set) var error: String?
     /// Sessions with a Do not record change on the way.
@@ -155,6 +157,7 @@ final class Logbook {
             return
         }
         run = ReportRun()
+        reportError = nil
         log("Logbook: refresh report")
         reportTask = Task {
             defer {
@@ -171,6 +174,7 @@ final class Logbook {
                 await reload()
             } catch {
                 log("Logbook: report failed: \(error)")
+                reportError = Self.describe(error)
                 notice = "Report failed: \(Self.describe(error))"
             }
         }

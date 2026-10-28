@@ -10,8 +10,9 @@ import SwiftUI
 ///   --type <text>             after 6 s, type into the selected session
 ///   --drop <file>             once the shown session is live, send the file
 ///                             as a drop on its terminal does
-///   --logbook <id|report>     show a Logbook transcript (Claude session id
-///                             on mac-mini) or the report (and Refresh it)
+///   --logbook <id|report>     show a Logbook transcript (machine/session id,
+///                             a session id on mac-mini, or machine/* for its
+///                             newest) or the report (and Refresh it)
 ///   --logbook-send <m/s>      after 8 s, send the shown transcript's last
 ///                             turn (or report project 1) to machine/session
 ///   --logbook-earlier         with --logbook <id>: load the transcript, then
@@ -39,7 +40,13 @@ enum DebugHooks {
             Task {
                 while fleet.phase != .ready { try? await Task.sleep(for: .milliseconds(300)) }
                 try? await Task.sleep(for: .seconds(1))
-                fleet.requestedLogbook = page == "report" ? .report : .session(LogbookKey(machine: "mac-mini", sessionId: page))
+                var key = LogbookKey(id: page) ?? LogbookKey(machine: "mac-mini", sessionId: page)
+                if key.sessionId == "*", let logbook {
+                    while !logbook.loaded { try? await Task.sleep(for: .milliseconds(300)) }
+                    key = logbook.sessions.filter { $0.key.machine == key.machine }.max { $0.last < $1.last }?.key ?? key
+                    fleet.log.add("Debug: Logbook \(key.id)")
+                }
+                fleet.requestedLogbook = page == "report" ? .report : .session(key)
                 if page == "report" { logbook?.refreshReport() }
             }
         }
@@ -48,7 +55,7 @@ enum DebugHooks {
             Task {
                 try? await Task.sleep(for: .seconds(8))
                 guard parts.count == 2, let logbook else { return }
-                let key = LogbookKey(machine: "mac-mini", sessionId: page)
+                let key = (LogbookKey(id: page) ?? LogbookKey(machine: "mac-mini", sessionId: page))
                 let transcript = logbook.transcript(key)
                 if page == "report", let report = logbook.report, let project = report.projects.first {
                     logbook.send(.reportSection(reportId: report.id, projectId: project.id), to: parts[0], session: parts[1])
@@ -67,7 +74,7 @@ enum DebugHooks {
             Task {
                 while fleet.phase != .ready { try? await Task.sleep(for: .milliseconds(300)) }
                 guard let logbook else { return }
-                let key = LogbookKey(machine: "mac-mini", sessionId: page)
+                let key = (LogbookKey(id: page) ?? LogbookKey(machine: "mac-mini", sessionId: page))
                 while logbook.session(key) == nil { try? await Task.sleep(for: .milliseconds(300)) }
                 let transcript = logbook.transcript(key)
                 transcript.start(size: logbook.session(key)?.bytes ?? 0)
