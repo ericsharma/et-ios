@@ -5,18 +5,41 @@ import Foundation
 /// Exact text, unlike the screen, which wraps and scrolls away.
 public enum Transcript {
     /// One exchange: what the user typed, and Claude's text replies until the
-    /// next prompt (tool calls, tool output and thinking left out).
+    /// next prompt (thinking left out). `id` is the prompt's entry uuid.
+    /// `reply` has only text; the tool calls are in `tools`, in order.
     public struct Turn: Identifiable, Equatable, Sendable {
         public let id: String
         public var prompt: String
         public var reply: String
         public var timestamp: Date?
+        public var tools: [ToolCall]
 
-        public init(id: String, prompt: String, reply: String, timestamp: Date? = nil) {
+        public init(id: String, prompt: String, reply: String, timestamp: Date? = nil, tools: [ToolCall] = []) {
             self.id = id
             self.prompt = prompt
             self.reply = reply
             self.timestamp = timestamp
+            self.tools = tools
+        }
+    }
+
+    /// A tool call in a turn: the tool, its input on one line, and its
+    /// output once the result line is there.
+    public struct ToolCall: Identifiable, Equatable, Sendable {
+        /// The tool_use id (`toolu_…`).
+        public let id: String
+        public var name: String
+        /// The main input (command, file path, pattern…), one line, at most 160 characters.
+        public var summary: String
+        public var output: String?
+        public var isError: Bool
+
+        public init(id: String, name: String, summary: String, output: String? = nil, isError: Bool = false) {
+            self.id = id
+            self.name = name
+            self.summary = summary
+            self.output = output
+            self.isError = isError
         }
     }
 
@@ -52,9 +75,12 @@ public enum Transcript {
         return (path, text.split(separator: "\n").map(String.init))
     }
 
-    /// Turns from transcript lines, oldest first.
+    /// Turns from transcript lines, oldest first. Tool calls go into the
+    /// turn they belong to, and their results into the calls (by id).
     public static func parse(lines: [String]) -> [Turn] {
         var turns: [Turn] = []
+        /// Tool call id → (turn, index in its tools).
+        var calls: [String: (Int, Int)] = [:]
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         for line in lines {
@@ -64,12 +90,30 @@ public enum Transcript {
                   entry["isSidechain"] as? Bool != true,
                   entry["isMeta"] as? Bool != true,
                   let message = entry["message"] as? [String: Any] else { continue }
+            if let blocks = message["content"] as? [[String: Any]], !turns.isEmpty {
+                let last = turns.count - 1
+                for block in blocks {
+                    switch block["type"] as? String {
+                    case "tool_use" where type == "assistant":
+                        guard let id = block["id"] as? String else { continue }
+                        let name = block["name"] as? String ?? "tool"
+                        calls[id] = (last, turns[last].tools.count)
+                        turns[last].tools.append(ToolCall(id: id, name: name, summary: summary(of: block["input"])))
+                    case "tool_result" where type == "user":
+                        guard let id = block["tool_use_id"] as? String, let at = calls[id] else { continue }
+                        turns[at.0].tools[at.1].output = resultText(of: block["content"])
+                        turns[at.0].tools[at.1].isError = block["is_error"] as? Bool ?? false
+                    default:
+                        continue
+                    }
+                }
+            }
             let text = Self.text(of: message["content"])
             guard !text.isEmpty else { continue }
             switch type {
             case "user":
                 // Slash commands and their output aren't prompts.
-                if text.hasPrefix("<command-") || text.hasPrefix("<local-command") { continue }
+                if text.hasPrefix("<command-") || text.hasPrefix("<local-command") || text.hasPrefix("[Request interrupted") { continue }
                 let id = entry["uuid"] as? String ?? UUID().uuidString
                 let date = (entry["timestamp"] as? String).flatMap { iso.date(from: $0) }
                 turns.append(Turn(id: id, prompt: text, reply: "", timestamp: date))
@@ -120,6 +164,28 @@ public enum Transcript {
         guard let blocks = content as? [[String: Any]] else { return "" }
         return blocks.compactMap { $0["type"] as? String == "text" ? $0["text"] as? String : nil }
             .joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// A tool input as one line: the field that says what it does, else
+    /// the first string field.
+    private static func summary(of input: Any?) -> String {
+        guard let input = input as? [String: Any] else { return "" }
+        let keys = ["command", "file_path", "path", "pattern", "url", "query", "description", "prompt", "skill"]
+        let value = keys.lazy.compactMap { input[$0] as? String }.first
+            ?? input.keys.sorted().lazy.compactMap { input[$0] as? String }.first
+            ?? ""
+        let line = value.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+        let flat = line.trimmingCharacters(in: .whitespaces)
+        return flat.count > 160 ? String(flat.prefix(159)) + "…" : flat
+    }
+
+    /// A tool result's text: a string, or the text blocks of a list.
+    private static func resultText(of content: Any?) -> String {
+        if let string = content as? String { return string }
+        guard let blocks = content as? [[String: Any]] else { return "" }
+        return blocks.map { block in
+            block["type"] as? String == "text" ? block["text"] as? String ?? "" : "[\(block["type"] as? String ?? "item")]"
+        }.joined(separator: "\n")
     }
 
     private static func shellQuote(_ s: String) -> String {

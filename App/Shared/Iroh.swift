@@ -272,7 +272,7 @@ final class IrohHost: HostConnection, @unchecked Sendable {
         let info = try await mapped { try await host.network() }
         return NetInfo(name: info.name, key: info.key, members: info.members.map {
             NetMember(endpointId: $0.endpointId, name: $0.name, isMachine: $0.isMachine)
-        })
+        }, archive: info.archive)
     }
 
     /// An `et://pair` link, valid 10 minutes, one use. `machine`: for
@@ -284,6 +284,75 @@ final class IrohHost: HostConnection, @unchecked Sendable {
     /// "E.T. is open" for `seconds` (at most 120): no pushes from this machine until then.
     func foreground(seconds: Int) async throws {
         try await mapped { try await host.foreground(seconds: UInt32(clamping: seconds)) }
+    }
+
+    // MARK: - Logbook (PLAN-logbook §4.5; on the archive machine)
+
+    /// Every recorded Claude session; `since`: changed after (unix seconds, 0 = all).
+    func logbookSessions(since: UInt64) async throws -> [LogbookSession] {
+        try await mapped { try await host.logbookSessions(since: since) }.map {
+            LogbookSession(key: LogbookKey($0.key), mmSession: $0.mmSession, cwd: $0.cwd, repo: $0.repo, branch: $0.branch,
+                           status: $0.status, first: Date(timeIntervalSince1970: TimeInterval($0.first)),
+                           last: Date(timeIntervalSince1970: TimeInterval($0.last)), bytes: $0.bytes,
+                           previous: $0.previous, paused: $0.paused)
+        }
+    }
+
+    /// A transcript's lines from byte `from`: the stored ones, then live.
+    func logbookFollow(_ key: LogbookKey, from: UInt64) async throws -> LogbookFeed {
+        LogbookFeed(try await mapped { try await host.logbookFollow(key: key.link, from: from) })
+    }
+
+    /// Do not record (D2): the session's machine stops sending its transcript.
+    func logbookPause(machine: String, mmSession: String, paused: Bool) async throws {
+        try await mapped { try await host.logbookPause(machine: machine, mmSession: mmSession, paused: paused) }
+    }
+
+    /// The report JSON (§4.4 + "id", "taken"). `refresh`: make a new one
+    /// (1–3 min), with progress (stage, done, total).
+    func logbookReport(refresh: Bool, progress: @escaping @Sendable (String, Int, Int) -> Void) async throws -> String {
+        try await mapped { try await host.report(refresh: refresh, progress: ReportRelay(progress)) }
+    }
+
+    /// The owner accepts or edits a grouping (one §4.4 proposal, as JSON).
+    func logbookGrouping(_ changeJSON: String) async throws {
+        try await mapped { try await host.grouping(changeJson: changeJSON) }
+    }
+
+    /// Writes the selection as Markdown on the archive, sends it to
+    /// `machine` and types its path into `session`.
+    func logbookSend(_ selection: LogbookSelection, to machine: String, session: String) async throws -> SentFiles {
+        let selection: LogSelection = switch selection {
+        case .turns(let key, let ids): .turns(key: key.link, turnIds: ids)
+        case .reportSection(let report, let project): .reportSection(reportId: report, projectId: project)
+        }
+        let delivered = try await mapped {
+            try await host.logbookSend(selection: selection, to: machine, session: session, progress: ProgressRelay { _, _ in })
+        }
+        return SentFiles(paths: delivered.paths, typed: delivered.typed)
+    }
+}
+
+extension LogbookKey {
+    fileprivate init(_ key: LogKey) {
+        self.init(machine: key.machine, sessionId: key.sessionId)
+    }
+
+    fileprivate var link: LogKey { LogKey(machine: machine, sessionId: sessionId) }
+}
+
+/// A followed transcript (EtLink's `LogStream`).
+final class LogbookFeed: @unchecked Sendable {
+    private let stream: LogStream
+
+    init(_ stream: LogStream) {
+        self.stream = stream
+    }
+
+    /// The next whole lines, and the byte offset after them. Waits for new lines.
+    func next() async throws -> (offset: UInt64, lines: [String]) {
+        let chunk = try await mapped { try await stream.next() }
+        return (chunk.offset, chunk.lines)
     }
 }
 
@@ -299,6 +368,8 @@ struct NetInfo: Sendable, Equatable {
     var name: String
     var key: String
     var members: [NetMember]
+    /// The machines that keep the Logbook, first = the one to use (PLAN-logbook D6).
+    var archive: [String] = []
 }
 
 /// A manymux session, as `mmList` reports it.
@@ -506,6 +577,19 @@ private final class ProgressRelay: SendProgress {
 
     func onProgress(done: UInt64, total: UInt64) {
         update(done, total)
+    }
+}
+
+/// `ReportProgress` as a closure.
+private final class ReportRelay: ReportProgress {
+    private let update: @Sendable (String, Int, Int) -> Void
+
+    init(_ update: @escaping @Sendable (String, Int, Int) -> Void) {
+        self.update = update
+    }
+
+    func onProgress(stage: String, done: UInt32, total: UInt32) {
+        update(stage, Int(done), Int(total))
     }
 }
 

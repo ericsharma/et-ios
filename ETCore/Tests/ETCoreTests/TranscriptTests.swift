@@ -23,6 +23,26 @@ struct TranscriptTests {
         #expect(turns[1].reply.isEmpty)
     }
 
+    @Test func keepsToolCallsWithTheirOutput() throws {
+        let url = try #require(Bundle.module.url(forResource: "logbook", withExtension: "jsonl", subdirectory: "Fixtures"))
+        let lines = try String(contentsOf: url, encoding: .utf8).split(separator: "\n").map(String.init)
+        let turns = Transcript.parse(lines: lines)
+        #expect(turns.map(\.id) == ["p1", "p2"])
+        // Text only in the reply, as before (Copilot reads it).
+        #expect(turns[0].reply == "Running them.\n\nAll 12 pass.")
+        #expect(turns[0].tools.map(\.name) == ["Bash", "Read"])
+        #expect(turns[0].tools[0].summary == "swift test")
+        #expect(turns[0].tools[0].output == "Test run with 12 tests passed")
+        #expect(turns[0].tools[0].isError == false)
+        #expect(turns[0].tools[1].summary == "/Users/x/et/Package.swift")
+        #expect(turns[0].tools[1].output == "line 1\n[image]")
+        #expect(turns[0].tools[1].isError)
+        // Still running: no output yet.
+        #expect(turns[1].tools.count == 1)
+        #expect(turns[1].tools[0].output == nil)
+        #expect(turns[1].reply.isEmpty)
+    }
+
     @Test func needleStopsBeforeEscapedCharacters() {
         #expect(Transcript.needle(fromPrompt: "Read the E.T. app and say \"hi\"") == "Read the E.T. app and say ")
         #expect(Transcript.needle(fromPrompt: "ok") == nil)

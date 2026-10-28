@@ -12,10 +12,13 @@
 		09B34837EC8C57C54AA12295 /* Iroh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4880DD1374C363AFA5C69F37 /* Iroh.swift */; };
 		0A0D3637C837954773B6B363 /* NetworkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10890B81C05CE555FD81D008 /* NetworkView.swift */; };
 		0AEEC656192348D8F9AC0E89 /* Iroh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4880DD1374C363AFA5C69F37 /* Iroh.swift */; };
+		0B985BB0144DDD591666D775 /* LogbookStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = A12B3013FA934A58F5CED94E /* LogbookStub.swift */; };
+		0CD25A29164D993D0A882B28 /* LogbookSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 035D3E3B25F955FFF0740357 /* LogbookSidebar.swift */; };
 		129167D900DCDB1EF68F3C66 /* VocabMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 591C2444EF4A2214A0249778 /* VocabMatcher.swift */; };
 		13D385DF09D2AE2FD4144B08 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CB2856B21C534EA0CAE1C159 /* Assets.xcassets */; };
 		176CEB6F04458465BE3439DA /* KeyRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCBF94AC41590A9B15E7FAA /* KeyRow.swift */; };
 		183CB5CE95619A1C21188D15 /* SharedFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 897E5EE0F90FB3B7D643E059 /* SharedFiles.swift */; };
+		193D09374FBDD4C0B00B413C /* Logbook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD3B63BE81D334271055BEF /* Logbook.swift */; };
 		1CF2C07C262A0FFE2738D263 /* VoiceInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 175E8D2F9B6999615A8AAF59 /* VoiceInput.swift */; };
 		1F53A5401133E4C36EBC1B23 /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6F7CAF25144AE01A1FD0AB2 /* SetupView.swift */; };
 		273834FD679594F0EFD222D3 /* Manymux.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BE76CB262FB7EA0605C99EB /* Manymux.swift */; };
@@ -28,6 +31,7 @@
 		44546852A16838D9010F6492 /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = 3EC677F4C4423E9C7AF25E72 /* ETCore */; };
 		45D6BA62083244C784927078 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC2C774B86C691F339F5290 /* Views.swift */; };
 		47F9FA3B055E526E99C3DF25 /* SharedFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 897E5EE0F90FB3B7D643E059 /* SharedFiles.swift */; };
+		4A8483A6FE767AABCE0E1B99 /* LogbookStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = A12B3013FA934A58F5CED94E /* LogbookStub.swift */; };
 		4CF65DB10F288E2D0C2D525B /* Bars.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19174F7966F0E207A7456BC3 /* Bars.swift */; };
 		5513D8628FF9265A5B7C110D /* DebugHooks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6567BD006FC3985DF01BE526 /* DebugHooks.swift */; };
 		58F3229B35D71250C678BC3D /* Iroh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4880DD1374C363AFA5C69F37 /* Iroh.swift */; };
@@ -39,6 +43,8 @@
 		5E1F84249444DFC50010EADD /* ShareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36C085050613D51A5F16E4D3 /* ShareView.swift */; };
 		66C925D75EC77293B6451EAB /* AppInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4A3A124DA65B9FD17453340 /* AppInfo.swift */; };
 		67169DC0BE388E8F72DC49C4 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = E016E05FBF8DE467C1BC1F30 /* SwiftTerm */; };
+		67C604DB4A8A22B61AB66066 /* LogbookTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DCA81B266760544B175CB11 /* LogbookTypes.swift */; };
+		6A226C0A622AFF40D7590C07 /* LogbookViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 747ECEA05C1D9344EE1626D8 /* LogbookViews.swift */; };
 		6BF6D002CAD9907E777E8EED /* ETSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 11602F37CD401485C3D66840 /* ETSSH */; };
 		6F005C5539A7B64474934977 /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = ACB31B6DE076A6AEE0E31967 /* ETCore */; };
 		7019904934883F3AD44F1675 /* Speaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD862AA08B0790FEA8C32121 /* Speaker.swift */; };
@@ -55,6 +61,7 @@
 		8EAA58E1D8A3A674820C9F67 /* ETMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C423DF1A7824BFB0B4AB4556 /* ETMacApp.swift */; };
 		907A38E66E596E6ACFB94585 /* Nicknames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BAEF5D9D9F6E2D1930C94BD /* Nicknames.swift */; };
 		92D2F2431FD1402AC2FB77A5 /* VolumeButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6643B444DEC1C52098247355 /* VolumeButtons.swift */; };
+		92F21E47F9FDCE52C77CCAB9 /* LogbookStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = A12B3013FA934A58F5CED94E /* LogbookStub.swift */; };
 		9413772FB394D001E403D5CF /* ETOnboarding in Frameworks */ = {isa = PBXBuildFile; productRef = 6C698F4751908DE96FEAE403 /* ETOnboarding */; };
 		9883DC46C85AE06C00277FC1 /* ETSSH in Frameworks */ = {isa = PBXBuildFile; productRef = A3FE42A77BFB03B651F1C8C3 /* ETSSH */; };
 		A06F1581902B41B80E0A68DC /* SharedFilesViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E06F47B00D27F78A52913A1 /* SharedFilesViews.swift */; };
@@ -63,6 +70,7 @@
 		B3B645CBAE52AC315F4D26D1 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 78E36ABFF9A6F111E6BC39DD /* SwiftTerm */; };
 		B49C06222B399FE2F004842A /* Setup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63189CD29B6FB5728F823465 /* Setup.swift */; };
 		B7B2B9BE3BD4B283F11398E5 /* VocabMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 591C2444EF4A2214A0249778 /* VocabMatcher.swift */; };
+		B91524F762D7CF4EA5380B9D /* LogbookTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DCA81B266760544B175CB11 /* LogbookTypes.swift */; };
 		B93916DB291AA31617776199 /* ShareModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68EF0E032C704DFFD2610FFA /* ShareModel.swift */; };
 		B9EF4532C1A648569D5AD074 /* TerminalHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */; };
 		BFC56E0C4CE90C8544693723 /* AppInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4A3A124DA65B9FD17453340 /* AppInfo.swift */; };
@@ -71,6 +79,7 @@
 		D925AEB7EE1B1A2E8E25A3DF /* Copilot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23D00D38126433369DDB5E17 /* Copilot.swift */; };
 		DCC53456F454E5F2E4EB4A14 /* Manymux.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BE76CB262FB7EA0605C99EB /* Manymux.swift */; };
 		E82A4932EA0D6AFA8F92AF9E /* Nicknames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BAEF5D9D9F6E2D1930C94BD /* Nicknames.swift */; };
+		E8DCE9C2F73F714AE6BBCAA6 /* LogbookTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DCA81B266760544B175CB11 /* LogbookTypes.swift */; };
 		EB28BC4D4608DBE3C2FD9D80 /* Vocabulary.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5E31C39DDE31580DBCAB4E /* Vocabulary.swift */; };
 		EBD84653806CD1F4B3F10156 /* ShareStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FBF0491C3AEC4AE125F75D8 /* ShareStore.swift */; };
 		EEBCAA1A936538064AF9140F /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = E77D439CE39322DFC4891B39 /* ETCore */; };
@@ -103,6 +112,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		035D3E3B25F955FFF0740357 /* LogbookSidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogbookSidebar.swift; sourceTree = "<group>"; };
 		090F6A6A5A570B49BDA73AE9 /* ET.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ET.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0B7EB4283A5F1B4E8DAE0DCE /* SessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionController.swift; sourceTree = "<group>"; };
 		0E6F2758FBA3C3ABEBD1ADFA /* TerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHost.swift; sourceTree = "<group>"; };
@@ -113,6 +123,7 @@
 		19174F7966F0E207A7456BC3 /* Bars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bars.swift; sourceTree = "<group>"; };
 		1BAEF5D9D9F6E2D1930C94BD /* Nicknames.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Nicknames.swift; sourceTree = "<group>"; };
 		23D00D38126433369DDB5E17 /* Copilot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Copilot.swift; sourceTree = "<group>"; };
+		2DCA81B266760544B175CB11 /* LogbookTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogbookTypes.swift; sourceTree = "<group>"; };
 		36A4263F016A81FE6C5B2B5E /* Overview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Overview.swift; sourceTree = "<group>"; };
 		36C085050613D51A5F16E4D3 /* ShareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareView.swift; sourceTree = "<group>"; };
 		3A02635506A8CBB96DC1C6C9 /* ET-mac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ET-mac.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -131,14 +142,17 @@
 		68B7189D418370DCE2A29810 /* QRScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScanner.swift; sourceTree = "<group>"; };
 		68EF0E032C704DFFD2610FFA /* ShareModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareModel.swift; sourceTree = "<group>"; };
 		6FBEC799A622722D593EB86B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		747ECEA05C1D9344EE1626D8 /* LogbookViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogbookViews.swift; sourceTree = "<group>"; };
 		75096092B60CEDCA629164FC /* FileSendViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSendViews.swift; sourceTree = "<group>"; };
 		775D2BD71278DE9B66655A0C /* EtLink */ = {isa = PBXFileReference; lastKnownFileType = folder; name = EtLink; path = ../Vendor/etd/apple/EtLink; sourceTree = SOURCE_ROOT; };
 		84694A6364E84BA9ACFD2E2B /* FilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilesView.swift; sourceTree = "<group>"; };
 		897E5EE0F90FB3B7D643E059 /* SharedFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedFiles.swift; sourceTree = "<group>"; };
 		89DB0886F532D6DAE2B499B3 /* MainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindow.swift; sourceTree = "<group>"; };
 		929A6DF5668934E4FF4835DA /* ETCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ETCore; path = ../ETCore; sourceTree = SOURCE_ROOT; };
+		9BD3B63BE81D334271055BEF /* Logbook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logbook.swift; sourceTree = "<group>"; };
 		9C2F45FF4381091649F20834 /* Fleet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fleet.swift; sourceTree = "<group>"; };
 		9FE7D921D5CAA4506B3FD10C /* SelectMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectMode.swift; sourceTree = "<group>"; };
+		A12B3013FA934A58F5CED94E /* LogbookStub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogbookStub.swift; sourceTree = "<group>"; };
 		A4A3A124DA65B9FD17453340 /* AppInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInfo.swift; sourceTree = "<group>"; };
 		AAC2C774B86C691F339F5290 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
 		AB367F7DC192EBCCA06508BC /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
@@ -200,6 +214,7 @@
 				C423DF1A7824BFB0B4AB4556 /* ETMacApp.swift */,
 				75096092B60CEDCA629164FC /* FileSendViews.swift */,
 				9C2F45FF4381091649F20834 /* Fleet.swift */,
+				035D3E3B25F955FFF0740357 /* LogbookSidebar.swift */,
 				89DB0886F532D6DAE2B499B3 /* MainWindow.swift */,
 				44366E16603D79FB4DCAF6D2 /* SessionTerminal.swift */,
 				6FBEC799A622722D593EB86B /* SettingsView.swift */,
@@ -218,6 +233,15 @@
 				3FDD228A576819287E908B47 /* SwiftTerm */,
 			);
 			name = Packages;
+			sourceTree = "<group>";
+		};
+		6D7CBEBA9131311390533F9F /* LogbookUI */ = {
+			isa = PBXGroup;
+			children = (
+				9BD3B63BE81D334271055BEF /* Logbook.swift */,
+				747ECEA05C1D9344EE1626D8 /* LogbookViews.swift */,
+			);
+			path = LogbookUI;
 			sourceTree = "<group>";
 		};
 		8B80F39CEBE1012947B0EA45 /* FilesUI */ = {
@@ -287,6 +311,8 @@
 			children = (
 				A4A3A124DA65B9FD17453340 /* AppInfo.swift */,
 				4880DD1374C363AFA5C69F37 /* Iroh.swift */,
+				A12B3013FA934A58F5CED94E /* LogbookStub.swift */,
+				2DCA81B266760544B175CB11 /* LogbookTypes.swift */,
 				4BE76CB262FB7EA0605C99EB /* Manymux.swift */,
 				1BAEF5D9D9F6E2D1930C94BD /* Nicknames.swift */,
 				591C2444EF4A2214A0249778 /* VocabMatcher.swift */,
@@ -316,6 +342,7 @@
 			isa = PBXGroup;
 			children = (
 				8B80F39CEBE1012947B0EA45 /* FilesUI */,
+				6D7CBEBA9131311390533F9F /* LogbookUI */,
 				F071F57C4703A1A1C169D1A1 /* Mac */,
 				59806B3A3A9AA44AF6BF3019 /* Packages */,
 				B3763F0955C58291DC8D648B /* Resources */,
@@ -512,6 +539,11 @@
 				7A66CC527EA1D8C14DB89D3C /* FileSendViews.swift in Sources */,
 				791E79EFC8C8971FEE5123D4 /* Fleet.swift in Sources */,
 				0AEEC656192348D8F9AC0E89 /* Iroh.swift in Sources */,
+				193D09374FBDD4C0B00B413C /* Logbook.swift in Sources */,
+				0CD25A29164D993D0A882B28 /* LogbookSidebar.swift in Sources */,
+				4A8483A6FE767AABCE0E1B99 /* LogbookStub.swift in Sources */,
+				67C604DB4A8A22B61AB66066 /* LogbookTypes.swift in Sources */,
+				6A226C0A622AFF40D7590C07 /* LogbookViews.swift in Sources */,
 				8401EF3426B8C649284DC663 /* MainWindow.swift in Sources */,
 				DCC53456F454E5F2E4EB4A14 /* Manymux.swift in Sources */,
 				E82A4932EA0D6AFA8F92AF9E /* Nicknames.swift in Sources */,
@@ -537,6 +569,8 @@
 				2A2EBF9E28BA7866D10E4FAB /* FilesView.swift in Sources */,
 				58F3229B35D71250C678BC3D /* Iroh.swift in Sources */,
 				176CEB6F04458465BE3439DA /* KeyRow.swift in Sources */,
+				0B985BB0144DDD591666D775 /* LogbookStub.swift in Sources */,
+				E8DCE9C2F73F714AE6BBCAA6 /* LogbookTypes.swift in Sources */,
 				893A4346740B9772C37B287C /* MachinesView.swift in Sources */,
 				7ABFAB899E15B83CE5845EA0 /* Manymux.swift in Sources */,
 				0A0D3637C837954773B6B363 /* NetworkView.swift in Sources */,
@@ -566,6 +600,8 @@
 			files = (
 				BFC56E0C4CE90C8544693723 /* AppInfo.swift in Sources */,
 				09B34837EC8C57C54AA12295 /* Iroh.swift in Sources */,
+				92F21E47F9FDCE52C77CCAB9 /* LogbookStub.swift in Sources */,
+				B91524F762D7CF4EA5380B9D /* LogbookTypes.swift in Sources */,
 				273834FD679594F0EFD222D3 /* Manymux.swift in Sources */,
 				907A38E66E596E6ACFB94585 /* Nicknames.swift in Sources */,
 				B93916DB291AA31617776199 /* ShareModel.swift in Sources */,

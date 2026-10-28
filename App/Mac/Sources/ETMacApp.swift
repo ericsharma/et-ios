@@ -8,6 +8,7 @@ struct ETMacApp: App {
     @State private var fleet: Fleet
     @State private var setup: Setup
     @State private var files: SharedFiles
+    @State private var logbook: Logbook
 
     init() {
         let fleet = Fleet()
@@ -15,11 +16,13 @@ struct ETMacApp: App {
         _setup = State(initialValue: Setup(fleet: fleet))
         let files = SharedFiles(hosts: { fleet.directHosts() }, log: { fleet.log.add($0) })
         _files = State(initialValue: files)
+        let logbook = Logbook(archive: { fleet.archiveHost() }, log: { fleet.log.add($0) })
+        _logbook = State(initialValue: logbook)
         #if DEBUG
         if CommandLine.arguments.contains("--offscreen") {
             let setup = _setup.wrappedValue
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                DebugHooks.offscreen(MainWindow(initial: nil).environment(fleet).environment(setup).environment(files), fleet: fleet, setup: setup)
+                DebugHooks.offscreen(MainWindow(initial: nil).environment(fleet).environment(setup).environment(files).environment(logbook), fleet: fleet, setup: setup)
             }
         }
         #endif
@@ -32,6 +35,7 @@ struct ETMacApp: App {
                 .environment(fleet)
                 .environment(setup)
                 .environment(files)
+                .environment(logbook)
                 .onAppear {
                     AppDelegate.fleet = fleet
                     if !AppDelegate.setupStarted {

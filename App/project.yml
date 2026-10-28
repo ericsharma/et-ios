@@ -119,7 +119,7 @@ targets:
   ET-mac:
     type: application
     platform: macOS
-    sources: [Mac/Sources, Mac/Resources, Shared, FilesUI]
+    sources: [Mac/Sources, Mac/Resources, Shared, FilesUI, LogbookUI]
     dependencies:
       - package: ETCore
         product: ETCore

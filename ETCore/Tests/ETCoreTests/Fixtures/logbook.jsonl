@@ -1,0 +1,13 @@
+{"type":"last-prompt","lastPrompt":"x"}
+{"parentUuid":null,"isSidechain":false,"type":"user","message":{"role":"user","content":"Run the tests"},"uuid":"p1","timestamp":"2026-10-28T10:00:00.000Z","cwd":"/Users/x/et"}
+{"parentUuid":"p1","isSidechain":false,"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"hidden"}]},"uuid":"a0"}
+{"parentUuid":"a0","isSidechain":false,"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Running them."}]},"uuid":"a1"}
+{"parentUuid":"a1","isSidechain":false,"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"swift test\n--parallel","description":"Run the tests"}}]},"uuid":"a2"}
+{"parentUuid":"a2","isSidechain":false,"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"Test run with 12 tests passed","is_error":false,"tool_use_id":"toolu_1"}]},"uuid":"r1"}
+{"parentUuid":"r1","isSidechain":false,"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_2","name":"Read","input":{"file_path":"/Users/x/et/Package.swift","limit":20}}]},"uuid":"a3"}
+{"parentUuid":"a3","isSidechain":true,"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_s","name":"Grep","input":{"pattern":"subagent"}}]},"uuid":"s1"}
+{"parentUuid":"a3","isSidechain":false,"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":[{"type":"text","text":"line 1"},{"type":"image","source":{}}],"is_error":true,"tool_use_id":"toolu_2"}]},"uuid":"r2"}
+{"parentUuid":"r2","isSidechain":false,"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"All 12 pass."}]},"uuid":"a4"}
+{"parentUuid":"a4","isSidechain":false,"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]},"uuid":"i1"}
+{"parentUuid":"i1","isSidechain":false,"type":"user","message":{"role":"user","content":"Now commit"},"uuid":"p2","timestamp":"2026-10-28T10:05:00.000Z"}
+{"parentUuid":"p2","isSidechain":false,"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_3","name":"Bash","input":{"command":"git commit -am 'feat: x'"}}]},"uuid":"a5"}

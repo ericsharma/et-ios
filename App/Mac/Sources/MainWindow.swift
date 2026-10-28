@@ -9,6 +9,8 @@ struct MainWindow: View {
     @Environment(Setup.self) private var setup
     @Environment(\.openWindow) private var openWindow
     @State private var selection: SessionRef?
+    /// A Logbook page in place of the terminal (PLAN-logbook §4.6).
+    @State private var logbookPage: LogbookPage?
     @State private var showingNewSession = false
     @State private var renaming: SessionRef?
     @State private var newName = ""
@@ -23,13 +25,14 @@ struct MainWindow: View {
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
-            Sidebar(selection: $selection, rename: { nicknaming = $0 }, renameOnMachine: startRename, end: { ending = $0 })
+            Sidebar(selection: $selection, logbookPage: $logbookPage, rename: { nicknaming = $0 }, renameOnMachine: startRename, end: { ending = $0 })
                 .navigationSplitViewColumnWidth(min: 220, ideal: 270, max: 400)
         } detail: {
             detail
         }
-        .navigationTitle(title)
-        .navigationSubtitle(selection.map { Nicknames.shared.machine($0.machine) } ?? "")
+        .navigationTitle(logbookPage == nil ? title : "Logbook")
+        .navigationSubtitle(logbookPage == nil ? selection.map { Nicknames.shared.machine($0.machine) } ?? "" : logbookSubtitle)
+        .onChange(of: selection) { _, ref in if ref != nil { logbookPage = nil } }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { showingNewSession = true } label: { Label("New Session", systemImage: "plus") }
@@ -74,6 +77,12 @@ struct MainWindow: View {
             fleet.queueSend([url])
             openWindow(id: "send")
         }
+        .onChange(of: fleet.requestedLogbook) { _, page in
+            guard let page else { return }
+            selection = nil
+            logbookPage = page
+            fleet.requestedLogbook = nil
+        }
         .onChange(of: fleet.requestedRef) { _, ref in
             guard let ref else { return }
             selection = ref
@@ -99,9 +108,22 @@ struct MainWindow: View {
         return info.map { $0.title.isEmpty ? $0.name : $0.title } ?? selection.name
     }
 
+    @Environment(Logbook.self) private var logbook
+
+    private var logbookSubtitle: String {
+        switch logbookPage {
+        case .session(let key): logbook.session(key)?.label ?? key.id
+        case .report: "Report"
+        case nil: ""
+        }
+    }
+
     @ViewBuilder private var detail: some View {
         if setup.stage != .done {
             SetupView()
+        } else if let logbookPage {
+            LogbookDetail(page: logbookPage)
+                .id(logbookPage)
         } else {
             VStack(spacing: 0) {
                 SessionTabs(selection: $selection, newSession: { showingNewSession = true },
@@ -153,6 +175,7 @@ struct Sidebar: View {
     @Environment(Fleet.self) private var fleet
     @Environment(\.openWindow) private var openWindow
     @Binding var selection: SessionRef?
+    @Binding var logbookPage: LogbookPage?
     let rename: (NicknameTarget) -> Void
     let renameOnMachine: (SessionRef) -> Void
     let end: (SessionRef) -> Void
@@ -205,6 +228,7 @@ struct Sidebar: View {
                 }
             }
             filesSection
+            LogbookSection(selection: $selection, page: $logbookPage)
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) { StatusLine() }

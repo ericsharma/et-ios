@@ -41,6 +41,8 @@ final class Fleet {
     private(set) var notice: String?
     /// A session to show (a tapped notification); the front window takes it.
     var requestedRef: SessionRef?
+    /// A Logbook page to show (debug flag `--logbook`); the front window takes it.
+    var requestedLogbook: LogbookPage?
     /// File sends in progress, and finished machine sends still showing
     /// their paths (PLAN-files F5).
     private(set) var sends: [FileSend] = []
@@ -253,6 +255,13 @@ final class Fleet {
         var hosts = mmHosts
         if let hubHost, let hubName { hosts[hubName] = hubHost }
         return hosts
+    }
+
+    /// The Logbook's archive machine (PLAN-logbook D6): the network's first
+    /// archive if it is connected, else the hub.
+    func archiveHost() -> IrohHost? {
+        let hosts = directHosts()
+        return network?.archive.lazy.compactMap { hosts[$0] }.first ?? hubHost
     }
 
     /// The network's machines other than the hub, by name.

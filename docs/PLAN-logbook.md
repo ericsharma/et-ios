@@ -1,6 +1,6 @@
 # Plan: Logbook — every Claude session of the network, in one place
 
-Status: 2026-10-28. D1–D10 ACCEPTED. L0 DONE (results in §5, L0; trigkey, gmktec and mac-mini all checked, so B can skip its L0 step). Next: A does L1 (Rust). B does the Mac UI (L2–L4) on a stub of the §4.5 API.
+Status: 2026-10-28. D1–D10 ACCEPTED. L0 DONE (results in §5, L0). A: L1 (Rust) next. B: L2-B done on a stub (`App/Shared/LogbookStub.swift`): Mac sidebar Logbook and live transcript.
 
 Follows [PLAN-network.md](PLAN-network.md) and [PLAN-files.md](PLAN-files.md). Work split as in those plans: **A** = the trigkey Claude session (etd, et-proto, et-link), **B** = the Mac agent (apps, builds), **C** = the owner (tests).
 

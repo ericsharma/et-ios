@@ -9,6 +9,9 @@ import SwiftUI
 ///   --type <text>             after 6 s, type into the selected session
 ///   --drop <file>             once the shown session is live, send the file
 ///                             as a drop on its terminal does
+///   --logbook <id|report>     show a Logbook transcript (Claude session id
+///                             on mac-mini) or the report
+///   --size <W>x<H>            the offscreen window's size (default 1100x700)
 ///   --offscreen               build the main window off screen (no display)
 ///   --hittest                 after 10 s, log the view under the top 160 pt
 @MainActor
@@ -25,6 +28,13 @@ enum DebugHooks {
                     while fleet.phase != .ready { try? await Task.sleep(for: .milliseconds(300)) }
                     fleet.requestedRef = SessionRef(machine: parts[0], name: parts[1])
                 }
+            }
+        }
+        if let page = value("--logbook") {
+            Task {
+                while fleet.phase != .ready { try? await Task.sleep(for: .milliseconds(300)) }
+                try? await Task.sleep(for: .seconds(1))
+                fleet.requestedLogbook = page == "report" ? .report : .session(LogbookKey(machine: "mac-mini", sessionId: page))
             }
         }
         if let spec = value("--spawn") {
@@ -103,11 +113,15 @@ enum DebugHooks {
     /// A window that never goes on screen (the Mac mini is headless), so
     /// hit tests and snapshots run against the real views.
     static func offscreen(_ root: some View, fleet: Fleet, setup: Setup) {
-        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1100, height: 700),
+        let args = CommandLine.arguments
+        let size = args.firstIndex(of: "--size").flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil }
+            .map { $0.split(separator: "x").compactMap { Double($0) } }
+        let frame = CGRect(x: 0, y: 0, width: size?.first ?? 1100, height: size?.last ?? 700)
+        let window = NSWindow(contentRect: frame,
                               styleMask: [.titled, .resizable, .closable, .fullSizeContentView], backing: .buffered, defer: false)
         window.toolbar = NSToolbar()
         window.contentViewController = NSHostingController(rootView: root)
-        window.setFrame(CGRect(x: 0, y: 0, width: 1100, height: 700), display: true)
+        window.setFrame(frame, display: true)
         offscreenWindow = window
         setup.start()
         run(fleet)
