@@ -51,6 +51,11 @@ enum DebugHooks {
                     fleet.log.add("Debug: Logbook \(key.id)")
                 }
                 fleet.requestedLogbook = page == "report" || page == "last" ? .report : .session(key)
+                if let logbook, page != "report", page != "last" {
+                    while !logbook.loaded { try? await Task.sleep(for: .milliseconds(300)) }
+                    let session = logbook.session(key)
+                    fleet.log.add("Debug: \(key.id): \(session.map { "\($0.bytes) bytes, previous \($0.previous ?? "none")" } ?? "not listed")")
+                }
                 if page == "report" { logbook?.refreshReport() }
                 guard page == "last", let logbook else { return }
                 while logbook.report == nil { try? await Task.sleep(for: .milliseconds(300)) }
