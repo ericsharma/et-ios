@@ -1,6 +1,6 @@
 # Plan: Logbook — every Claude session of the network, in one place
 
-Status: 2026-10-28. D1–D10 ACCEPTED (D6 mechanism changed in L1, see §3). L0 DONE (results in §5, L0). A: L1 DEPLOYED 2026-10-28 (etd v0.0.8 = L1 + session-list fix; trigkey + gmktec, nixos-config 28201f4; trigkey is the archive). mac-mini: B runs darwin-rebuild. Next L2-A (read API in etd + et-link, then bump Vendor/etd). B: L2-B, L3-B and L4-B done on a stub (`App/Shared/LogbookStub.swift`): Mac sidebar Logbook, live transcript, report view with suggestions, Send to session. L5 (iOS/iPad) done on the stub, with 2 fixture transcripts; built, not run (no TestFlight until the stub is gone). The stub has A's accepted §4.5 changes 1–4 and 6 (LogChunk.live, line start, LogStream.close, LogEntry.title, `since`); 5 waits for the grouping schema. Views page: the last 3 MB first, then "Load earlier", 3 MB at a time. Next for B: swap the stub for the real API when A bumps Vendor/etd.
+Status: 2026-10-28. D1–D10 ACCEPTED (D6 mechanism changed in L1, see §3). L0 DONE (results in §5, L0). A: L1 DEPLOYED 2026-10-28 (etd v0.0.8 = L1 + session-list fix; trigkey + gmktec, nixos-config 28201f4; trigkey is the archive). mac-mini: B runs darwin-rebuild. L2-A DONE on etd branch `logbook-l2a` (3f511fc), not deployed (owner OK needed); after the deploy B bumps Vendor/etd and deletes the stub. Next for A: L3-A (watcher, report, grouping). B: L2-B, L3-B and L4-B done on a stub (`App/Shared/LogbookStub.swift`): Mac sidebar Logbook, live transcript, report view with suggestions, Send to session. L5 (iOS/iPad) done on the stub, with 2 fixture transcripts; built, not run (no TestFlight until the stub is gone). The stub has A's accepted §4.5 changes 1–4 and 6 (LogChunk.live, line start, LogStream.close, LogEntry.title, `since`); 5 waits for the grouping schema. Views page: the last 3 MB first, then "Load earlier", 3 MB at a time. Next for B: swap the stub for the real API when A bumps Vendor/etd.
 
 Follows [PLAN-network.md](PLAN-network.md) and [PLAN-files.md](PLAN-files.md). Work split as in those plans: **A** = the trigkey Claude session (etd, et-proto, et-link), **B** = the Mac agent (apps, builds), **C** = the owner (tests).
 
@@ -77,13 +77,14 @@ app ── LogSessions / LogFollow / Report / LogSend ──▶ archive etd
 ```
 Request::LogInfo                                          // 24 DONE (L1), any member → any machine
 Request::LogAppend   { session_id, meta: LogMeta, offset: u64, bytes: Vec<u8> } // 25 DONE (L1), machine → archive
-Request::LogSessions { since: u64 }                       // 26, list keys + meta + status
-Request::LogRead     { key: LogKey, from: u64 }           // 27, bytes from offset; then follows (live)
-Request::LogPause    { machine: String, session: String, paused: bool }  // 28
-Request::Report      { refresh: bool }                    // 29, Progress frames, then the report JSON
-Request::Grouping    { change: GroupChange }              // 30, owner confirms / fixes
-Request::LogSend     { selection: LogSelection, to: String, session: String } // 31
-Response::LogInfo { archive, paused }, LogAck { offset } (DONE); LogList(Vec<LogEntry>), LogBytes(Vec<u8>), ReportJson(String)
+Request::LogArchives                                      // 26 DONE (L2-A), Machines([name]): the archives this machine knows
+Request::LogSessions { since: u64 }                       // 27 DONE (L2-A), LogList(Vec<LogEntry>)
+Request::LogRead     { machine, session_id, from: u64 }   // 28 DONE (L2-A), LogChunk { offset, bytes, live } frames, then live
+Request::LogPause    { machine, mm_session, paused }      // 29 DONE (L2-A), Pong
+Request::Report      { refresh: bool }                    // 30 wire DONE; ReportProgress frames, then Report { json } (watcher: L3-A)
+Request::Grouping    { change_json: String }              // 31 wire DONE; Pong (L3-A)
+Request::LogSend     { selection, to, session }           // 32 DONE for Turns (L2-A); ReportSection in L3-A
+Response::LogInfo { archive, paused }, LogAck { offset }, LogList, LogChunk, ReportProgress, Report { json }
 ```
 
 As built in L1 (etd `PROTOCOL.md`, "Logbook"): the archive keys a transcript by the **sender's member name** (a source cannot write as another machine). `offset` is in the source's file. Empty `bytes` = "where are you?" (and a `meta` update). An `offset` above the archive's = skipped bytes, stored as one line `{"type":"etd-gap","skipped":N}`: this is how **Do not record** works (the lines never leave the machine). Readers (Swift `Transcript.parse`) must ignore that line type.
@@ -215,7 +216,7 @@ etd v0.0.7 (fa5d74a) + v0.0.8 fix (692d667: list sessions on the node socket, on
 
 ### Phase L2 — read API + Mac live view (A ~½ day, B ~1 day)
 
-1. A: `LogSessions`, `LogRead` with follow, `LogPause`; et-link API + Swift check.
+1. A: `LogSessions`, `LogRead` with follow, `LogPause`; et-link API + Swift check. **DONE 2026-10-28** (etd branch `logbook-l2a` 3f511fc, not pushed): all six §4.5 methods in et-link with B's changes 1–4 and 6 (Swift names checked against the stub with uniffi-bindgen on Linux). Real now: sessions, follow (the archive wakes followers at each append; `live` as B asked), pause (the archive drops a paused session's lines at once), `logbook_send` for turns (Markdown: prompts + Claude's text, no tool output), `NetworkInfo.archive`. Until L3-A: `report(refresh: false)` = `"id": null`; `report(refresh: true)`, `grouping`, and `ReportSection` answer an error.
 2. B: Mac sidebar Logbook (sessions grouped by repo for now) + live transcript view. ✅ Type in a Claude session on gmktec, see it on the Mac in < 5 s.
 
 ### Phase L3 — watcher + report (A ~1 day, B ~½ day)
