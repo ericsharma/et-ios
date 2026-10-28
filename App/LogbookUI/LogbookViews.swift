@@ -30,11 +30,18 @@ struct LogbookSessionRow: View {
             LogbookStatusDot(status: session.status)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 4) {
-                    Text(session.label).font(.callout.monospaced()).lineLimit(1)
+                    if let title = session.title {
+                        Text(title).font(.callout).lineLimit(1)
+                    } else {
+                        Text(session.label).font(.callout.monospaced()).lineLimit(1)
+                    }
                     if session.paused {
                         Image(systemName: "pause.circle.fill").foregroundStyle(.orange).font(.caption)
                             .help("Do not record")
                     }
+                }
+                if session.title != nil {
+                    Text(session.label).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Text(role ?? caption).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
@@ -60,6 +67,8 @@ struct LogbookTranscriptView: View {
     @State private var selected: Set<String> = []
     @State private var sending: LogbookSendTarget?
     @State private var atBottom = true
+    /// The turn to keep in view after Load earlier.
+    @State private var anchor: String?
 
     private var session: LogbookSession? { logbook.session(key) }
 
@@ -147,8 +156,15 @@ struct LogbookTranscriptView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     if transcript.isPartial {
                         HStack {
-                            Text("Showing the last \(ByteCountFormatter.string(fromByteCount: Int64(LogbookTranscript.tail), countStyle: .file)).")
-                            Button("Load all") { transcript.loadAll() }
+                            Text("\(ByteCountFormatter.string(fromByteCount: Int64(transcript.startOffset), countStyle: .file)) earlier")
+                            if transcript.loadingEarlier {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Button("Load earlier") {
+                                    anchor = transcript.turns.first { $0.id != Transcript.leadingTurnID }?.id
+                                    transcript.loadEarlier()
+                                }
+                            }
                         }
                         .font(.caption).foregroundStyle(.secondary)
                     }
@@ -165,6 +181,12 @@ struct LogbookTranscriptView: View {
                 .padding(14)
             }
             .onAppear { proxy.scrollTo("end", anchor: .bottom) }
+            // Earlier turns came: keep the turn that was at the top in view.
+            .onChange(of: transcript.turns.first?.id) { _, _ in
+                guard let id = anchor, transcript.turns.contains(where: { $0.id == id }) else { return }
+                anchor = nil
+                proxy.scrollTo(id, anchor: .top)
+            }
             // New lines: stay at the end if the reader is there.
             .onChange(of: transcript.turns.last) { _, _ in
                 if atBottom { proxy.scrollTo("end", anchor: .bottom) }

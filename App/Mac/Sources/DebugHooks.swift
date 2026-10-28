@@ -14,6 +14,8 @@ import SwiftUI
 ///                             on mac-mini) or the report (and Refresh it)
 ///   --logbook-send <m/s>      after 8 s, send the shown transcript's last
 ///                             turn (or report project 1) to machine/session
+///   --logbook-earlier         with --logbook <id>: load the transcript, then
+///                             Load earlier twice, logging each step
 ///   --size <W>x<H>            the offscreen window's size (default 1100x700)
 ///   --offscreen               build the main window off screen (no display)
 ///   --hittest                 after 10 s, log the view under the top 160 pt
@@ -58,6 +60,25 @@ enum DebugHooks {
                 }
                 let last = transcript.turns.last { $0.id != Transcript.leadingTurnID }!
                 logbook.send(.turns(key, [last.id]), to: parts[0], session: parts[1])
+                transcript.stop()
+            }
+        }
+        if args.contains("--logbook-earlier"), let page = value("--logbook") {
+            Task {
+                while fleet.phase != .ready { try? await Task.sleep(for: .milliseconds(300)) }
+                guard let logbook else { return }
+                let key = LogbookKey(machine: "mac-mini", sessionId: page)
+                while logbook.session(key) == nil { try? await Task.sleep(for: .milliseconds(300)) }
+                let transcript = logbook.transcript(key)
+                transcript.start(size: logbook.session(key)?.bytes ?? 0)
+                for _ in 0..<2 {
+                    while transcript.loading || transcript.loadingEarlier { try? await Task.sleep(for: .milliseconds(300)) }
+                    try? await Task.sleep(for: .seconds(1))
+                    fleet.log.add("Debug: \(transcript.turns.count) turns from \(transcript.startOffset); Load earlier")
+                    transcript.loadEarlier()
+                }
+                while transcript.loading || transcript.loadingEarlier { try? await Task.sleep(for: .milliseconds(300)) }
+                fleet.log.add("Debug: \(transcript.turns.count) turns from \(transcript.startOffset)")
                 transcript.stop()
             }
         }

@@ -294,7 +294,7 @@ final class IrohHost: HostConnection, @unchecked Sendable {
             LogbookSession(key: LogbookKey($0.key), mmSession: $0.mmSession, cwd: $0.cwd, repo: $0.repo, branch: $0.branch,
                            status: $0.status, first: Date(timeIntervalSince1970: TimeInterval($0.first)),
                            last: Date(timeIntervalSince1970: TimeInterval($0.last)), bytes: $0.bytes,
-                           previous: $0.previous, paused: $0.paused)
+                           previous: $0.previous, paused: $0.paused, title: $0.title)
         }
     }
 
@@ -349,10 +349,16 @@ final class LogbookFeed: @unchecked Sendable {
         self.stream = stream
     }
 
-    /// The next whole lines, and the byte offset after them. Waits for new lines.
-    func next() async throws -> (offset: UInt64, lines: [String]) {
+    /// The next whole lines and the byte offset after them; `live`: the
+    /// stored part is all read. Waits for new lines.
+    func next() async throws -> (offset: UInt64, lines: [String], live: Bool) {
         let chunk = try await mapped { try await stream.next() }
-        return (chunk.offset, chunk.lines)
+        return (chunk.offset, chunk.lines, chunk.live)
+    }
+
+    /// Stops the follow on the archive.
+    func close() {
+        stream.close()
     }
 }
 

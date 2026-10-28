@@ -49,9 +49,11 @@ public struct LogEntry: Equatable, Hashable, Sendable {
     public var previous: String?
     /// Do not record.
     public var paused: Bool
+    /// Claude's own title for the session (its ai-title lines).
+    public var title: String?
 
     public init(key: LogKey, mmSession: String, cwd: String, repo: String?, branch: String?, status: String,
-                first: UInt64, last: UInt64, bytes: UInt64, previous: String?, paused: Bool) {
+                first: UInt64, last: UInt64, bytes: UInt64, previous: String?, paused: Bool, title: String?) {
         self.key = key
         self.mmSession = mmSession
         self.cwd = cwd
@@ -63,17 +65,22 @@ public struct LogEntry: Equatable, Hashable, Sendable {
         self.bytes = bytes
         self.previous = previous
         self.paused = paused
+        self.title = title
     }
 }
 
 /// Whole JSONL lines only. `offset`: the byte offset after the last line.
+/// `live`: the stored bytes are all sent (true on the chunk that reaches
+/// their end, or on an empty chunk if none did).
 public struct LogChunk: Equatable, Hashable, Sendable {
     public var offset: UInt64
     public var lines: [String]
+    public var live: Bool
 
-    public init(offset: UInt64, lines: [String]) {
+    public init(offset: UInt64, lines: [String], live: Bool) {
         self.offset = offset
         self.lines = lines
+        self.live = live
     }
 }
 
@@ -92,29 +99,46 @@ open class LogStream: @unchecked Sendable {
     private let source: LogbookStubSource
     private var offset: UInt64
     private var first = true
+    /// Where the stored bytes end (the size when the follow started).
+    private let stored: UInt64
+    private var sentLive = false
+    private var closed = false
 
     init(source: LogbookStubSource, from: UInt64) {
         self.source = source
         self.offset = from
+        self.stored = source.storedEnd
     }
 
     open func next() async throws -> LogChunk {
         while true {
             try Task.checkCancellation()
-            if let chunk = try source.read(from: offset, alignToLine: first) {
+            if closed { throw LinkError.Closed(message: "Log stream closed") }
+            if var chunk = try source.read(from: offset, alignToLine: first) {
                 first = false
                 offset = chunk.offset
+                chunk.live = chunk.offset >= stored
+                sentLive = sentLive || chunk.live
                 return chunk
             }
             first = false
+            if !sentLive {
+                sentLive = true
+                return LogChunk(offset: offset, lines: [], live: true)
+            }
             try await Task.sleep(for: source.poll)
         }
+    }
+
+    open func close() {
+        closed = true
     }
 }
 
 extension RemoteHost {
+    /// The entries whose last change is at or after `since` (unix seconds; 0 = all).
     public func logbookSessions(since: UInt64) async throws -> [LogEntry] {
-        LogbookStub.shared.sessions()
+        LogbookStub.shared.sessions().filter { $0.last >= since }
     }
 
     public func logbookFollow(key: LogKey, from: UInt64) async throws -> LogStream {
@@ -133,8 +157,8 @@ extension RemoteHost {
     public func report(refresh: Bool, progress: ReportProgress) async throws -> String {
         LogbookStub.log("report refresh=\(refresh)")
         if !refresh {
-            guard let last = LogbookStub.shared.lastReport else { throw LinkError.Remote(message: "No report yet") }
-            return last
+            return LogbookStub.shared.lastReport
+                ?? #"{"id":null,"taken":0,"projects":[],"unassigned":[],"proposals":[]}"#
         }
         let sessions = LogbookStub.shared.sessions()
         let total: UInt32 = 6
@@ -172,6 +196,8 @@ final class LogbookStub: @unchecked Sendable {
     private var _lastReport: String?
     /// cwd → (repo, branch).
     private var repos: [String: (String?, String?)] = [:]
+    /// path → (size, title).
+    private var titles: [String: (size: UInt64, title: String?)] = [:]
 
     var lastReport: String? {
         get { lock.withLock { _lastReport } }
@@ -215,7 +241,7 @@ final class LogbookStub: @unchecked Sendable {
                     key: LogKey(machine: Self.machine, sessionId: id), mmSession: mm, cwd: cwd, repo: repo, branch: branch,
                     status: running?.status ?? "gone",
                     first: UInt64(created.timeIntervalSince1970), last: UInt64(modified.timeIntervalSince1970),
-                    bytes: size, previous: nil, paused: !mm.isEmpty && isPaused(mm)))
+                    bytes: size, previous: nil, paused: !mm.isEmpty && isPaused(mm), title: title(of: file, size: size)))
             }
         }
         return entries.sorted { $0.last > $1.last }
@@ -273,6 +299,29 @@ final class LogbookStub: @unchecked Sendable {
         return live
     }
 
+    /// The last ai-title line near the end of the file, else near its start.
+    /// Cached by size: the list is asked for every 5 s.
+    private func title(of file: URL, size: UInt64) -> String? {
+        if let known = lock.withLock({ titles[file.path] }), known.size == size { return known.title }
+        guard let handle = try? FileHandle(forReadingFrom: file) else { return nil }
+        defer { try? handle.close() }
+        func last(in data: Data) -> String? {
+            let text = String(decoding: data, as: UTF8.self)
+            guard let r = text.range(of: #""aiTitle":""#, options: .backwards) else { return nil }
+            let rest = text[r.upperBound...]
+            return rest.firstIndex(of: "\"").map { String(rest[..<$0]) }
+        }
+        let window: UInt64 = 256 * 1024
+        try? handle.seek(toOffset: size > window ? size - window : 0)
+        var title = last(in: handle.readData(ofLength: Int(window)))
+        if title == nil, size > window {
+            try? handle.seek(toOffset: 0)
+            title = last(in: handle.readData(ofLength: Int(window)))
+        }
+        lock.withLock { titles[file.path] = (size, title) }
+        return title
+    }
+
     private static func cwd(inHeadOf file: URL) -> String? {
         guard let handle = try? FileHandle(forReadingFrom: file) else { return nil }
         defer { try? handle.close() }
@@ -313,9 +362,9 @@ final class LogbookStub: @unchecked Sendable {
 
     func sessions() -> [LogEntry] {
         let now = UInt64(Date().timeIntervalSince1970)
-        let meta: [(mm: String, cwd: String, repo: String, branch: String, status: String)] = [
-            ("claude", "/Users/ericsharma/tmux-ios", "git@github.com:ericsharma/et-ios.git", "main", "busy"),
-            ("claude2", "/Users/ericsharma/nixos-config", "git@github.com:ericsharma/nixos-config.git", "main", "idle"),
+        let meta: [(mm: String, cwd: String, repo: String, branch: String, status: String, title: String)] = [
+            ("claude", "/Users/ericsharma/tmux-ios", "git@github.com:ericsharma/et-ios.git", "main", "busy", "Mac session tabs ignore clicks"),
+            ("claude2", "/Users/ericsharma/nixos-config", "git@github.com:ericsharma/nixos-config.git", "main", "idle", "OmniVoice voice cloning"),
         ]
         return Self.fixtures.enumerated().map { i, name in
             let m = meta[i]
@@ -323,7 +372,7 @@ final class LogbookStub: @unchecked Sendable {
                 .flatMap { try? FileManager.default.attributesOfItem(atPath: $0.path)[.size] as? UInt64 }) ?? 0
             return LogEntry(key: LogKey(machine: Self.machine, sessionId: name), mmSession: m.mm, cwd: m.cwd, repo: m.repo,
                             branch: m.branch, status: m.status, first: now - 3600 * UInt64(i + 1), last: now - 60 * UInt64(i),
-                            bytes: bytes, previous: nil, paused: isPaused(m.mm))
+                            bytes: bytes, previous: nil, paused: isPaused(m.mm), title: m.title)
         }
     }
 
@@ -379,6 +428,8 @@ final class LogbookStub: @unchecked Sendable {
 
 class LogbookStubSource: @unchecked Sendable {
     var poll: Duration { .seconds(1) }
+    /// Where the stored part ends; past it, chunks are live.
+    var storedEnd: UInt64 { 0 }
 
     /// Whole lines from `from`, or nil when there is nothing new.
     /// `alignToLine`: `from` can be inside a line; skip to the next one.
@@ -392,6 +443,10 @@ final class FileSource: LogbookStubSource, @unchecked Sendable {
 
     init(url: URL) {
         self.url = url
+    }
+
+    override var storedEnd: UInt64 {
+        (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? UInt64) ?? 0
     }
 
     override func read(from: UInt64, alignToLine: Bool) throws -> LogChunk? {
@@ -424,7 +479,7 @@ final class FileSource: LogbookStubSource, @unchecked Sendable {
         guard let lastNewline = data.lastIndex(of: UInt8(ascii: "\n")) else { return nil }
         let whole = data[data.startIndex...lastNewline]
         let lines = String(decoding: whole, as: UTF8.self).split(separator: "\n").map(String.init)
-        return LogChunk(offset: start + UInt64(whole.count), lines: lines)
+        return LogChunk(offset: start + UInt64(whole.count), lines: lines, live: false)
     }
 }
 
@@ -435,6 +490,8 @@ final class FixtureSource: LogbookStubSource, @unchecked Sendable {
     /// One stream reads it, one call at a time.
     private var waited = false
     override var poll: Duration { .seconds(3) }
+    /// The first half is "stored".
+    override var storedEnd: UInt64 { UInt64(max(lines.count / 2, 1)) }
 
     init(lines: [String]) {
         self.lines = lines
@@ -445,7 +502,7 @@ final class FixtureSource: LogbookStubSource, @unchecked Sendable {
         let at = Int(from)
         if at == 0 {
             let half = max(lines.count / 2, 1)
-            return LogChunk(offset: UInt64(half), lines: Array(lines.prefix(half)))
+            return LogChunk(offset: UInt64(half), lines: Array(lines.prefix(half)), live: false)
         }
         // Each line after the first half waits one poll.
         if !waited {
@@ -453,13 +510,13 @@ final class FixtureSource: LogbookStubSource, @unchecked Sendable {
             return nil
         }
         waited = false
-        if at < lines.count { return LogChunk(offset: UInt64(at + 1), lines: [lines[at]]) }
+        if at < lines.count { return LogChunk(offset: UInt64(at + 1), lines: [lines[at]], live: false) }
         let n = at - lines.count
         let uuid = "stub-\(n)"
         let stamp = ISO8601DateFormatter().string(from: Date())
         let line = n % 2 == 0
             ? #"{"type":"user","isSidechain":false,"uuid":"\#(uuid)","timestamp":"\#(stamp)","message":{"role":"user","content":"Stub prompt \#(n / 2 + 1): what changed?"}}"#
             : #"{"type":"assistant","isSidechain":false,"uuid":"\#(uuid)","timestamp":"\#(stamp)","message":{"role":"assistant","content":[{"type":"text","text":"Stub reply \#(n / 2 + 1): one more line, 3 s later."}]}}"#
-        return LogChunk(offset: UInt64(at + 1), lines: [line])
+        return LogChunk(offset: UInt64(at + 1), lines: [line], live: false)
     }
 }

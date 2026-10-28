@@ -39,6 +39,8 @@ struct LogbookSession: Identifiable, Hashable, Sendable {
     var previous: String?
     /// Do not record.
     var paused: Bool
+    /// Claude's title for the session.
+    var title: String?
 
     var id: String { key.id }
     var isLive: Bool { status != "gone" }
@@ -113,6 +115,7 @@ struct LogbookReport: Codable, Equatable, Sendable {
 
     init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        // "id": null = no report yet.
         id = try c.decodeIfPresent(String.self, forKey: .id) ?? ""
         taken = try c.decodeIfPresent(Double.self, forKey: .taken) ?? Date().timeIntervalSince1970
         projects = try c.decodeIfPresent([Project].self, forKey: .projects) ?? []

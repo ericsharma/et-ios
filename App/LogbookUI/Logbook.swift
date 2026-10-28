@@ -139,7 +139,9 @@ final class Logbook {
     func loadReport() async {
         guard let host = archive() else { return }
         do {
-            report = try LogbookReport.decode(try await host.logbookReport(refresh: false) { _, _, _ in })
+            let last = try LogbookReport.decode(try await host.logbookReport(refresh: false) { _, _, _ in })
+            // "id": null = no report yet.
+            report = last.id.isEmpty ? nil : last
         } catch {
             // No report yet: the Refresh button makes the first.
         }
@@ -289,20 +291,23 @@ final class LogbookTranscript {
     private(set) var turns: [Transcript.Turn] = []
     private(set) var loading = true
     private(set) var error: String?
-    /// The view starts this far from the end; earlier turns load on request.
+    /// The loaded part starts here; earlier turns load on request, 3 MB at a time.
     private(set) var startOffset: UInt64 = 0
+    /// "Load earlier" is running; the shown turns stay until it is done.
+    private(set) var loadingEarlier = false
 
-    /// Bytes from the end a view loads first (a long session is 5 MB+).
+    /// Bytes a view loads first, and per "Load earlier" (sessions reach 75 MB+).
     static let tail: UInt64 = 3 * 1024 * 1024
 
     @ObservationIgnored private let archive: @MainActor () -> IrohHost?
     @ObservationIgnored private let log: @MainActor (String) -> Void
     @ObservationIgnored private var lines: [String] = []
     @ObservationIgnored private var task: Task<Void, Never>?
+    @ObservationIgnored private var feed: LogbookFeed?
     @ObservationIgnored private var parsing = false
     @ObservationIgnored private var dirty = false
-    /// Counts chunks, to see when the stored bytes are all read.
-    @ObservationIgnored private var chunks = 0
+    /// The stored part is all read (a chunk said `live`).
+    @ObservationIgnored private var caughtUp = false
 
     init(key: LogbookKey, archive: @escaping @MainActor () -> IrohHost?, log: @escaping @MainActor (String) -> Void) {
         self.key = key
@@ -314,61 +319,71 @@ final class LogbookTranscript {
 
     /// Follows from the last `tail` bytes of a `size`-byte transcript.
     func start(size: UInt64) {
-        follow(from: size > Self.tail ? size - Self.tail : 0)
+        follow(from: size > Self.tail ? size - Self.tail : 0, keep: false)
     }
 
-    func loadAll() {
-        follow(from: 0)
+    /// 3 MB more before the loaded part.
+    func loadEarlier() {
+        guard startOffset > 0, !loadingEarlier else { return }
+        follow(from: earlier, keep: true)
     }
 
     func stop() {
         task?.cancel()
         task = nil
+        feed?.close()
+        feed = nil
     }
 
-    private func follow(from offset: UInt64) {
+    private var earlier: UInt64 { startOffset > Self.tail ? startOffset - Self.tail : 0 }
+
+    /// `keep`: show the current turns until the new follow has read its
+    /// stored part (no jump back to a half-loaded list).
+    private func follow(from offset: UInt64, keep: Bool) {
         stop()
         startOffset = offset
         lines = []
-        turns = []
-        loading = true
+        caughtUp = false
+        loadingEarlier = keep
+        if !keep {
+            turns = []
+            loading = true
+        }
         error = nil
         log("Logbook: follow \(key.id) from \(offset)")
         task = Task {
             guard let host = archive() else {
                 error = "No archive machine connected"
                 loading = false
+                loadingEarlier = false
                 return
             }
             do {
                 let feed = try await host.logbookFollow(key, from: offset)
+                guard !Task.isCancelled else {
+                    feed.close()
+                    return
+                }
+                self.feed = feed
                 while !Task.isCancelled {
                     let chunk = try await feed.next()
                     guard !Task.isCancelled else { return }
-                    lines += chunk.lines
-                    chunks += 1
-                    reparse()
-                    stepBackIfNoPrompt(after: chunks)
+                    // The archive starts at the next whole line: its offset is the real start.
+                    if lines.isEmpty, chunk.lines.first != nil, chunk.offset >= startOffset {
+                        startOffset = chunk.offset - UInt64(chunk.lines.reduce(0) { $0 + $1.utf8.count + 1 })
+                    }
+                    // Claude's summary after /compact is not a prompt the owner typed.
+                    lines += chunk.lines.filter { !$0.contains(#""isCompactSummary":true"#) }
+                    if chunk.live { caughtUp = true }
+                    if !chunk.lines.isEmpty || chunk.live { reparse() }
                 }
             } catch {
                 guard !Task.isCancelled else { return }
                 self.error = Logbook.describe(error)
                 log("Logbook: follow \(key.id) failed: \(error)")
                 loading = false
+                loadingEarlier = false
             }
-        }
-    }
-
-    /// A tail without a prompt (large tool output, such as images): once no
-    /// chunk came for 1.5 s (the stored bytes are read), start 3 MB earlier.
-    private func stepBackIfNoPrompt(after count: Int) {
-        guard startOffset > 0 else { return }
-        Task {
-            try? await Task.sleep(for: .milliseconds(1500))
-            guard count == chunks, startOffset > 0, !parsing,
-                  !turns.contains(where: { $0.id != Transcript.leadingTurnID }) else { return }
-            log("Logbook: \(key.id): no prompt after \(startOffset), loading 3 MB more")
-            follow(from: startOffset > Self.tail ? startOffset - Self.tail : 0)
         }
     }
 
@@ -384,14 +399,25 @@ final class LogbookTranscript {
         let leading = startOffset > 0
         Task {
             let parsed = await Task.detached(priority: .userInitiated) { Transcript.parse(lines: snapshot, leading: leading) }.value
-            if loading { log("Logbook: \(key.id): \(snapshot.count) lines, \(parsed.count) turns") }
-            turns = parsed
-            loading = false
             parsing = false
             if dirty {
                 dirty = false
                 reparse()
+                return
             }
+            // Load earlier: keep the old turns until the stored part is read.
+            if loadingEarlier && !caughtUp { return }
+            // A loaded part without a prompt (large tool output, such as
+            // images): start 3 MB earlier.
+            if caughtUp, startOffset > 0, !parsed.contains(where: { $0.id != Transcript.leadingTurnID }) {
+                log("Logbook: \(key.id): no prompt after \(startOffset), loading 3 MB more")
+                follow(from: earlier, keep: loadingEarlier)
+                return
+            }
+            if loading || loadingEarlier { log("Logbook: \(key.id): \(snapshot.count) lines, \(parsed.count) turns from \(startOffset)") }
+            turns = parsed
+            loading = false
+            loadingEarlier = false
         }
     }
 }
