@@ -182,6 +182,7 @@ struct Sidebar: View {
     /// The machine a drag of files is over.
     @State private var dropTarget: String?
     @Environment(SharedFiles.self) private var files
+    @Environment(Logbook.self) private var logbook
     @State private var picking: SharedFilePick?
 
     var body: some View {
@@ -250,6 +251,17 @@ struct Sidebar: View {
             guard let notice else { return }
             fleet.flash(notice)
             files.notice = nil
+        }
+        // On the List, not the Logbook section: a List may not build a
+        // section that is scrolled out of view.
+        .task(id: fleet.phase) {
+            guard fleet.phase == .ready else { return }
+            await logbook.watch()
+        }
+        .onChange(of: logbook.notice) { _, notice in
+            guard let notice else { return }
+            fleet.flash(notice)
+            logbook.notice = nil
         }
     }
 

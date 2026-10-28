@@ -1,5 +1,6 @@
 #if DEBUG
 import AppKit
+import ETCore
 import SwiftUI
 
 /// Launch flags for testing on a headless Mac (debug builds only):
@@ -11,6 +12,8 @@ import SwiftUI
 ///                             as a drop on its terminal does
 ///   --logbook <id|report>     show a Logbook transcript (Claude session id
 ///                             on mac-mini) or the report (and Refresh it)
+///   --logbook-send <m/s>      after 8 s, send the shown transcript's last
+///                             turn (or report project 1) to machine/session
 ///   --size <W>x<H>            the offscreen window's size (default 1100x700)
 ///   --offscreen               build the main window off screen (no display)
 ///   --hittest                 after 10 s, log the view under the top 160 pt
@@ -36,6 +39,26 @@ enum DebugHooks {
                 try? await Task.sleep(for: .seconds(1))
                 fleet.requestedLogbook = page == "report" ? .report : .session(LogbookKey(machine: "mac-mini", sessionId: page))
                 if page == "report" { logbook?.refreshReport() }
+            }
+        }
+        if let target = value("--logbook-send"), let page = value("--logbook") {
+            let parts = target.split(separator: "/", maxSplits: 1).map(String.init)
+            Task {
+                try? await Task.sleep(for: .seconds(8))
+                guard parts.count == 2, let logbook else { return }
+                let key = LogbookKey(machine: "mac-mini", sessionId: page)
+                let transcript = logbook.transcript(key)
+                if page == "report", let report = logbook.report, let project = report.projects.first {
+                    logbook.send(.reportSection(reportId: report.id, projectId: project.id), to: parts[0], session: parts[1])
+                    return
+                }
+                transcript.start(size: logbook.session(key)?.bytes ?? 0)
+                while transcript.turns.last(where: { $0.id != Transcript.leadingTurnID }) == nil {
+                    try? await Task.sleep(for: .milliseconds(300))
+                }
+                let last = transcript.turns.last { $0.id != Transcript.leadingTurnID }!
+                logbook.send(.turns(key, [last.id]), to: parts[0], session: parts[1])
+                transcript.stop()
             }
         }
         if let spec = value("--spawn") {

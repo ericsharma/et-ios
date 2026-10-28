@@ -43,6 +43,21 @@ struct TranscriptTests {
         #expect(turns[1].reply.isEmpty)
     }
 
+    @Test func leadingKeepsRepliesBeforeTheFirstPrompt() throws {
+        let url = try #require(Bundle.module.url(forResource: "logbook", withExtension: "jsonl", subdirectory: "Fixtures"))
+        let lines = try String(contentsOf: url, encoding: .utf8).split(separator: "\n").map(String.init)
+        // From the first assistant line: the tail of a file.
+        let tail = Array(lines.dropFirst(3))
+        #expect(Transcript.parse(lines: tail).map(\.id) == ["p2"])
+        let turns = Transcript.parse(lines: tail, leading: true)
+        #expect(turns.map(\.id) == [Transcript.leadingTurnID, "p2"])
+        #expect(turns[0].prompt.isEmpty)
+        #expect(turns[0].reply == "Running them.\n\nAll 12 pass.")
+        #expect(turns[0].tools.map(\.name) == ["Bash", "Read"])
+        // Starting at a prompt: no leading turn.
+        #expect(Transcript.parse(lines: lines, leading: true).map(\.id) == ["p1", "p2"])
+    }
+
     @Test func needleStopsBeforeEscapedCharacters() {
         #expect(Transcript.needle(fromPrompt: "Read the E.T. app and say \"hi\"") == "Read the E.T. app and say ")
         #expect(Transcript.needle(fromPrompt: "ok") == nil)

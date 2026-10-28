@@ -301,6 +301,8 @@ final class LogbookTranscript {
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var parsing = false
     @ObservationIgnored private var dirty = false
+    /// Counts chunks, to see when the stored bytes are all read.
+    @ObservationIgnored private var chunks = 0
 
     init(key: LogbookKey, archive: @escaping @MainActor () -> IrohHost?, log: @escaping @MainActor (String) -> Void) {
         self.key = key
@@ -344,7 +346,9 @@ final class LogbookTranscript {
                     let chunk = try await feed.next()
                     guard !Task.isCancelled else { return }
                     lines += chunk.lines
+                    chunks += 1
                     reparse()
+                    stepBackIfNoPrompt(after: chunks)
                 }
             } catch {
                 guard !Task.isCancelled else { return }
@@ -352,6 +356,19 @@ final class LogbookTranscript {
                 log("Logbook: follow \(key.id) failed: \(error)")
                 loading = false
             }
+        }
+    }
+
+    /// A tail without a prompt (large tool output, such as images): once no
+    /// chunk came for 1.5 s (the stored bytes are read), start 3 MB earlier.
+    private func stepBackIfNoPrompt(after count: Int) {
+        guard startOffset > 0 else { return }
+        Task {
+            try? await Task.sleep(for: .milliseconds(1500))
+            guard count == chunks, startOffset > 0, !parsing,
+                  !turns.contains(where: { $0.id != Transcript.leadingTurnID }) else { return }
+            log("Logbook: \(key.id): no prompt after \(startOffset), loading 3 MB more")
+            follow(from: startOffset > Self.tail ? startOffset - Self.tail : 0)
         }
     }
 
@@ -364,8 +381,9 @@ final class LogbookTranscript {
         }
         parsing = true
         let snapshot = lines
+        let leading = startOffset > 0
         Task {
-            let parsed = await Task.detached(priority: .userInitiated) { Transcript.parse(lines: snapshot) }.value
+            let parsed = await Task.detached(priority: .userInitiated) { Transcript.parse(lines: snapshot, leading: leading) }.value
             if loading { log("Logbook: \(key.id): \(snapshot.count) lines, \(parsed.count) turns") }
             turns = parsed
             loading = false

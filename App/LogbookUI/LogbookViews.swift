@@ -58,6 +58,7 @@ struct LogbookTranscriptView: View {
     let machines: [MmMachine]
     @State private var transcript: LogbookTranscript?
     @State private var selected: Set<String> = []
+    @State private var sending: LogbookSendTarget?
     @State private var atBottom = true
 
     private var session: LogbookSession? { logbook.session(key) }
@@ -86,13 +87,18 @@ struct LogbookTranscriptView: View {
                     Label(selected.isEmpty ? "Send last turn…" : "Send \(selected.count) turn\(selected.count == 1 ? "" : "s")…",
                           systemImage: "paperplane")
                 }
-                .help("Send to session… (PLAN-logbook L4)")
-                .disabled(true)
+                .help("Send to session…: the turns as a Markdown file, its path typed into a session")
+                .disabled(!(transcript?.turns.contains { $0.id != Transcript.leadingTurnID } ?? false))
             }
         }
-        .onAppear {
+        .sheet(item: $sending) { target in
+            LogbookSendSheet(target: target, machines: machines, logbook: logbook)
+        }
+        // Starts once the list has the session: its size picks the tail.
+        .task(id: session != nil) {
+            guard transcript == nil, let session else { return }
             let t = logbook.transcript(key)
-            t.start(size: session?.bytes ?? 0)
+            t.start(size: session.bytes)
             transcript = t
         }
         .onDisappear { transcript?.stop() }
@@ -166,7 +172,14 @@ struct LogbookTranscriptView: View {
         }
     }
 
-    private func sendSelection() {}
+    /// The selected turns, or the last one if none is selected.
+    private func sendSelection() {
+        let sendable = (transcript?.turns ?? []).filter { $0.id != Transcript.leadingTurnID }
+        guard let last = sendable.last else { return }
+        let ids = selected.isEmpty ? [last.id] : sendable.map(\.id).filter(selected.contains)
+        let name = session?.label ?? key.id
+        sending = LogbookSendTarget(selection: .turns(key, ids), title: ids.count == 1 ? "1 turn of \(name)" : "\(ids.count) turns of \(name)")
+    }
 }
 
 /// One exchange: the prompt (tap the circle to select it), the reply, and
@@ -178,19 +191,10 @@ struct LogbookTurnView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 8) {
-                Button(action: toggle) {
-                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(selected ? Color.accentColor : .secondary)
-                }
-                .buttonStyle(.borderless)
-                .help(selected ? "Deselect" : "Select this turn to send it")
-                VStack(alignment: .leading, spacing: 2) {
-                    if let date = turn.timestamp {
-                        Text(date, format: .dateTime.hour().minute()).font(.caption2).foregroundStyle(.secondary)
-                    }
-                    Text(turn.prompt).foregroundStyle(.blue).textSelection(.enabled)
-                }
+            if turn.id == Transcript.leadingTurnID {
+                Text("Its prompt is before the loaded part.").font(.caption).foregroundStyle(.secondary)
+            } else {
+                prompt
             }
             if !turn.tools.isEmpty {
                 ToolCallsView(tools: turn.tools).padding(.leading, 26)
@@ -203,6 +207,23 @@ struct LogbookTurnView: View {
         }
         .padding(10)
         .background(selected ? Color.accentColor.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var prompt: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Button(action: toggle) {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selected ? Color.accentColor : .secondary)
+            }
+            .buttonStyle(.borderless)
+            .help(selected ? "Deselect" : "Select this turn to send it")
+            VStack(alignment: .leading, spacing: 2) {
+                if let date = turn.timestamp {
+                    Text(date, format: .dateTime.hour().minute()).font(.caption2).foregroundStyle(.secondary)
+                }
+                Text(turn.prompt).foregroundStyle(.blue).textSelection(.enabled)
+            }
+        }
     }
 
     /// Inline Markdown (bold, code, links); the text as is if it doesn't parse.

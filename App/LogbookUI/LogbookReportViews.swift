@@ -8,6 +8,7 @@ struct LogbookReportView: View {
     let machines: [MmMachine]
     let openSession: (LogbookKey) -> Void
     @State private var editing: LogbookEdit?
+    @State private var sending: LogbookSendTarget?
 
     var body: some View {
         ScrollView {
@@ -18,7 +19,8 @@ struct LogbookReportView: View {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 14, alignment: .top)], spacing: 14) {
                         ForEach(report.projects) { project in
                             ProjectCard(project: project, logbook: logbook, openSession: openSession,
-                                        send: nil,
+                                        send: { sending = LogbookSendTarget(selection: .reportSection(reportId: report.id, projectId: project.id),
+                                                                            title: "the report on \(project.name)") },
                                         edit: { editing = LogbookEdit(project: project, session: nil) })
                         }
                     }
@@ -36,6 +38,9 @@ struct LogbookReportView: View {
                 }
             }
             .padding(16)
+        }
+        .sheet(item: $sending) { target in
+            LogbookSendSheet(target: target, machines: machines, logbook: logbook)
         }
         .sheet(item: $editing) { edit in
             LogbookEditSheet(edit: edit, logbook: logbook)

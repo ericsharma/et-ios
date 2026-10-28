@@ -84,22 +84,9 @@ struct SharedFilePicker: View {
             List {
                 switch pick.kind {
                 case .session:
-                    ForEach(machines.filter { !$0.sessions.isEmpty }) { machine in
-                        Section(machine.name) {
-                            ForEach(machine.sessions) { session in
-                                Button {
-                                    files.type(pick.item, into: machine.name, session: session.name)
-                                    dismiss()
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(session.name).font(.body.monospaced())
-                                        if !session.title.isEmpty {
-                                            Text(session.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    SessionPickerRows(machines: machines) { machine, session in
+                        files.type(pick.item, into: machine, session: session)
+                        dismiss()
                     }
                 case .machine:
                     ForEach(machines.filter { $0.name != pick.item.machine }) { machine in
@@ -121,5 +108,31 @@ struct SharedFilePicker: View {
         #if os(macOS)
         .frame(minWidth: 380, minHeight: 420)
         #endif
+    }
+}
+
+/// Every machine's manymux sessions as picker rows, a section per machine.
+/// Shared Files and the Logbook's "Send to session…" use it.
+struct SessionPickerRows: View {
+    let machines: [MmMachine]
+    let pick: (_ machine: String, _ session: String) -> Void
+
+    var body: some View {
+        ForEach(machines.filter { !$0.sessions.isEmpty }) { machine in
+            Section(machine.name) {
+                ForEach(machine.sessions) { session in
+                    Button {
+                        pick(machine.name, session.name)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(session.name).font(.body.monospaced())
+                            if !session.title.isEmpty {
+                                Text(session.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

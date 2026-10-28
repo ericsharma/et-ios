@@ -49,6 +49,7 @@
 		6F005C5539A7B64474934977 /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = ACB31B6DE076A6AEE0E31967 /* ETCore */; };
 		7019904934883F3AD44F1675 /* Speaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD862AA08B0790FEA8C32121 /* Speaker.swift */; };
 		71DCD98736F4928BF2983F28 /* AppInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4A3A124DA65B9FD17453340 /* AppInfo.swift */; };
+		762F760818D185632223C322 /* LogbookSendViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54E5B96C3B3539B1C7B53F03 /* LogbookSendViews.swift */; };
 		77ED11F2C14086DA337E9883 /* VoiceInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB2420D4BA60D70DBDC8885A /* VoiceInput.swift */; };
 		791E79EFC8C8971FEE5123D4 /* Fleet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C2F45FF4381091649F20834 /* Fleet.swift */; };
 		7A66CC527EA1D8C14DB89D3C /* FileSendViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75096092B60CEDCA629164FC /* FileSendViews.swift */; };
@@ -133,6 +134,7 @@
 		44366E16603D79FB4DCAF6D2 /* SessionTerminal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTerminal.swift; sourceTree = "<group>"; };
 		4880DD1374C363AFA5C69F37 /* Iroh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Iroh.swift; sourceTree = "<group>"; };
 		4BE76CB262FB7EA0605C99EB /* Manymux.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Manymux.swift; sourceTree = "<group>"; };
+		54E5B96C3B3539B1C7B53F03 /* LogbookSendViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogbookSendViews.swift; sourceTree = "<group>"; };
 		591C2444EF4A2214A0249778 /* VocabMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VocabMatcher.swift; sourceTree = "<group>"; };
 		5E06F47B00D27F78A52913A1 /* SharedFilesViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedFilesViews.swift; sourceTree = "<group>"; };
 		5E147244B49816415D5E26BA /* Templates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Templates.swift; sourceTree = "<group>"; };
@@ -242,6 +244,7 @@
 			children = (
 				9BD3B63BE81D334271055BEF /* Logbook.swift */,
 				EDB766205ACA88AFE4503F86 /* LogbookReportViews.swift */,
+				54E5B96C3B3539B1C7B53F03 /* LogbookSendViews.swift */,
 				747ECEA05C1D9344EE1626D8 /* LogbookViews.swift */,
 			);
 			path = LogbookUI;
@@ -544,6 +547,7 @@
 				0AEEC656192348D8F9AC0E89 /* Iroh.swift in Sources */,
 				193D09374FBDD4C0B00B413C /* Logbook.swift in Sources */,
 				E9E11AA1FFD106C37C885F01 /* LogbookReportViews.swift in Sources */,
+				762F760818D185632223C322 /* LogbookSendViews.swift in Sources */,
 				0CD25A29164D993D0A882B28 /* LogbookSidebar.swift in Sources */,
 				4A8483A6FE767AABCE0E1B99 /* LogbookStub.swift in Sources */,
 				67C604DB4A8A22B61AB66066 /* LogbookTypes.swift in Sources */,

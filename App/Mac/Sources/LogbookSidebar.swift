@@ -51,15 +51,6 @@ struct LogbookSection: View {
                     .help("Refresh the session list")
             }
         }
-        .task(id: fleet.phase) {
-            guard fleet.phase == .ready else { return }
-            await logbook.watch()
-        }
-        .onChange(of: logbook.notice) { _, notice in
-            guard let notice else { return }
-            fleet.flash(notice)
-            logbook.notice = nil
-        }
     }
 
     /// "Report (12 min ago)", the suggestions, and Refresh.

@@ -75,10 +75,16 @@ public enum Transcript {
         return (path, text.split(separator: "\n").map(String.init))
     }
 
+    /// The id of the turn `parse(lines:leading: true)` makes for replies
+    /// whose prompt is before the first line.
+    public static let leadingTurnID = "leading"
+
     /// Turns from transcript lines, oldest first. Tool calls go into the
     /// turn they belong to, and their results into the calls (by id).
-    public static func parse(lines: [String]) -> [Turn] {
-        var turns: [Turn] = []
+    /// `leading`: the lines start inside a turn (a tail of the file); keep
+    /// the replies before the first prompt in a turn with an empty prompt.
+    public static func parse(lines: [String], leading: Bool = false) -> [Turn] {
+        var turns: [Turn] = leading ? [Turn(id: leadingTurnID, prompt: "", reply: "")] : []
         /// Tool call id → (turn, index in its tools).
         var calls: [String: (Int, Int)] = [:]
         let iso = ISO8601DateFormatter()
@@ -125,6 +131,7 @@ public enum Transcript {
                 continue
             }
         }
+        if leading, let first = turns.first, first.reply.isEmpty, first.tools.isEmpty { turns.removeFirst() }
         return turns
     }
 
