@@ -1138,13 +1138,22 @@ final class SessionController {
 
     private var presetKey: String { "presets.\(server.id.uuidString)" }
 
+    /// The chosen key set, else the profile of the agent that runs there
+    /// (PLAN-multi-agent): its keys, paste, `@path` and prompts.
     func preset(for page: WindowPage) -> KeyPreset {
         if let chosen = presetChoices[page.name] { return chosen }
-        // A window running claude over ssh shows "ssh", so the name matters too.
-        let looksLikeClaude = page.currentCommand == "claude" || page.name.localizedCaseInsensitiveContains("claude")
-            || page.title.localizedCaseInsensitiveContains("claude")
-            || page.mm?.command.localizedCaseInsensitiveContains("claude") == true
-        return looksLikeClaude ? .claude : .shell
+        return agent(for: page).map(KeyPreset.init(profile:)) ?? .shell
+    }
+
+    /// The agent that runs in a window or session, from its program, command, name or title.
+    func agent(for page: WindowPage) -> AgentProfile? {
+        AgentProfile.matching(currentCommand: page.currentCommand, command: page.mm?.command ?? "",
+                              name: page.name, title: page.title)
+    }
+
+    /// Copilot reads Claude's transcripts only until PLAN-multi-agent M2.
+    func copilotAgent(for page: WindowPage) -> AgentProfile {
+        preset(for: page).profile ?? agentProfiles()[0]
     }
 
     func setPreset(_ preset: KeyPreset, for page: WindowPage) {
@@ -1498,12 +1507,12 @@ final class SessionController {
         }
     }
 
-    /// Sends compose-bar text (SPEC §6.2). Multi-line text goes to Claude
-    /// windows as a bracketed paste, so Claude gets one message instead of
-    /// one per line; in shells each line runs.
+    /// Sends compose-bar text (SPEC §6.2). Multi-line text goes to agent
+    /// windows as a bracketed paste (the profile's `multiline`), so the agent
+    /// gets one message instead of one per line; in shells each line runs.
     func sendComposed(_ text: String, to page: WindowPage, pressEnter: Bool) {
         var bytes: [UInt8]
-        if text.contains("\n") && preset(for: page) == .claude {
+        if text.contains("\n") && preset(for: page).profile?.multiline == "bracketed-paste" {
             bytes = Array("\u{1b}[200~".utf8) + Array(text.utf8) + Array("\u{1b}[201~".utf8)
         } else {
             bytes = Array(text.replacingOccurrences(of: "\n", with: "\r").utf8)

@@ -155,6 +155,9 @@ struct AgentsPage: View {
                 if !others.isEmpty {
                     Text("No Claude on " + others.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
                 }
+                if !agents.installed.isEmpty {
+                    WhatWorks(installed: agents.installed)
+                }
             }
             .padding(16)
         }
@@ -230,6 +233,117 @@ struct AgentsPage: View {
     }
 }
 
+/// Per machine and per agent: installed, transcript, alerts
+/// (PLAN-multi-agent §4.2). A "·" opens what is missing and how to turn it on.
+struct WhatWorks: View {
+    let installed: [String: [AgentOnMachine]]
+    @State private var picked: Picked?
+
+    struct Picked: Equatable {
+        var machine: String
+        var agent: AgentOnMachine
+    }
+
+    private var machineNames: [String] {
+        installed.keys.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("What works").font(.title3.weight(.semibold))
+            ScrollView(.horizontal, showsIndicators: false) {
+                Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 8) {
+                    GridRow {
+                        Text("Agents").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        ForEach(machineNames, id: \.self) { name in
+                            Text(Nicknames.shared.machine(name)).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        }
+                    }
+                    ForEach(agentProfiles()) { profile in
+                        GridRow {
+                            HStack(spacing: 6) {
+                                AgentMark(profile: profile)
+                                Text(profile.name).font(.callout)
+                            }
+                            ForEach(machineNames, id: \.self) { name in
+                                cell(machine: name, agent: installed[name]?.first { $0.id == profile.id })
+                            }
+                        }
+                    }
+                    GridRow {
+                        Color.clear.frame(width: 1, height: 1)
+                        Text("installed · transcript · alerts").font(.caption2).foregroundStyle(.secondary)
+                            .gridCellColumns(max(machineNames.count, 1))
+                    }
+                }
+            }
+            if let picked {
+                hint(picked)
+            } else {
+                Text("Tap a \"·\" to see what is missing.").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    @ViewBuilder private func cell(machine: String, agent: AgentOnMachine?) -> some View {
+        if let agent, agent.version != nil {
+            Button {
+                picked = picked == Picked(machine: machine, agent: agent) ? nil : Picked(machine: machine, agent: agent)
+            } label: {
+                HStack(spacing: 6) {
+                    mark(true)
+                    mark(agent.transcript)
+                    mark(agent.alerts)
+                }
+                .font(.callout.monospaced())
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(agent.version.map { "Version \($0)" } ?? "")
+        } else {
+            Button {
+                if let agent { picked = Picked(machine: machine, agent: agent) }
+            } label: {
+                Text("—").font(.callout.monospaced()).foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func copy(_ text: String) {
+        #if os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #else
+        UIPasteboard.general.string = text
+        #endif
+    }
+
+    private func mark(_ works: Bool) -> some View {
+        Text(works ? "✓" : "·").foregroundStyle(works ? Color.green : .secondary)
+    }
+
+    private func hint(_ picked: Picked) -> some View {
+        let profile = AgentProfile.profile(id: picked.agent.id)
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                if let profile { AgentMark(profile: profile) }
+                Text("\(profile?.name ?? picked.agent.id) on \(Nicknames.shared.machine(picked.machine))")
+                    .font(.callout.weight(.semibold))
+                if let version = picked.agent.version {
+                    Text(version).font(.caption.monospaced()).foregroundStyle(.secondary)
+                }
+            }
+            Text(picked.agent.setupHint ?? "Everything works.").font(.caption)
+            if let hint = picked.agent.setupHint {
+                Button("Copy") { copy(hint) }.font(.caption)
+            }
+        }
+    }
+}
+
 /// One line over a session's terminal when Claude runs in it: status,
 /// model, context, the login and its limits.
 struct AgentStrip: View {
@@ -265,5 +379,83 @@ struct AgentStrip: View {
             ForEach(machine?.limits.prefix(2) ?? []) { UsageMeter(limit: $0, compact: true) }
         }
         .lineLimit(1)
+    }
+}
+
+// MARK: - New session (PLAN-multi-agent §4.2)
+
+/// What + starts: a shell, an agent installed on the machine, or a command.
+enum SpawnChoice: Hashable {
+    case shell
+    case agent(String)
+    case command
+
+    /// The command for manymux; nil for `.command` (the typed one).
+    var launch: [String]? {
+        switch self {
+        case .shell: []
+        case .agent(let id): AgentProfile.profile(id: id)?.launch
+        case .command: nil
+        }
+    }
+}
+
+/// The + sheet's rows: Shell, the agents on the machine with their
+/// versions, "X is not on <machine>", Command.
+struct SpawnChoices: View {
+    let agents: Agents?
+    let machine: String
+    @Binding var choice: SpawnChoice
+    @State private var loading = false
+    @State private var unknown = false
+
+    var body: some View {
+        let found = agents?.installed[machine]
+        row(.shell) { Text("Shell") }
+        Text("Agents").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+        ForEach(agentProfiles()) { profile in
+            let version = found?.first { $0.id == profile.id }?.version
+            if found != nil, version == nil {
+                HStack(spacing: 8) {
+                    AgentMark(profile: profile).opacity(0.4)
+                    Text("\(profile.name) is not on \(Nicknames.shared.machine(machine))")
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                row(.agent(profile.id)) {
+                    AgentMark(profile: profile)
+                    Text(profile.name)
+                    Spacer()
+                    if let version { Text(version).font(.caption.monospaced()).foregroundStyle(.secondary) }
+                }
+            }
+        }
+        if found == nil {
+            Text(loading ? "Looking for agents on \(Nicknames.shared.machine(machine))…"
+                 : "Couldn't ask \(Nicknames.shared.machine(machine)) which agents it has.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        row(.command) { Text("Command…") }
+            .task(id: machine) {
+                guard let agents, !machine.isEmpty else { return }
+                loading = true
+                let found = await agents.loadInstalled(on: machine)
+                loading = false
+                if case .agent(let id) = choice, let found, found.first(where: { $0.id == id })?.version == nil {
+                    choice = .shell
+                }
+            }
+    }
+
+    private func row(_ value: SpawnChoice, @ViewBuilder label: () -> some View) -> some View {
+        Button { choice = value } label: {
+            HStack(spacing: 8) {
+                Image(systemName: choice == value ? "largecircle.fill.circle" : "circle")
+                    .foregroundStyle(choice == value ? Color.accentColor : .secondary)
+                label()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }

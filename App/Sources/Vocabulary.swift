@@ -146,10 +146,10 @@ final class Vocabulary {
 
     // MARK: - Using it
 
-    /// Fixes names in finished dictation. `tagFiles`: "at <file>" becomes
-    /// an "@path" mention (Claude windows).
-    func correct(_ text: String, tagFiles: Bool) -> String {
-        matcher.correct(text, tagFiles: tagFiles)
+    /// Fixes names in finished dictation. `mention`: "at <file>" becomes
+    /// a "@path" mention (the agent profile's, in agent windows).
+    func correct(_ text: String, mention: String?) -> String {
+        matcher.correct(text, mention: mention)
     }
 
     /// Hints for the recognizer (it reads at most about 100).
@@ -532,7 +532,7 @@ struct VocabularyView: View {
                 TextField("Type what dictation heard", text: $trial, axis: .vertical)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
                 if !trial.isEmpty {
-                    Text(vocabulary.correct(trial, tagFiles: true)).font(.callout.monospaced())
+                    Text(vocabulary.correct(trial, mention: "@")).font(.callout.monospaced())
                 }
             } header: {
                 Text("Try it")

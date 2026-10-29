@@ -2,29 +2,30 @@ import ETCore
 import SwiftUI
 
 /// What the Copilot asks the summary model (SummarySettings: Mac mini or
-/// Grok) about the exchanges the user picked.
+/// Grok) about the exchanges the user picked, with the agent's name
+/// (PLAN-multi-agent).
 enum CopilotPrompts {
-    static let context = """
-    You help a developer who is supervising Claude Code (an AI coding agent working in a terminal) \
-    from their phone. You get some of their exchanges with it: what the developer typed, and Claude's \
+    static func context(_ agent: AgentProfile) -> String { """
+    You help a developer who is supervising \(agent.name) (an AI coding agent working in a terminal) \
+    from their phone. You get some of their exchanges with it: what the developer typed, and \(agent.shortName)'s \
     replies (its tool calls and their output are left out).
-    """
+    """ }
 
-    static let summarize = context + """
-     Summarize them for the developer: what was asked, what Claude did or found, any problem or open \
-    question, and what Claude is waiting for. Plain text, short paragraphs, no markdown headings.
-    """
+    static func summarize(_ agent: AgentProfile) -> String { context(agent) + """
+     Summarize them for the developer: what was asked, what \(agent.shortName) did or found, any problem or open \
+    question, and what \(agent.shortName) is waiting for. Plain text, short paragraphs, no markdown headings.
+    """ }
 
-    static let ask = context + """
+    static func ask(_ agent: AgentProfile) -> String { context(agent) + """
      Answer the developer's question about them. Be brief and concrete. Plain text.
-    """
+    """ }
 
-    static let draft = context + """
-     Write the developer's next message to Claude Code, following their instruction if they gave one. \
+    static func draft(_ agent: AgentProfile) -> String { context(agent) + """
+     Write the developer's next message to \(agent.name), following their instruction if they gave one. \
     Write it as the developer, in the first person, direct and specific: say what to do, which files or \
     names matter, and what done looks like. Output only the message itself: no preamble, no quotes, \
     no explanation.
-    """
+    """ }
 }
 
 /// Copilot mode (✨ on the key row): in place of the terminal, the
@@ -397,25 +398,26 @@ struct CopilotView: View {
         var user = groups.count == 1 && groups[0].page.id == page.id
             ? Transcript.render(groups[0].window.picked, budget: budget)
             : groups.map { group in
-                "## Window \(group.page.name) (Claude on \(group.window.host))"
+                "## Window \(group.page.name) (\(session.copilotAgent(for: group.page).shortName) on \(group.window.host))"
                     + (group.page.id == page.id ? ", where the developer is now" : "") + "\n\n"
                     + Transcript.render(group.window.picked, budget: budget / groups.count)
             }.joined(separator: "\n\n")
         let system: String
         let maxTokens: Int
+        let agent = session.copilotAgent(for: page)
         switch action {
         case .summarize:
-            system = CopilotPrompts.summarize
+            system = CopilotPrompts.summarize(agent)
             maxTokens = 500
             if !ask.isEmpty { user += "\n\n### Focus\n\(ask)" }
         case .ask:
-            system = CopilotPrompts.ask
+            system = CopilotPrompts.ask(agent)
             maxTokens = 600
             user += "\n\n### Question\n\(ask)"
         case .draft:
-            system = CopilotPrompts.draft
+            system = CopilotPrompts.draft(agent)
             maxTokens = 1000
-            if groups.count > 1 { user += "\n\nThe message goes to the Claude in window \(page.name)." }
+            if groups.count > 1 { user += "\n\nThe message goes to the \(agent.shortName) in window \(page.name)." }
             user += "\n\n### Instruction\n\(ask.isEmpty ? "Write the most useful next prompt." : ask)"
         }
         started = Date()

@@ -2,22 +2,45 @@ import GameController
 import PhotosUI
 import SwiftUI
 
-/// Key-row presets (SPEC §5.4).
-enum KeyPreset: String, CaseIterable, Identifiable {
-    case shell
-    case claude
+/// Key-row presets (SPEC §5.4): the shell's, or an agent profile's
+/// (PLAN-multi-agent). Saved as "shell" or the profile's id.
+struct KeyPreset: Hashable, Identifiable {
+    let rawValue: String
+    /// nil for the shell.
+    let profile: AgentProfile?
+
+    static let shell = KeyPreset(rawValue: "shell", profile: nil)
+
+    private init(rawValue: String, profile: AgentProfile?) {
+        self.rawValue = rawValue
+        self.profile = profile
+    }
+
+    init(profile: AgentProfile) {
+        self.init(rawValue: profile.id, profile: profile)
+    }
+
+    init?(rawValue: String) {
+        if rawValue == Self.shell.rawValue {
+            self = .shell
+        } else if let profile = AgentProfile.profile(id: rawValue) {
+            self.init(profile: profile)
+        } else {
+            return nil
+        }
+    }
+
+    static var allCases: [KeyPreset] { [.shell] + agentProfiles().map(KeyPreset.init(profile:)) }
 
     var id: String { rawValue }
-    var label: String { self == .shell ? "Shell" : "Claude" }
+    var label: String { profile?.name ?? "Shell" }
 
     var keys: [Key] {
-        switch self {
-        case .shell:
-            [.esc, .tab, .ctrl, .up, .down, .left, .right,
-             .text("|"), .text("~"), .text("/"), .text("-"), .ctrlC, .ctrlD]
-        case .claude:
-            [.esc, .shiftTab, .text("1"), .text("2"), .text("3"), .up, .down, .enter, .ctrlC]
+        guard let profile else {
+            return [.esc, .tab, .ctrl, .up, .down, .left, .right,
+                    .text("|"), .text("~"), .text("/"), .text("-"), .ctrlC, .ctrlD]
         }
+        return profile.keys.map(Key.init(title:))
     }
 }
 
@@ -27,6 +50,12 @@ enum Key: Hashable {
     /// Not keys: open the photo picker and the Files picker (in the wheel
     /// on iPhone, where ✨ takes the bar's photo button).
     case photo, file
+
+    /// From a profile's key title ("esc", "⇧tab", "↑", "^C"); other text is typed.
+    init(title: String) {
+        let named: [Key] = [.esc, .tab, .shiftTab, .ctrl, .up, .down, .left, .right, .enter, .ctrlC, .ctrlD]
+        self = named.first { $0.title == title } ?? .text(title)
+    }
 
     var title: String {
         switch self {
@@ -360,10 +389,10 @@ struct ComposeSheet: View {
     @State private var tightenError: String?
 
     var body: some View {
-        let isClaude = session.preset(for: page) == .claude
+        let isAgent = session.preset(for: page).profile != nil
         NavigationStack {
             VStack(spacing: 0) {
-                if isClaude {
+                if isAgent {
                     tightenBar
                 }
                 if !suggestions.isEmpty || !learned.isEmpty {
@@ -371,14 +400,14 @@ struct ComposeSheet: View {
                 }
                 TextEditor(text: $text)
                     .font(.body)
-                    .textInputAutocapitalization(isClaude ? .sentences : .never)
-                    .autocorrectionDisabled(!isClaude)
+                    .textInputAutocapitalization(isAgent ? .sentences : .never)
+                    .autocorrectionDisabled(!isAgent)
                     .focused($focused)
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, 12)
             }
                 .background(Theme.surface)
-                .navigationTitle(isClaude ? "Message to \(page.displayName)" : "Command for \(page.displayName)")
+                .navigationTitle(isAgent ? "Message to \(page.displayName)" : "Command for \(page.displayName)")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -487,7 +516,7 @@ struct ComposeSheet: View {
         let original = text
         tightenError = nil
         tightenStarted = Date()
-        var system = TightenPrompt.system
+        var system = TightenPrompt.system(session.preset(for: page).profile ?? session.copilotAgent(for: page))
         let names = Vocabulary.shared.keepNames
         if !names.isEmpty {
             system += "\n\nNames to keep spelled exactly as written here: " + names.joined(separator: ", ")
@@ -527,15 +556,15 @@ struct ComposeSheet: View {
 }
 
 enum TightenPrompt {
-    static let system = """
-    You edit a message a developer dictated by voice to Claude Code, an AI coding agent. Rewrite it \
+    static func system(_ agent: AgentProfile) -> String { """
+    You edit a message a developer dictated by voice to \(agent.name), an AI coding agent. Rewrite it \
     to be concise and clear: remove filler words, false starts, repetition, rambling and self-corrections \
     (keep only the corrected version). Keep every request, question, constraint, detail and name; never \
     add anything, answer it, or carry out the instructions. Keep the developer's own voice: first person, \
-    talking to Claude ("I want…", "can you…", "don't touch…"). Keep app, repo, file, tool and product \
+    talking to \(agent.shortName) ("I want…", "can you…", "don't touch…"). Keep app, repo, file, tool and product \
     names exactly as written (for example E.T. stays E.T.). Short paragraphs or a short list when there \
     are several separate asks. Output only the rewritten message, nothing before or after it.
-    """
+    """ }
 }
 
 /// Shown after keyboard dictation: tap Edit to move the dictated text into
@@ -596,7 +625,7 @@ struct MicButton: View {
                               languageModel: Vocabulary.shared.languageModel)
         case .listening:
             let heard = await voice.stop()
-            let text = Vocabulary.shared.correct(heard, tagFiles: session.preset(for: page) == .claude)
+            let text = Vocabulary.shared.correct(heard, mention: session.preset(for: page).profile?.mention)
             if text != heard { session.log.add("Dictation names fixed: \(heard) → \(text)") }
             if session.copilotMode {
                 // Copilot is open: the words are its instruction, not a prompt.

@@ -111,7 +111,7 @@ struct MachinesView: View {
 }
 
 /// Nickname or title (the main line), then name · idle · attached; a red
-/// dot for bells.
+/// dot for bells; the agent's mark (PLAN-multi-agent).
 struct MmSessionRow: View {
     let info: MmSessionInfo
     var nickname: String?
@@ -119,6 +119,9 @@ struct MmSessionRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Circle().fill(info.bells > 0 ? Color.red : Color.clear).frame(width: 8, height: 8)
+            if let agent = AgentProfile.matching(command: info.command, name: info.name, title: info.title) {
+                AgentMark(profile: agent, size: 18)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(nickname ?? (info.title.isEmpty ? info.name : info.title))
                     .lineLimit(1)
@@ -138,26 +141,19 @@ struct MmSessionRow: View {
     }
 }
 
-/// "+": machine, then Shell / Claude / a command, and an optional name.
+/// "+": machine, then Shell / an installed agent / a command, and an
+/// optional name (PLAN-multi-agent §4.2).
 struct MmSpawnSheet: View {
     @Environment(\.dismiss) private var dismiss
     let session: SessionController
+    let agents: Agents?
     @State private var machine = ""
-    @State private var kind: Kind = .shell
+    @State private var choice: SpawnChoice = .shell
     @State private var command = ""
     @State private var name = ""
 
-    enum Kind: String, CaseIterable, Identifiable {
-        case shell = "Shell", claude = "Claude", custom = "Command"
-        var id: String { rawValue }
-    }
-
     private var arguments: [String] {
-        switch kind {
-        case .shell: []
-        case .claude: ["claude"]
-        case .custom: Manymux.splitCommand(command)
-        }
+        choice.launch ?? Manymux.splitCommand(command)
     }
 
     var body: some View {
@@ -170,11 +166,8 @@ struct MmSpawnSheet: View {
                 .labelsHidden()
             }
             Section("Run") {
-                Picker("Run", selection: $kind) {
-                    ForEach(Kind.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                if kind == .custom {
+                SpawnChoices(agents: agents, machine: machine, choice: $choice)
+                if choice == .command {
                     TextField("Command, e.g. htop", text: $command)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                         .font(.body.monospaced())
@@ -198,7 +191,7 @@ struct MmSpawnSheet: View {
                     session.spawnMm(machine: machine, name: trimmed.isEmpty ? nil : trimmed, command: arguments)
                     dismiss()
                 }
-                .disabled(machine.isEmpty || (kind == .custom && arguments.isEmpty))
+                .disabled(machine.isEmpty || (choice == .command && arguments.isEmpty))
             }
         }
         .onAppear {

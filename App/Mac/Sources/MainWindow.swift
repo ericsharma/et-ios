@@ -326,6 +326,9 @@ struct SessionRow: View {
     var body: some View {
         HStack(spacing: 8) {
             Circle().fill(info.bells > 0 ? Theme.bell : Color.clear).frame(width: 7, height: 7)
+            if let agent = AgentProfile.matching(command: info.command, name: info.name, title: info.title) {
+                AgentMark(profile: agent)
+            }
             VStack(alignment: .leading, spacing: 1) {
                 Text(nickname ?? (info.title.isEmpty ? info.name : info.title)).lineLimit(1)
                 HStack(spacing: 5) {
@@ -488,28 +491,21 @@ struct Banner: View {
 
 // MARK: - New session
 
+/// Machine, then Shell / an installed agent / a command (PLAN-multi-agent §4.2).
 struct NewSessionSheet: View {
     @Environment(Fleet.self) private var fleet
+    @Environment(Agents.self) private var agents
     @Environment(\.dismiss) private var dismiss
     let defaultMachine: String?
     let opened: (SessionRef) -> Void
     @State private var machine = ""
-    @State private var kind: Kind = .shell
+    @State private var choice: SpawnChoice = .shell
     @State private var command = ""
     @State private var name = ""
     @State private var starting = false
 
-    enum Kind: String, CaseIterable, Identifiable {
-        case shell = "Shell", claude = "Claude", custom = "Command"
-        var id: String { rawValue }
-    }
-
     private var arguments: [String] {
-        switch kind {
-        case .shell: []
-        case .claude: ["claude"]
-        case .custom: Manymux.splitCommand(command)
-        }
+        choice.launch ?? Manymux.splitCommand(command)
     }
 
     var body: some View {
@@ -517,11 +513,8 @@ struct NewSessionSheet: View {
             Picker("Machine", selection: $machine) {
                 ForEach(fleet.machines) { Text(Nicknames.shared.machine($0.name)).tag($0.name) }
             }
-            Picker("Run", selection: $kind) {
-                ForEach(Kind.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            if kind == .custom {
+            SpawnChoices(agents: agents, machine: machine, choice: $choice)
+            if choice == .command {
                 TextField("Command", text: $command, prompt: Text("e.g. htop"))
                     .font(.body.monospaced())
             }
@@ -534,7 +527,7 @@ struct NewSessionSheet: View {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Start") { start() }
-                    .disabled(machine.isEmpty || (kind == .custom && arguments.isEmpty) || starting)
+                    .disabled(machine.isEmpty || (choice == .command && arguments.isEmpty) || starting)
             }
         }
         .onAppear {

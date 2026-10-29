@@ -75,8 +75,9 @@ struct VocabMatcher {
         var space: String  // whitespace after the token
     }
 
-    /// `tagFiles`: "at <file>" becomes "@path" (Claude Code file mentions).
-    func correct(_ text: String, tagFiles: Bool) -> String {
+    /// `mention`: "at <file>" becomes "@path" (the agent profile's file
+    /// mention, e.g. Claude Code's "@"); nil leaves files as words.
+    func correct(_ text: String, mention: String?) -> String {
         guard !exact.isEmpty else { return text }
         let tokens = Self.tokenize(text)
         var out: [Token] = []
@@ -94,13 +95,13 @@ struct VocabMatcher {
                 let last = span.last!
                 var replacement = term.text
                 let isFile = term.source == .file || term.text.contains("/")
-                if tagFiles, isFile {
-                    if first.lead.hasSuffix("@") {
+                if let mention, isFile {
+                    if first.lead.hasSuffix(mention) {
                         replacement = term.path ?? term.text
                     } else if let previous = out.last, previous.core.lowercased() == "at",
                               previous.trail.isEmpty, previous.lead.isEmpty {
                         out.removeLast()
-                        first.lead = "@"
+                        first.lead = mention
                         replacement = term.path ?? term.text
                     }
                 }

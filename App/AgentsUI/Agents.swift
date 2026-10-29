@@ -108,6 +108,8 @@ final class Agents {
 
     /// By name.
     private(set) var machines: [Machine] = []
+    /// The built-in agents on each machine, by machine name (PLAN-multi-agent).
+    private(set) var installed: [String: [AgentOnMachine]] = [:]
     private(set) var refreshing = false
     private(set) var refreshed: Date?
 
@@ -173,6 +175,20 @@ final class Agents {
         }
     }
 
+    /// The agents installed on one machine, asked now; nil when it can't
+    /// be asked (not a direct host, or no answer).
+    func loadInstalled(on machine: String) async -> [AgentOnMachine]? {
+        guard let host = hosts()[machine] else { return nil }
+        do {
+            let found = try await Self.withTimeout(.seconds(30)) { try await host.agents() }
+            installed[machine] = found
+            return found
+        } catch {
+            log("Agents: installed agents on \(machine): \(Self.describe(error))")
+            return installed[machine]
+        }
+    }
+
     /// Asks every connected machine; each answer shows as it comes.
     func refresh() async {
         guard !refreshing else { return }
@@ -184,6 +200,14 @@ final class Agents {
         let hosts = hosts()
         // Machines that left the network go.
         machines.removeAll { hosts[$0.name] == nil }
+        installed = installed.filter { hosts[$0.key] != nil }
+        let installedTask = Task {
+            await withTaskGroup(of: Void.self) { group in
+                for name in hosts.keys {
+                    group.addTask { _ = await self.loadInstalled(on: name) }
+                }
+            }
+        }
         await withTaskGroup(of: (String, Result<String, any Error>).self) { group in
             for (name, host) in hosts {
                 group.addTask {
@@ -217,6 +241,7 @@ final class Agents {
                 }
             }
         }
+        await installedTask.value
     }
 
     // MARK: - The script's answer

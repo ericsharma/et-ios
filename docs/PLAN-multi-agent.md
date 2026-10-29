@@ -1,6 +1,6 @@
 # Plan: Multi-agent — E.T. for every terminal AI agent, not only Claude Code
 
-Status: 2026-10-29. D1–D9 ACCEPTED (owner). M0 started (A: trigkey, B: mac-mini installs done). Nothing built.
+Status: 2026-10-29. D1–D9 ACCEPTED (owner). M0 started (A: trigkey, B: mac-mini installs done). M1-B DONE on a Swift stub (`App/Shared/AgentProfilesStub.swift`); M1-A (et-link) not yet.
 
 Follows [PLAN-agents.md](PLAN-agents.md) (AG1 built: the **Agents page** with each machine's Claude login, usage limits and running Claude agents; AG2: the same data from etd, a proposal) and [PLAN-logbook.md](PLAN-logbook.md) (D5: "Claude Code only, behind a `Reader` trait so Codex / Gemini come later"). Work split as in that plan: **A** = the trigkey Claude session (etd, et-proto, et-link), **B** = the Mac agent (apps, builds), **C** = the owner (tests).
 
@@ -205,6 +205,13 @@ Times are for the agent that runs the step. ✅ = owner can see it work.
 
 1. A: `AgentProfile` table + `agent_profiles()`, `Request::Agents` (33) = AG2 + installed agents with versions, `etd agents`. **Installed agents DONE 2026-10-29** (etd f98347b, not released or deployed): `agent_profiles()`, `RemoteHost.agents() -> [AgentOnMachine]` as above; the answer is JSON (`Response::Agents { json }`), so AG2 fields (running agents, Claude login + usage) come later with no protocol break. On trigkey `etd agents` finds Claude 2.1.312, Codex 0.166.0, Gemini 0.66.0, Grok 0.2.11. B: bump `Vendor/etd` to f98347b (or later) and replace the stub.
 2. B: replace `preset(for:)` with a profile lookup; key sets, multi-line paste, `@path`, Overview mark, prompts from the profile. **+** sheet with installed agents. Mark on rows and tabs.
+   **B DONE (2026-10-29), on a stub.** `App/Shared/AgentProfilesStub.swift` has the §4.1 names (`AgentProfile`, `AgentOnMachine`, `agentProfiles()`, `IrohHost.agents()`). `agents()` runs `command -v <agent>` and `<agent> --version` through `IrohHost.run`, as AG1 does. When et-link has the API, the stub stops compiling (redeclarations): delete it and map `host.agents()` in `Iroh.swift`. `App/Shared/AgentProfiles.swift` stays: `AgentProfile.matching(…)` (program, command, name or title; the same rule as the old Claude test), the accent colors and `AgentMark`.
+   - iOS: `KeyPreset` is "shell" or a profile id (saved choices "claude" still load). `preset(for:)` falls back to `agent(for:)`. Multi-line paste reads `multiline`, `@path` dictation reads `mention` (`VocabMatcher.correct(_:mention:)`), the compose sheet and Tighten read the profile, Copilot prompts use the agent's name. Select mode's transcript stays Claude only until M2.
+   - Key sets for Codex, Gemini CLI and Grok Build are Claude's, marked `// M0: check`.
+   - **+** (iOS and Mac, shared `SpawnChoices`): Shell, the agents on the chosen machine with their versions, "X is not on <machine>", Command….
+   - Mark: iOS Machines rows, tabs, iPad sidebar, session header, Overview; Mac sidebar rows and tabs.
+   - Agents page: a **What works** section (installed · transcript · alerts per machine; tap a cell for the hint and Copy). Running agents stay Claude only until `Request::Agents`.
+   - Checked: both apps build; matching and version parsing (12 cases); on the headless Mac, the Agents page with What works, and a Claude session started with `claude` from the Mac app (mark on its tab and row). On 2026-10-29 no machine had Codex or Gemini on PATH (the M0 installs are in `~/.local/share/agents-m0`), so + shows "is not on" for them.
 3. ✅ From the phone: + → gmktec → Gemini CLI. The session opens with Gemini's key set and its mark in the list.
 
 ### Phase M2 — transcripts (A ~1½ days, B ~1 day)

@@ -167,7 +167,9 @@ struct SelectModeView: View {
     @State private var transcript: TerminalText?
     @State private var transcriptStatus: String?
 
-    private var isClaude: Bool { session.preset(for: request.page) == .claude }
+    /// The transcript is Claude's only until PLAN-multi-agent M2 (the
+    /// Logbook's transcript, for every agent).
+    private var isClaude: Bool { session.preset(for: request.page).profile?.id == "claude" }
     private var shown: TerminalText? { source == .transcript ? transcript : frozen }
 
     var body: some View {

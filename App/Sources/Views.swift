@@ -376,7 +376,7 @@ struct SessionView: View {
         .background { ShortcutKeys(session: session, toggleSidebar: toggleSidebar) }
         .sheet(isPresented: $session.showNewWindow) {
             if session.mode == .manymux {
-                NavigationStack { MmSpawnSheet(session: session) }
+                NavigationStack { MmSpawnSheet(session: session, agents: agents) }
             } else {
                 NavigationStack { NewWindowSheet(session: session) }
             }
@@ -553,6 +553,9 @@ struct SessionView: View {
                 Text(session.mmMachineName.map(Nicknames.shared.machine) ?? "?")
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
+            }
+            if let agent = session.preset(for: page).profile {
+                AgentMark(profile: agent, size: 15)
             }
             Text(page.readOnly ? "\(page.displayName) · view only" : page.mmNickname ?? (page.title.isEmpty ? page.name : page.title))
                 .font(.subheadline)
@@ -962,6 +965,9 @@ struct WindowTabs: View {
                                 if let machine = page.mm?.machine {
                                     Text(Nicknames.shared.machine(machine)).font(.caption2).foregroundStyle(.secondary)
                                 }
+                                if let agent = session.preset(for: page).profile {
+                                    AgentMark(profile: agent, size: 13)
+                                }
                                 Text(page.displayName).font(.caption.monospaced())
                             }
                             .padding(.horizontal, 10).padding(.vertical, 5)
@@ -1083,6 +1089,9 @@ struct WindowSidebar: View {
                         Circle().fill(Theme.accent).frame(width: 7, height: 7)
                     } else {
                         Color.clear.frame(width: 7, height: 7)
+                    }
+                    if let agent = session.preset(for: page).profile {
+                        AgentMark(profile: agent, size: 18)
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(page.displayName).font(.body.monospaced())

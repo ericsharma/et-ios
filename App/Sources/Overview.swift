@@ -17,7 +17,7 @@ struct OverviewView: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 165), spacing: 12)], spacing: 12) {
                     ForEach(session.windows) { page in
                         WindowTile(page: page, isCurrent: page.id == session.currentWindowID,
-                                   isClaude: session.preset(for: page) == .claude, tick: tick)
+                                   agent: session.preset(for: page).profile, tick: tick)
                             .onTapGesture {
                                 session.currentWindowID = page.id
                                 dismiss()
@@ -71,7 +71,7 @@ struct OverviewView: View {
 struct WindowTile: View {
     let page: WindowPage
     let isCurrent: Bool
-    let isClaude: Bool
+    let agent: AgentProfile?
     /// Changes every second so the snapshot is re-read.
     let tick: Date
 
@@ -93,7 +93,7 @@ struct WindowTile: View {
                 }
                 Text(page.name).font(.caption.monospaced().weight(.semibold)).lineLimit(1)
                 Spacer(minLength: 0)
-                if isClaude { Image(systemName: "sparkle").font(.caption2).foregroundStyle(Theme.active) }
+                if let agent { AgentMark(profile: agent, size: 13) }
                 Text(page.currentCommand).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }
             .padding(.horizontal, 8).padding(.vertical, 6)

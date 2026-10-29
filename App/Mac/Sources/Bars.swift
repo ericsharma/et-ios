@@ -54,6 +54,9 @@ struct SessionTabs: View {
                     Circle().fill(Theme.bell).frame(width: 6, height: 6)
                 }
                 Text(Nicknames.shared.machine(ref.machine)).font(.caption2).foregroundStyle(.secondary)
+                if let agent = AgentProfile.matching(command: info.command, name: info.name, title: info.title) {
+                    AgentMark(profile: agent, size: 13)
+                }
                 Text(Nicknames.shared.session(machine: ref.machine, name: ref.name)).font(.caption.monospaced())
             }
             .padding(.horizontal, 10).padding(.vertical, 4)
