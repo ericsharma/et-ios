@@ -151,6 +151,24 @@ enum DebugHooks {
                 }
             }
         }
+        if let spec = value("--fetch") {
+            // machine:path, a shared file fetched into Caches (Files > Quick Look)
+            let parts = spec.split(separator: ":", maxSplits: 1).map(String.init)
+            Task {
+                while fleet.phase != .ready { try? await Task.sleep(for: .milliseconds(300)) }
+                guard parts.count == 2, let host = fleet.directHosts()[parts[0]] else {
+                    fleet.log.add("Debug fetch: no machine \(parts.first ?? "")"); return
+                }
+                let folder = FileManager.default.temporaryDirectory.appendingPathComponent("et-fetch").path
+                try? FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+                do {
+                    let local = try await host.fetchFile(parts[1], into: folder) { _, _ in }
+                    fleet.log.add("Debug fetch of \(parts[1]) from \(parts[0]) to \(local)")
+                } catch {
+                    fleet.log.add("Debug fetch of \(parts[1]) failed: \(error)")
+                }
+            }
+        }
         if args.contains("--describe") {
             Task {
                 try? await Task.sleep(for: .seconds(8))
