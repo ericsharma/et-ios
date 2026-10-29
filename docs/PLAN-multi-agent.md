@@ -1,6 +1,6 @@
 # Plan: Multi-agent — E.T. for every terminal AI agent, not only Claude Code
 
-Status: 2026-10-29. D1–D9 ACCEPTED (owner). M0 started (A). Nothing built.
+Status: 2026-10-29. D1–D9 ACCEPTED (owner). M0 started (A: trigkey, B: mac-mini installs done). Nothing built.
 
 Follows [PLAN-agents.md](PLAN-agents.md) (AG1 built: the **Agents page** with each machine's Claude login, usage limits and running Claude agents; AG2: the same data from etd, a proposal) and [PLAN-logbook.md](PLAN-logbook.md) (D5: "Claude Code only, behind a `Reader` trait so Codex / Gemini come later"). Work split as in that plan: **A** = the trigkey Claude session (etd, et-proto, et-link), **B** = the Mac agent (apps, builds), **C** = the owner (tests).
 
@@ -187,6 +187,19 @@ Times are for the agent that runs the step. ✅ = owner can see it work.
 | Grok headless | `grok -p` / `grok agent`, `--output-format`, `-r <session id>`, `-c` (continue for cwd), `sessions list|search`, `export` (Markdown), `import`. | `headless` = `grok -p`. `grok export` is a fallback transcript source. |
 | Grok reads Claude's files | `grok inspect`: loads `~/.claude/CLAUDE.md`, permissions from `~/.claude/settings.local.json`, and all 26 Claude skills. Its flags name the Claude Code equivalents (`--allow` = `--allowedTools`). | Grok may accept Claude-format hooks: check. A Grok profile can reuse much of Claude's. |
 | Logins (headless) | `codex login --device-auth`, `grok login --device-auth`, Gemini: login screen on first `gemini` run (or `GEMINI_API_KEY`). | Owner (C) logs in once per machine. The Agents page can show "not logged in" with the command. |
+
+**M0 results, mac-mini (2026-10-29, B, no login yet):**
+
+| Check | Result | Effect on the design |
+|---|---|---|
+| Install | All in `~/.local/share/agents-m0` (user profile, no nix-darwin change). Node 22.23.3 from nixpkgs (`node` link; the mini had no Node). npm: Codex **0.166.0**, Gemini **0.66.0**. Grok: nixpkgs here has `grok-build` **1.0.50**, not 0.2.11. trigkey's 0.2.11 is xAI's binary from `storage.googleapis.com/grok-build-public-artifacts/cli/grok-0.2.11-linux-x86_64`. On the mini: the same bucket's `grok-0.2.11-macos-aarch64`, built with `grok-build.nix` (`grok-result` link). `grok --version` = `grok 0.2.11 (3247ce8f833)`. | The npm installs need Node on PATH: a manymux command needs `env PATH=…` or a wrapper (as for `claude`, 2026-10-23). |
+| Grok updates itself | The first run downloads **1.0.70** to `~/.grok/downloads/grok-1.0.70-macos-aarch64` and links `~/.grok/bin/grok` to it (`~/.grok/version.json`). The nix 0.2.11 stays in place. | A pinned Grok does not stay pinned. Version detection must ask the binary that runs, and `processes` must match `~/.grok/bin/grok` too. |
+| Process tree, Codex (`mm new -d -n m0-codex env PATH=… codex`) | `63742 1 mm daemon --no-notify` → `74610 63742 …/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex`. No Node process stays: the native binary is the session leader's process. | `processes` = exe name `codex`. |
+| Process tree, Gemini | `74625 63742 node …/agents-m0/bin/gemini` → `74645 74625 node --max-old-space-size=8192 …/agents-m0/bin/gemini` (it starts itself again with a bigger heap). | `processes` must match `node … gemini`, at two levels. The child is the one that works. |
+| Process tree, Grok | `74640 63742 grok` (argv0 only, no path). | `processes` = exe name `grok`; the path is not in the command line. |
+| Files, Codex | `~/.codex`: `config.toml`, `version.json`, `installation_id`, SQLite stores `state_5`, `logs_2`, `memories_1`, `queue_1`, `goals_1` (WAL), `skills/.system`, `tmp/`. No `sessions/` before login. | Supports part 1: Codex keeps state in SQLite. Check the transcript after login. |
+| Files, Gemini | `~/.gemini`: `state.json` (+ `.bak`), `projects.json`, `installation_id`, `history/tmp`, `tmp/`. `--version` alone wrote two `projects.json.*.tmp` files. | No chats before login. |
+| Files, Grok | `~/.grok`: `config.toml`, `version.json`, `agent_id`, `README.md`, `docs/`, `skills/`, `completions/`, `logs/`, `sessions/session_search.sqlite`, `bin/`, `downloads/`. | Sessions are in SQLite (search index); check the transcript after login. |
 
 ### Phase M1 — profiles, + and the session look (A ~½ day, B ~1 day)
 
