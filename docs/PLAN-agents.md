@@ -2,6 +2,8 @@
 
 Status: 2026-10-28. AG1 DONE (app only, et-ios). AG2 (etd) is a proposal for A.
 
+Next: [PLAN-multi-agent.md](PLAN-multi-agent.md) makes this page and AG2 work for every agent vendor (Codex, Gemini CLI, Grok Build), not only Claude.
+
 ## 1. Goal
 
 The owner sees every Claude agent on the E.T. network in one place:
