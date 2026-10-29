@@ -49,6 +49,12 @@ final class Setup {
     /// The bundled CLI; nil in a build without it.
     let cli: EtdCLI? = Bundle.main.url(forAuxiliaryExecutable: "etd").map { EtdCLI(executable: $0) }
 
+    /// The bundled etd's version, written by scripts/bundle-etd-mac.sh.
+    static let bundledEtdVersion: String? = Bundle.main.url(forResource: "etd-version", withExtension: nil)
+        .flatMap { try? String(contentsOf: $0, encoding: .utf8) }
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .flatMap { $0.isEmpty ? nil : $0 }
+
     init(fleet: Fleet) {
         self.fleet = fleet
         joinName = Onboarding.machineName(fromHost: Host.current().localizedName ?? ProcessInfo.processInfo.hostName)
@@ -91,6 +97,7 @@ final class Setup {
                 await install(cli)
             case .ownEtd:
                 await ensureAgent()
+                await restartIfOld(cli, running: status.version)
                 await setUpManymux(cli)
                 await afterEtd(cli)
             case .useExisting(let manager, let takeOver):
@@ -134,6 +141,41 @@ final class Setup {
         }
     }
 
+    /// After an app update the login item still runs the etd it started
+    /// with; launchd restarts it on the new binary (KeepAlive). Only E.T.'s
+    /// own login item: an etd from Nix, brew or the CLI is left alone.
+    private func restartIfOld(_ cli: EtdCLI, running old: String?) async {
+        guard let new = Self.bundledEtdVersion, old != new, Self.agent.status == .enabled else { return }
+        stage = .working("Updating etd…")
+        do {
+            try await Self.offMain { try Self.kickstartAgent() }
+        } catch {
+            fleet.log.add("etd restart failed: \(error)")
+            return
+        }
+        guard await waitForEtd(cli, version: new) else {
+            fleet.log.add("etd restart: etd \(new) didn't come up. See ~/Library/Logs/etd.log.")
+            return
+        }
+        fleet.log.add("etd restarted: \(old ?? "?") -> \(status?.version ?? "?")")
+    }
+
+    /// `launchctl kickstart -k gui/<uid>/xyz.ericsharma.et.etd`.
+    nonisolated private static func kickstartAgent() throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        process.arguments = ["kickstart", "-k", "gui/\(getuid())/xyz.ericsharma.et.etd"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            throw EtdCLI.Failure(command: "launchctl kickstart", status: process.terminationStatus, output: output)
+        }
+    }
+
     /// Polls until the user turns E.T. on in Login Items.
     private func waitForApproval() {
         approvalTask?.cancel()
@@ -153,9 +195,11 @@ final class Setup {
         SMAppService.openSystemSettingsLoginItems()
     }
 
-    private func waitForEtd(_ cli: EtdCLI) async -> Bool {
+    /// `version`: also until that etd answers, not the one before it.
+    private func waitForEtd(_ cli: EtdCLI, version: String? = nil) async -> Bool {
         for _ in 0..<60 {
-            if let status = try? await Self.offMain({ try cli.status() }), status.running {
+            if let status = try? await Self.offMain({ try cli.status() }), status.running,
+               version == nil || status.version == version {
                 self.status = status
                 manager = status.resolvedManager
                 return true

@@ -7,6 +7,10 @@ APP="$TARGET_BUILD_DIR/$WRAPPER_NAME"
 "$SRCROOT/../scripts/build-etd-mac.sh" "$APP" > /dev/null
 mkdir -p "$APP/Contents/Library/LaunchAgents"
 cp -f "$SRCROOT/Mac/LaunchAgents/xyz.ericsharma.et.etd.plist" "$APP/Contents/Library/LaunchAgents/"
+# etd has no --version: the app compares this with the running etd's and
+# restarts its login item after an update (Setup.restartIfOld).
+mkdir -p "$APP/Contents/Resources"
+sed -n 's/^version = "\(.*\)"$/\1/p' "$SRCROOT/../Vendor/etd/Cargo.toml" | head -1 > "$APP/Contents/Resources/etd-version"
 IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:--}"
 for bin in etd etd-ssh; do
   if [ "$IDENTITY" = "-" ]; then
