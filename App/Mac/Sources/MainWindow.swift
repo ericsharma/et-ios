@@ -190,6 +190,7 @@ struct Sidebar: View {
     @State private var dropTarget: String?
     @Environment(SharedFiles.self) private var files
     @Environment(Logbook.self) private var logbook
+    @Environment(Agents.self) private var agents
     @State private var picking: SharedFilePick?
 
     var body: some View {
@@ -266,6 +267,9 @@ struct Sidebar: View {
             guard fleet.phase == .ready else { return }
             await logbook.watch()
         }
+        // Agents too: the Agents section can be scrolled out of view, and
+        // the strip over a terminal needs it running.
+        .task { await agents.watch() }
         .onChange(of: logbook.notice) { _, notice in
             guard let notice else { return }
             fleet.flash(notice)

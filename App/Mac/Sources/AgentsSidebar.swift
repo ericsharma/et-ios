@@ -29,7 +29,6 @@ struct AgentsSection: View {
                 page = .agents
             }
         }
-        .task { await agents.watch() }
     }
 
     private var caption: String {
