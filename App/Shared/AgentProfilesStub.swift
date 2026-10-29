@@ -95,13 +95,13 @@ extension IrohHost {
         return profiles.map { profile in
             let version = found[profile.id].map(Self.versionNumber)
             let isClaude = profile.id == "claude"
-            // Antigravity CLI: running sessions and quota on the Agents page.
-            let isAgy = profile.id == "antigravity"
+            // Antigravity CLI and Grok Build: running sessions and usage on the Agents page.
+            let isAgy = profile.id == "antigravity" || profile.id == "grok"
             let transcript = isClaude && claudeFiles
             let hint: String? = if version == nil {
                 "\(profile.name) is not installed here, or not on etd's PATH."
             } else if isAgy {
-                "E.T. shows Antigravity CLI sessions and quota; it can't read its transcripts or state yet (PLAN-multi-agent M2, M3)."
+                "E.T. shows \(profile.name) sessions and usage; it can't read its transcripts or state yet (PLAN-multi-agent M2, M3)."
             } else if !isClaude {
                 "E.T. can't read \(profile.name) transcripts or state yet (PLAN-multi-agent M2, M3)."
             } else if !transcript {

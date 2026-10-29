@@ -104,6 +104,8 @@ struct AccountCard: View {
 struct AgentRow: View {
     let agent: Agents.Agent
     var title: String?
+    /// Its login's limits, for agents whose machine header doesn't show them.
+    var limits: [Agents.Limit] = []
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -117,6 +119,10 @@ struct AgentRow: View {
                 Text(details).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 0)
+            if !limits.isEmpty {
+                HStack(spacing: 10) { ForEach(limits.prefix(2)) { UsageMeter(limit: $0, compact: true) } }
+                    .padding(.top, 2)
+            }
         }
         .padding(.vertical, 2)
     }
@@ -157,10 +163,10 @@ struct AgentsPage: View {
                         ForEach(agents.accounts) { AccountCard(usage: $0) }
                     }
                 }
-                ForEach(agents.machines.filter { !$0.noClaude || $0.agy != nil }) { machine in
+                ForEach(agents.machines.filter { !$0.noClaude || !$0.logins.isEmpty }) { machine in
                     machineSection(machine)
                 }
-                let others = agents.machines.filter { $0.noClaude && $0.agy == nil }.map(\.name)
+                let others = agents.machines.filter { $0.noClaude && $0.logins.isEmpty }.map(\.name)
                 if !others.isEmpty {
                     Text("No agents on " + others.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
                 }
@@ -224,7 +230,9 @@ struct AgentsPage: View {
             }
             ForEach(live) { agent in
                 Button { open(agent) } label: {
-                    AgentRow(agent: agent, title: title(agent)).contentShape(Rectangle())
+                    AgentRow(agent: agent, title: title(agent),
+                             limits: agent.agent == "claude" ? [] : agents.limits(machine: machine.name, agent: agent.agent))
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .help("Open \(agent.machine)/\(agent.mmSession)")
@@ -361,7 +369,8 @@ struct AgentStrip: View {
     let machine: Agents.Machine?
     let limits: [Agents.Limit]
 
-    private var isAgy: Bool { agent.agent == "antigravity" }
+    private var login: Agents.AgentLogin? { machine?.logins.first { $0.agent == agent.agent } }
+    private var isClaude: Bool { agent.agent == "claude" }
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -383,10 +392,10 @@ struct AgentStrip: View {
             if let context = agent.contextText {
                 Text(context).font(.caption).foregroundStyle(.secondary)
             }
-            if full, let email = isAgy ? machine?.agy?.email : machine?.account?.email {
+            if full, let email = isClaude ? machine?.account?.email : login?.email {
                 Text(email).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
-            if full, !isAgy, let plan = machine?.plan {
+            if full, let plan = isClaude ? machine?.plan : login?.plan {
                 Text(plan).font(.caption2).foregroundStyle(.secondary)
             }
             Spacer(minLength: 4)
