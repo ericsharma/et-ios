@@ -175,6 +175,19 @@ Times are for the agent that runs the step. ✅ = owner can see it work.
 2. For each agent, run one short session in manymux and record: process name and tree, transcript path and format (JSONL or JSON, append-only or not), whether the process keeps the file open, how `/clear` and resume change the file, the terminal title it sets, the hook events and the exact JSON they get, the headless command, and the keys its TUI needs.
 3. Replace §2.2 with a checked table. Change D4 and D5 if the facts say so.
 
+**M0 results, part 1 (2026-10-29, A, trigkey, no login yet):**
+
+| Check | Result | Effect on the design |
+|---|---|---|
+| Install | npm: Codex `@openai/codex` **0.166.0**, Gemini `@google/gemini-cli` **0.66.0**. Grok Build is not on npm; nixpkgs `grok-build` **0.2.11** (homepage x.ai/cli, binaries `grok` and `agent`). nixpkgs is far behind for the others (codex 0.92.0, gemini-cli 0.25.2). M0 install: `~/.local/share/agents-m0` (not in nixos-config). | Check facts on the npm versions. Version detection must handle npm, nix and other installs. |
+| Codex storage | 0.166 has `codex migrate-rollouts` ("legacy local sessions to paginated thread history"), features `sqlite` (removed, on), `local_thread_store_compression` (in development), `background_paginated_rollout_migration` (in development). | The web facts (one append-only `rollout-*.jsonl` per session) may be **old**. D4 may need a Codex converter. Check after login. |
+| Codex hooks | `codex features list`: `hooks` **stable, on**. | D5 source (2) works for Codex. |
+| Codex sessions | `codex agents` (sessions on a "shared local app-server daemon"), `resume`, `fork`, `queue` (a message for an existing session), `archive`. | The app-server may give status and transcript without file reads: check it as a Codex `Reader` source. |
+| Gemini headless | `-p`, `-o json|stream-json`, `--acp`, `--resume latest|<n>`, `--session-id <uuid>`, `--list-sessions`, `--approval-mode`. | `headless` = `gemini -p … -o json`. `--session-id` lets etd know the id when E.T. starts the session. |
+| Grok headless | `grok -p` / `grok agent`, `--output-format`, `-r <session id>`, `-c` (continue for cwd), `sessions list|search`, `export` (Markdown), `import`. | `headless` = `grok -p`. `grok export` is a fallback transcript source. |
+| Grok reads Claude's files | `grok inspect`: loads `~/.claude/CLAUDE.md`, permissions from `~/.claude/settings.local.json`, and all 26 Claude skills. Its flags name the Claude Code equivalents (`--allow` = `--allowedTools`). | Grok may accept Claude-format hooks: check. A Grok profile can reuse much of Claude's. |
+| Logins (headless) | `codex login --device-auth`, `grok login --device-auth`, Gemini: login screen on first `gemini` run (or `GEMINI_API_KEY`). | Owner (C) logs in once per machine. The Agents page can show "not logged in" with the command. |
+
 ### Phase M1 — profiles, + and the session look (A ~½ day, B ~1 day)
 
 1. A: `AgentProfile` table + `agent_profiles()`, `Request::Agents` (33) = AG2 + installed agents with versions, `etd agents`.
