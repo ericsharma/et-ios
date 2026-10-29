@@ -203,7 +203,7 @@ Times are for the agent that runs the step. ✅ = owner can see it work.
 
 ### Phase M1 — profiles, + and the session look (A ~½ day, B ~1 day)
 
-1. A: `AgentProfile` table + `agent_profiles()`, `Request::Agents` (33) = AG2 + installed agents with versions, `etd agents`.
+1. A: `AgentProfile` table + `agent_profiles()`, `Request::Agents` (33) = AG2 + installed agents with versions, `etd agents`. **Installed agents DONE 2026-10-29** (etd f98347b, not released or deployed): `agent_profiles()`, `RemoteHost.agents() -> [AgentOnMachine]` as above; the answer is JSON (`Response::Agents { json }`), so AG2 fields (running agents, Claude login + usage) come later with no protocol break. On trigkey `etd agents` finds Claude 2.1.312, Codex 0.166.0, Gemini 0.66.0, Grok 0.2.11. B: bump `Vendor/etd` to f98347b (or later) and replace the stub.
 2. B: replace `preset(for:)` with a profile lookup; key sets, multi-line paste, `@path`, Overview mark, prompts from the profile. **+** sheet with installed agents. Mark on rows and tabs.
 3. ✅ From the phone: + → gmktec → Gemini CLI. The session opens with Gemini's key set and its mark in the list.
 
