@@ -1,6 +1,6 @@
 # Plan: Multi-agent — E.T. for every terminal AI agent, not only Claude Code
 
-Status: 2026-10-29. D1–D9 ACCEPTED (owner). M0 started (A: trigkey, B: mac-mini installs done). M1-B DONE on a Swift stub (`App/Shared/AgentProfilesStub.swift`); M1-A (et-link) not yet.
+Status: 2026-10-29. D1–D9 ACCEPTED (owner). M0 started (A: trigkey, B: mac-mini installs done). M1-B DONE on a Swift stub (`App/Shared/AgentProfilesStub.swift`); M1-A installed agents in etd f98347b, not yet in Vendor/etd (the apps use the stub until then).
 
 Follows [PLAN-agents.md](PLAN-agents.md) (AG1 built: the **Agents page** with each machine's Claude login, usage limits and running Claude agents; AG2: the same data from etd, a proposal) and [PLAN-logbook.md](PLAN-logbook.md) (D5: "Claude Code only, behind a `Reader` trait so Codex / Gemini come later"). Work split as in that plan: **A** = the trigkey Claude session (etd, et-proto, et-link), **B** = the Mac agent (apps, builds), **C** = the owner (tests).
 
