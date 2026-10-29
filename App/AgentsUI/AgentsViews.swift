@@ -61,8 +61,64 @@ struct UsageBar: View {
     }
 }
 
-/// A Claude, Antigravity CLI or Grok login: who, the plan, its limits, and
-/// the machines that use it. Limits from an earlier ask show "as of".
+// MARK: - Page parts
+
+/// One look for every block of the Agents page.
+private extension View {
+    func agentsCard() -> some View {
+        padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+/// A titled block: the same header for every section of the page.
+struct AgentsBlock<Accessory: View, Content: View>: View {
+    let title: String
+    var subtitle: String?
+    @ViewBuilder var accessory: Accessory
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title).font(.title3.weight(.semibold))
+                if let subtitle {
+                    Text(subtitle).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                accessory
+            }
+            content
+        }
+    }
+}
+
+extension AgentsBlock where Accessory == EmptyView {
+    init(title: String, subtitle: String? = nil, @ViewBuilder content: () -> Content) {
+        self.init(title: title, subtitle: subtitle, accessory: { EmptyView() }, content: content)
+    }
+}
+
+/// A problem with what to do about it, in one style everywhere.
+struct AgentsNotice: View {
+    let text: String
+    var systemImage = "exclamationmark.triangle.fill"
+    var tint: Color = .orange
+
+    var body: some View {
+        Label {
+            Text(text).fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: systemImage).foregroundStyle(tint)
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+}
+
+/// A Claude, Antigravity CLI or Grok login: who, the plan, its limits in
+/// pairs (5-hour beside weekly), and the machines that use it.
 struct AccountCard: View {
     let usage: Agents.AccountUsage
     /// Hides the login from this page (an old one).
@@ -70,90 +126,173 @@ struct AccountCard: View {
 
     private var profile: AgentProfile? { AgentProfile.profile(id: usage.agent) }
 
+    /// The organization, else the agent; "login not readable" when E.T.
+    /// has no email for it.
+    private var subtitle: String {
+        if usage.account.email == nil { return "Login not readable here" }
+        return usage.account.org ?? profile?.name ?? ""
+    }
+
+    /// The limits by model group, in their order.
+    private var groups: [(name: String?, limits: [Agents.Limit])] {
+        var result: [(name: String?, limits: [Agents.Limit])] = []
+        for limit in usage.limits {
+            if let i = result.firstIndex(where: { $0.name == limit.group }) {
+                result[i].limits.append(limit)
+            } else {
+                result.append((limit.group, [limit]))
+            }
+        }
+        return result
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                if let profile { AgentMark(profile: profile).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 3 } }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(usage.account.email ?? usage.account.name ?? "\(profile?.name ?? "Claude") account").font(.headline).lineLimit(1)
-                    if let org = usage.account.org {
-                        Text(org).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                    }
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 10) {
+                if let profile { AgentMark(profile: profile, size: 22) }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(usage.account.email ?? usage.account.name ?? "\(profile?.name ?? "Claude") account")
+                        .font(.callout.weight(.semibold)).lineLimit(1).truncationMode(.middle)
+                    Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
-                Spacer()
+                Spacer(minLength: 4)
                 if let plan = usage.plan {
-                    Text(plan).font(.caption.weight(.semibold))
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(.tint.opacity(0.2), in: Capsule())
+                    Text(plan).font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .background((profile?.accentColor ?? .accentColor).opacity(0.22), in: Capsule())
                 }
                 if let hide {
                     Menu {
                         Button("Hide Account", systemImage: "eye.slash", action: hide)
                     } label: {
-                        Image(systemName: "ellipsis.circle").foregroundStyle(.secondary)
+                        Image(systemName: "ellipsis").font(.callout).foregroundStyle(.secondary)
+                            .frame(width: 22, height: 22).contentShape(Rectangle())
                     }
                     .menuStyle(.button)
+                    .menuIndicator(.hidden)
                     .buttonStyle(.plain)
                     .fixedSize()
                     .help("Hide this login (an old one) from the Agents page")
                 }
             }
-            ForEach(usage.limits) { UsageMeter(limit: $0) }
-            if let error = usage.usageError, usage.limits.isEmpty {
-                Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
-            } else if usage.isStale, let fetched = usage.fetched {
-                Label("As of \(UsageMeter.resetText(fetched))" + (usage.usageError.map { " · \($0)" } ?? ""),
-                      systemImage: "clock.arrow.circlepath")
-                    .font(.caption).foregroundStyle(.secondary)
+            if usage.limits.isEmpty {
+                AgentsNotice(text: usage.usageError ?? "No usage yet")
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(groups, id: \.name) { group in
+                        VStack(alignment: .leading, spacing: 6) {
+                            if let name = group.name {
+                                Text(name).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                            }
+                            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
+                                ForEach(Array(stride(from: 0, to: group.limits.count, by: 2)), id: \.self) { i in
+                                    GridRow {
+                                        LimitGauge(limit: group.limits[i])
+                                        if i + 1 < group.limits.count {
+                                            LimitGauge(limit: group.limits[i + 1])
+                                        } else {
+                                            Color.clear.frame(height: 1)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if usage.isStale, let fetched = usage.fetched {
+                    AgentsNotice(text: "As of \(UsageMeter.resetText(fetched))" + (usage.usageError.map { " · \($0)" } ?? ""),
+                                 systemImage: "clock.arrow.circlepath", tint: .secondary)
+                }
             }
-            Text("On " + usage.machines.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
+            Divider()
+            Label(usage.machines.map(Nicknames.shared.machine).joined(separator: ", "), systemImage: "desktopcomputer")
+                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }
-        .padding(12)
-        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+        .agentsCard()
         .contextMenu {
             if let hide { Button("Hide Account", systemImage: "eye.slash", action: hide) }
         }
     }
 }
 
-/// A running agent: its title, where it runs, the model and context.
+/// One limit in a card: window, percent, bar, reset.
+struct LimitGauge: View {
+    let limit: Agents.Limit
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(limit.windowLabel).font(.caption)
+                Spacer(minLength: 4)
+                Text("\(Int(limit.percent.rounded()))%").font(.caption.weight(.semibold).monospacedDigit())
+            }
+            UsageBar(percent: limit.percent).frame(height: 6)
+            Text(limit.resets.map { "Resets \(UsageMeter.resetText($0))" } ?? " ")
+                .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A running agent: state, mark, title, where it runs and what it uses,
+/// and its login's meters in one column on the right.
 struct AgentRow: View {
     let agent: Agents.Agent
     var title: String?
-    /// Its login's limits, for agents whose machine header doesn't show them.
     var limits: [Agents.Limit] = []
+    var opens = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            LogbookStatusDot(status: agent.status).padding(.top, 5)
-            if let profile = agent.profile { AgentMark(profile: profile).padding(.top, 1) }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title ?? (agent.mmSession.isEmpty ? "\(agent.profile?.shortName ?? "Claude") (pid \(agent.pid))" : agent.mmSession))
-                    .font(.callout).lineLimit(1)
-                Text(agent.mmSession.isEmpty ? agent.machine : "\(agent.machine)/\(agent.mmSession)")
-                    .font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
-                Text(details).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                lead
+                Spacer(minLength: 8)
+                meters.frame(width: 190, alignment: .trailing)
+                chevron
             }
-            Spacer(minLength: 0)
-            if !limits.isEmpty {
-                HStack(spacing: 10) { ForEach(limits.prefix(2)) { UsageMeter(limit: $0, compact: true) } }
-                    .padding(.top, 2)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) { lead; Spacer(minLength: 0); chevron }
+                if !limits.isEmpty { meters.padding(.leading, 46) }
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
+    }
+
+    private var lead: some View {
+        HStack(spacing: 10) {
+            LogbookStatusDot(status: agent.status)
+            if let profile = agent.profile { AgentMark(profile: profile, size: 20) }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title ?? agent.profile?.name ?? agent.agent).font(.callout).lineLimit(1)
+                Text(details).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+        }
+        .help(agent.version.map { "\(agent.profile?.name ?? agent.agent) v\($0)" } ?? "")
+    }
+
+    @ViewBuilder private var meters: some View {
+        HStack(spacing: 12) { ForEach(limits.prefix(2)) { UsageMeter(limit: $0, compact: true) } }
+    }
+
+    @ViewBuilder private var chevron: some View {
+        if opens {
+            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+        }
     }
 
     private var details: String {
-        var parts = agent.status.isEmpty ? [agent.profile?.name ?? agent.agent] : [agent.status]
+        var parts = [agent.mmSession.isEmpty ? "pid \(agent.pid)" : agent.mmSession]
+        if !agent.status.isEmpty { parts.append(agent.status) }
         if let model = agent.modelName { parts.append(model) }
         if let context = agent.contextText { parts.append(context) }
-        if let version = agent.version { parts.append("v\(version)") }
         parts.append(LogbookSession.tilde(agent.cwd))
         return parts.joined(separator: " · ")
     }
 }
 
-/// Every machine's Claude login, its limits and its running agents.
+/// Every machine's agents, the logins they use with their limits, and
+/// what E.T. can do with each agent where.
 struct AgentsPage: View {
     let agents: Agents
     /// Claude's title for an agent (from the Logbook), if known.
@@ -163,7 +302,7 @@ struct AgentsPage: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 28) {
                 header
                 if agents.machines.isEmpty {
                     if agents.refreshing {
@@ -172,103 +311,151 @@ struct AgentsPage: View {
                         ContentUnavailableView("No machines", systemImage: "desktopcomputer",
                                                description: Text("No machine of the network is connected."))
                     }
-                }
-                if !agents.accounts.isEmpty {
-                    Text("Accounts").font(.title3.weight(.semibold))
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 12, alignment: .top)], spacing: 12) {
-                        ForEach(agents.accounts) { usage in
-                            AccountCard(usage: usage) { agents.setHidden(usage, true) }
+                } else {
+                    running
+                    usage
+                    if !agents.installed.isEmpty {
+                        AgentsBlock(title: "What works", subtitle: "per machine") {
+                            WhatWorks(installed: agents.installed)
                         }
                     }
-                }
-                let hidden = agents.hiddenAccounts
-                if !hidden.isEmpty {
-                    DisclosureGroup {
-                        ForEach(hidden) { usage in
-                            HStack(spacing: 8) {
-                                if let profile = AgentProfile.profile(id: usage.agent) { AgentMark(profile: profile) }
-                                Text(usage.account.email ?? usage.account.name ?? usage.id).font(.callout).lineLimit(1)
-                                Text("on " + usage.machines.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                Spacer()
-                                Button("Show") { agents.setHidden(usage, false) }.font(.caption)
-                            }
-                        }
-                    } label: {
-                        Text("\(hidden.count) hidden account\(hidden.count == 1 ? "" : "s")").font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                ForEach(agents.machines.filter { !$0.noClaude || !$0.logins.isEmpty }) { machine in
-                    machineSection(machine)
-                }
-                let others = agents.machines.filter { $0.noClaude && $0.logins.isEmpty }.map(\.name)
-                if !others.isEmpty {
-                    Text("No agents on " + others.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
-                }
-                if !agents.installed.isEmpty {
-                    WhatWorks(installed: agents.installed)
                 }
             }
-            .padding(16)
+            .padding(20)
+            .frame(maxWidth: 1100, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
         .task { await agents.watch() }
     }
 
+    // MARK: Header
+
     private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Agents").font(.title2.weight(.semibold))
-                Text(summary).font(.caption).foregroundStyle(.secondary)
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                #if os(macOS)
+                // iOS has the navigation title.
+                Text("Agents").font(.largeTitle.weight(.bold))
+                #endif
+                HStack(spacing: 8) {
+                    chip("\(agents.running.count) running", systemImage: "terminal")
+                    chip("\(agents.running.filter { $0.status == "busy" }.count) busy", systemImage: "bolt.fill", tint: .green)
+                    if let tightest {
+                        chip("\(tightest.profile.shortName) \(tightest.limit.compactLabel) \(Int(tightest.limit.percent.rounded()))%",
+                             systemImage: "gauge.with.dots.needle.67percent",
+                             tint: tightest.limit.percent >= 90 ? .red : tightest.limit.percent >= 70 ? .orange : .secondary)
+                            .help("The most used limit: \(tightest.account)")
+                    }
+                    let problems = problems
+                    if !problems.isEmpty {
+                        chip("\(problems.count) to look at", systemImage: "exclamationmark.triangle.fill", tint: .orange)
+                            .help(problems.joined(separator: "\n"))
+                    }
+                }
             }
             Spacer()
-            if agents.refreshing {
-                ProgressView().controlSize(.small)
+            VStack(alignment: .trailing, spacing: 6) {
+                Button {
+                    Task { await agents.refresh() }
+                } label: {
+                    if agents.refreshing {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                }
+                .disabled(agents.refreshing)
+                if let refreshed = agents.refreshed {
+                    Text("Updated \(refreshed.formatted(date: .omitted, time: .shortened))")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
             }
-            Button {
-                Task { await agents.refresh() }
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-            .disabled(agents.refreshing)
         }
     }
 
-    private var summary: String {
-        let running = agents.running
-        let busy = running.filter { $0.status == "busy" }.count
-        var text = "\(running.count) running, \(busy) busy"
-        if let refreshed = agents.refreshed {
-            text += " · updated \(refreshed.formatted(date: .omitted, time: .shortened))"
-        }
-        return text
+    private func chip(_ text: String, systemImage: String, tint: Color = .secondary) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.caption.weight(.medium))
+            .labelStyle(ChipLabelStyle(tint: tint))
+            .padding(.horizontal, 9).padding(.vertical, 4)
+            .background(.quaternary.opacity(0.5), in: Capsule())
     }
 
-    private func machineSection(_ machine: Agents.Machine) -> some View {
+    /// The most used limit of all shown logins.
+    private var tightest: (limit: Agents.Limit, profile: AgentProfile, account: String)? {
+        agents.accounts.flatMap { usage in
+            usage.limits.compactMap { limit in
+                AgentProfile.profile(id: usage.agent).map { (limit, $0, usage.account.email ?? usage.id) }
+            }
+        }
+        .max { $0.0.percent < $1.0.percent }
+    }
+
+    /// Machines that did not answer, and shown logins with no limits.
+    private var problems: [String] {
+        agents.machines.compactMap { machine in machine.error.map { "\(Nicknames.shared.machine(machine.name)): \($0)" } }
+            + agents.accounts.filter { $0.limits.isEmpty && $0.usageError != nil }.map {
+                "\($0.account.email ?? AgentProfile.profile(id: $0.agent)?.name ?? $0.id): \($0.usageError ?? "")"
+            }
+    }
+
+    // MARK: Running now
+
+    private var running: some View {
+        let withAgents = agents.machines.filter { machine in machine.agents.contains { !$0.isOrphan } }
+        let quiet = agents.machines.filter { machine in machine.error == nil && !machine.agents.contains { !$0.isOrphan } }
+        let failed = agents.machines.filter { $0.error != nil }
+        return AgentsBlock(title: "Running now", subtitle: "tap to open its terminal") {
+            VStack(alignment: .leading, spacing: 0) {
+                if withAgents.isEmpty {
+                    Text("No agent runs in a session.").font(.callout).foregroundStyle(.secondary).padding(.vertical, 6)
+                }
+                ForEach(Array(withAgents.enumerated()), id: \.element.id) { index, machine in
+                    if index > 0 { Divider().padding(.vertical, 8) }
+                    machineBlock(machine)
+                }
+                if !failed.isEmpty || !quiet.isEmpty {
+                    Divider().padding(.vertical, 8)
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(failed) { machine in
+                            AgentsNotice(text: "\(Nicknames.shared.machine(machine.name)): \(machine.error ?? "")" + Self.fix(for: machine.error))
+                        }
+                        if !quiet.isEmpty {
+                            AgentsNotice(text: "Nothing running on " + quiet.map { Nicknames.shared.machine($0.name) }.joined(separator: ", "),
+                                         systemImage: "moon.zzz", tint: .secondary)
+                        }
+                    }
+                }
+            }
+            .agentsCard()
+        }
+    }
+
+    /// What to do about a machine's error, when there is a clear step.
+    private static func fix(for error: String?) -> String {
+        guard let error else { return "" }
+        if error.contains("jq is not installed") { return ". Install jq there to see its agents." }
+        return ""
+    }
+
+    private func machineBlock(_ machine: Agents.Machine) -> some View {
         let live = machine.agents.filter { !$0.isOrphan }
         let orphans = machine.agents.filter(\.isOrphan)
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(machine.name).font(.headline)
-                if let account = machine.account, let email = account.email, !agents.hidden.contains(account.uuid) {
-                    Text(email).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
-                Spacer()
-                let limits = agents.limits(machine: machine.name)
-                if !limits.isEmpty {
-                    HStack(spacing: 10) { ForEach(limits.prefix(2)) { UsageMeter(limit: $0, compact: true) } }
-                }
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Image(systemName: "desktopcomputer").font(.caption).foregroundStyle(.secondary)
+                Text(Nicknames.shared.machine(machine.name)).font(.subheadline.weight(.semibold))
+                Text("\(live.count)").font(.caption2.weight(.semibold).monospacedDigit())
+                    .padding(.horizontal, 6).padding(.vertical, 1)
+                    .background(.quaternary, in: Capsule())
             }
-            if let error = machine.error {
-                Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
-            } else if live.isEmpty {
-                Text("No agent running in a session").font(.caption).foregroundStyle(.secondary)
-            }
+            .padding(.bottom, 2)
             ForEach(live) { agent in
                 Button { open(agent) } label: {
                     AgentRow(agent: agent, title: title(agent),
-                             limits: agent.agent == "claude" ? [] : agents.limits(machine: machine.name, agent: agent.agent))
-                        .contentShape(Rectangle())
+                             limits: agents.limits(machine: machine.name, agent: agent.agent), opens: true)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(AgentRowButtonStyle())
                 .help("Open \(agent.machine)/\(agent.mmSession)")
             }
             if !orphans.isEmpty {
@@ -278,15 +465,86 @@ struct AgentsPage: View {
                     Text("\(orphans.count) agent process\(orphans.count == 1 ? "" : "es") with no session")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                .padding(.top, 4)
             }
         }
-        .padding(12)
-        .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    // MARK: Usage
+
+    private var usage: some View {
+        let shown = agents.accounts
+        let hidden = agents.hiddenAccounts
+        return AgentsBlock(title: "Usage", subtitle: "each login once, with the machines that use it") {
+            VStack(alignment: .leading, spacing: 18) {
+                if shown.isEmpty {
+                    Text("No logins yet.").font(.callout).foregroundStyle(.secondary).agentsCard()
+                }
+                ForEach(agentProfiles().filter { profile in shown.contains { $0.agent == profile.id } }) { profile in
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 6) {
+                            AgentMark(profile: profile, size: 14)
+                            Text(profile.name).font(.subheadline.weight(.semibold))
+                        }
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 12, alignment: .top)], alignment: .leading, spacing: 12) {
+                            ForEach(shown.filter { $0.agent == profile.id }) { usage in
+                                AccountCard(usage: usage) { agents.setHidden(usage, true) }
+                            }
+                        }
+                    }
+                }
+                if !hidden.isEmpty {
+                    DisclosureGroup {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(hidden) { usage in
+                                HStack(spacing: 8) {
+                                    if let profile = AgentProfile.profile(id: usage.agent) { AgentMark(profile: profile, size: 14) }
+                                    Text(usage.account.email ?? usage.account.name ?? usage.id).font(.callout).lineLimit(1)
+                                    Text(usage.machines.map(Nicknames.shared.machine).joined(separator: ", "))
+                                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                    Spacer()
+                                    Button("Show") { agents.setHidden(usage, false) }.font(.caption)
+                                }
+                            }
+                        }
+                        .padding(.top, 6)
+                    } label: {
+                        Label("\(hidden.count) hidden login\(hidden.count == 1 ? "" : "s")", systemImage: "eye.slash")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct ChipLabelStyle: LabelStyle {
+    let tint: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) {
+            configuration.icon.foregroundStyle(tint)
+            configuration.title
+        }
+    }
+}
+
+/// A row that opens something: a soft highlight on hover and press.
+private struct AgentRowButtonStyle: ButtonStyle {
+    @State private var hovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 8)
+            .background(Color.primary.opacity(configuration.isPressed ? 0.1 : hovering ? 0.05 : 0),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .padding(.horizontal, -8)
+            .onHover { hovering = $0 }
     }
 }
 
 /// Per machine and per agent: installed, transcript, alerts
-/// (PLAN-multi-agent §4.2). A "·" opens what is missing and how to turn it on.
+/// (PLAN-multi-agent §4.2). Tap a cell for what is missing.
 struct WhatWorks: View {
     let installed: [String: [AgentOnMachine]]
     @State private var picked: Picked?
@@ -301,19 +559,22 @@ struct WhatWorks: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("What works").font(.title3.weight(.semibold))
+        VStack(alignment: .leading, spacing: 12) {
             ScrollView(.horizontal, showsIndicators: false) {
-                Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 8) {
+                Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
                     GridRow {
-                        Text("Agents").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        Text("Agent").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                            .frame(minWidth: 170, alignment: .leading)
                         ForEach(machineNames, id: \.self) { name in
                             Text(Nicknames.shared.machine(name)).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                                .lineLimit(1).frame(minWidth: 104).gridColumnAlignment(.center)
                         }
                     }
+                    .padding(.bottom, 8)
                     ForEach(agentProfiles()) { profile in
+                        Divider().gridCellUnsizedAxes(.horizontal)
                         GridRow {
-                            HStack(spacing: 6) {
+                            HStack(spacing: 8) {
                                 AgentMark(profile: profile)
                                 Text(profile.name).font(.callout)
                             }
@@ -321,47 +582,54 @@ struct WhatWorks: View {
                                 cell(machine: name, agent: installed[name]?.first { $0.id == profile.id })
                             }
                         }
-                    }
-                    GridRow {
-                        Color.clear.frame(width: 1, height: 1)
-                        Text("installed · transcript · alerts").font(.caption2).foregroundStyle(.secondary)
-                            .gridCellColumns(max(machineNames.count, 1))
+                        .padding(.vertical, 7)
                     }
                 }
             }
-            if let picked {
-                hint(picked)
-            } else {
-                Text("Tap a \"·\" to see what is missing.").font(.caption).foregroundStyle(.secondary)
+            HStack(spacing: 14) {
+                legend("checkmark.circle.fill", .green, "works")
+                legend("circle.dashed", .secondary, "not yet")
+                legend("minus", .secondary, "not installed")
+                Text("Columns: installed · transcript · alerts").font(.caption2).foregroundStyle(.secondary)
             }
+            if let picked { hint(picked) }
         }
-        .padding(12)
-        .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
+        .agentsCard()
+    }
+
+    private func legend(_ symbol: String, _ tint: Color, _ text: String) -> some View {
+        Label { Text(text) } icon: { Image(systemName: symbol).foregroundStyle(tint) }
+            .font(.caption2).foregroundStyle(.secondary)
     }
 
     @ViewBuilder private func cell(machine: String, agent: AgentOnMachine?) -> some View {
-        if let agent, agent.version != nil {
-            Button {
-                picked = picked == Picked(machine: machine, agent: agent) ? nil : Picked(machine: machine, agent: agent)
-            } label: {
-                HStack(spacing: 6) {
-                    mark(true)
-                    mark(agent.transcript)
-                    mark(agent.alerts)
+        let selected = agent.map { picked == Picked(machine: machine, agent: $0) } ?? false
+        Button {
+            if let agent { picked = selected ? nil : Picked(machine: machine, agent: agent) }
+        } label: {
+            Group {
+                if let agent, agent.version != nil {
+                    HStack(spacing: 5) {
+                        dot(true)
+                        dot(agent.transcript)
+                        dot(agent.alerts)
+                    }
+                } else {
+                    Image(systemName: "minus").foregroundStyle(.tertiary)
                 }
-                .font(.callout.monospaced())
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .help(agent.version.map { "Version \($0)" } ?? "")
-        } else {
-            Button {
-                if let agent { picked = Picked(machine: machine, agent: agent) }
-            } label: {
-                Text("—").font(.callout.monospaced()).foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
+            .font(.callout)
+            .frame(minWidth: 104, minHeight: 22)
+            .background(selected ? Color.accentColor.opacity(0.15) : .clear, in: RoundedRectangle(cornerRadius: 6))
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .help(agent?.version.map { "Version \($0)" } ?? "Not installed")
+    }
+
+    private func dot(_ works: Bool) -> some View {
+        Image(systemName: works ? "checkmark.circle.fill" : "circle.dashed")
+            .foregroundStyle(works ? Color.green : .secondary)
     }
 
     private func copy(_ text: String) {
@@ -373,26 +641,27 @@ struct WhatWorks: View {
         #endif
     }
 
-    private func mark(_ works: Bool) -> some View {
-        Text(works ? "✓" : "·").foregroundStyle(works ? Color.green : .secondary)
-    }
-
     private func hint(_ picked: Picked) -> some View {
         let profile = AgentProfile.profile(id: picked.agent.id)
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                if let profile { AgentMark(profile: profile) }
-                Text("\(profile?.name ?? picked.agent.id) on \(Nicknames.shared.machine(picked.machine))")
-                    .font(.callout.weight(.semibold))
-                if let version = picked.agent.version {
-                    Text(version).font(.caption.monospaced()).foregroundStyle(.secondary)
+        return HStack(alignment: .top, spacing: 10) {
+            if let profile { AgentMark(profile: profile, size: 20) }
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text("\(profile?.name ?? picked.agent.id) on \(Nicknames.shared.machine(picked.machine))")
+                        .font(.callout.weight(.semibold))
+                    if let version = picked.agent.version {
+                        Text(version).font(.caption.monospaced()).foregroundStyle(.secondary)
+                    }
                 }
+                Text(picked.agent.setupHint ?? "Everything works.").font(.caption).foregroundStyle(.secondary)
             }
-            Text(picked.agent.setupHint ?? "Everything works.").font(.caption)
+            Spacer()
             if let hint = picked.agent.setupHint {
                 Button("Copy") { copy(hint) }.font(.caption)
             }
         }
+        .padding(10)
+        .background(.background.opacity(0.6), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 

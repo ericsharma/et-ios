@@ -50,6 +50,20 @@ final class Agents {
         }
 
         var isFiveHour: Bool { name == "five_hour" || name.hasSuffix("-5h") }
+
+        /// The model group a limit is for, when a login has several
+        /// (Antigravity CLI): "Gemini", "Claude + GPT".
+        var group: String? {
+            if name.hasPrefix("gemini-") { return "Gemini" }
+            if name.hasPrefix("3p-") { return "Claude + GPT" }
+            return nil
+        }
+
+        /// The window without the group: "5-hour", "Weekly", "Weekly · Opus".
+        var windowLabel: String {
+            guard group != nil else { return label }
+            return isFiveHour ? "5-hour" : "Weekly"
+        }
     }
 
     /// A login of an agent other than Claude (Antigravity CLI, Grok Build)
