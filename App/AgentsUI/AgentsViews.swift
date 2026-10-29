@@ -61,10 +61,12 @@ struct UsageBar: View {
     }
 }
 
-/// A Claude or Antigravity CLI login: who, the plan, its limits, and the
-/// machines that use it. Limits from an earlier ask show "as of".
+/// A Claude, Antigravity CLI or Grok login: who, the plan, its limits, and
+/// the machines that use it. Limits from an earlier ask show "as of".
 struct AccountCard: View {
     let usage: Agents.AccountUsage
+    /// Hides the login from this page (an old one).
+    var hide: (() -> Void)?
 
     private var profile: AgentProfile? { AgentProfile.profile(id: usage.agent) }
 
@@ -84,6 +86,17 @@ struct AccountCard: View {
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(.tint.opacity(0.2), in: Capsule())
                 }
+                if let hide {
+                    Menu {
+                        Button("Hide Account", systemImage: "eye.slash", action: hide)
+                    } label: {
+                        Image(systemName: "ellipsis.circle").foregroundStyle(.secondary)
+                    }
+                    .menuStyle(.button)
+                    .buttonStyle(.plain)
+                    .fixedSize()
+                    .help("Hide this login (an old one) from the Agents page")
+                }
             }
             ForEach(usage.limits) { UsageMeter(limit: $0) }
             if let error = usage.usageError, usage.limits.isEmpty {
@@ -97,6 +110,9 @@ struct AccountCard: View {
         }
         .padding(12)
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+        .contextMenu {
+            if let hide { Button("Hide Account", systemImage: "eye.slash", action: hide) }
+        }
     }
 }
 
@@ -160,7 +176,25 @@ struct AgentsPage: View {
                 if !agents.accounts.isEmpty {
                     Text("Accounts").font(.title3.weight(.semibold))
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 12, alignment: .top)], spacing: 12) {
-                        ForEach(agents.accounts) { AccountCard(usage: $0) }
+                        ForEach(agents.accounts) { usage in
+                            AccountCard(usage: usage) { agents.setHidden(usage, true) }
+                        }
+                    }
+                }
+                let hidden = agents.hiddenAccounts
+                if !hidden.isEmpty {
+                    DisclosureGroup {
+                        ForEach(hidden) { usage in
+                            HStack(spacing: 8) {
+                                if let profile = AgentProfile.profile(id: usage.agent) { AgentMark(profile: profile) }
+                                Text(usage.account.email ?? usage.account.name ?? usage.id).font(.callout).lineLimit(1)
+                                Text("on " + usage.machines.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                Spacer()
+                                Button("Show") { agents.setHidden(usage, false) }.font(.caption)
+                            }
+                        }
+                    } label: {
+                        Text("\(hidden.count) hidden account\(hidden.count == 1 ? "" : "s")").font(.caption).foregroundStyle(.secondary)
                     }
                 }
                 ForEach(agents.machines.filter { !$0.noClaude || !$0.logins.isEmpty }) { machine in
@@ -214,7 +248,7 @@ struct AgentsPage: View {
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
                 Text(machine.name).font(.headline)
-                if let email = machine.account?.email {
+                if let account = machine.account, let email = account.email, !agents.hidden.contains(account.uuid) {
                     Text(email).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer()

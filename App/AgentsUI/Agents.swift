@@ -165,6 +165,10 @@ final class Agents {
 
     @ObservationIgnored private let hosts: @MainActor () -> [String: IrohHost]
     @ObservationIgnored private let log: @MainActor (String) -> Void
+    /// Logins the user hid (old ones), by AccountUsage id. On this device
+    /// only, like nicknames. A hidden login's usage is not asked.
+    private(set) var hidden: Set<String> = Set(UserDefaults.standard.stringArray(forKey: Agents.hiddenKey) ?? [])
+    private static let hiddenKey = "agents.hiddenAccounts"
     /// An account the usage API rate-limited is not asked until then.
     @ObservationIgnored private var backoff: [String: Date] = [:]
     /// The usage API is asked at most this often.
@@ -183,9 +187,25 @@ final class Agents {
         machines.flatMap(\.agents).filter { !$0.isOrphan }
     }
 
-    /// Claude logins, then Antigravity CLI logins, each once with the
-    /// machines that use it.
+    /// The logins shown: all but the hidden ones.
     var accounts: [AccountUsage] {
+        allAccounts.filter { !hidden.contains($0.id) }
+    }
+
+    var hiddenAccounts: [AccountUsage] {
+        allAccounts.filter { hidden.contains($0.id) }
+    }
+
+    func setHidden(_ usage: AccountUsage, _ hide: Bool) {
+        if hide { hidden.insert(usage.id) } else { hidden.remove(usage.id) }
+        UserDefaults.standard.set(hidden.sorted(), forKey: Self.hiddenKey)
+        log("Agents: \(hide ? "hid" : "showed") \(usage.account.email ?? usage.id)")
+        if !hide { refreshed = nil }
+    }
+
+    /// Claude logins, then Antigravity CLI and Grok logins, each once with
+    /// the machines that use it.
+    private var allAccounts: [AccountUsage] {
         var byId: [String: AccountUsage] = [:]
         var order: [String] = []
         func add(_ usage: AccountUsage, machine: String) {
@@ -337,7 +357,8 @@ final class Agents {
         }
         func skip(_ key: String?, _ name: String) -> Bool {
             guard let key else { return false }
-            return asker[key] != name || (backoff[key] ?? .distantPast) > Date()
+            let id = key.hasPrefix("claude:") ? String(key.dropFirst(7)) : key
+            return hidden.contains(id) || asker[key] != name || (backoff[key] ?? .distantPast) > Date()
         }
         var skips: [String: String] = [:]
         for machine in machines {
