@@ -67,7 +67,7 @@ struct UsageBar: View {
 private extension View {
     func agentsCard() -> some View {
         padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
@@ -129,8 +129,8 @@ struct AccountCard: View {
     /// The organization, else the agent; "login not readable" when E.T.
     /// has no email for it.
     private var subtitle: String {
-        if usage.account.email == nil { return "Login not readable here" }
-        return usage.account.org ?? profile?.name ?? ""
+        if let org = usage.account.org, !org.hasSuffix("'s Organization"), org != profile?.name { return org }
+        return profile?.name ?? ""
     }
 
     /// The limits by model group, in their order.
@@ -187,11 +187,11 @@ struct AccountCard: View {
                             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
                                 ForEach(Array(stride(from: 0, to: group.limits.count, by: 2)), id: \.self) { i in
                                     GridRow {
-                                        LimitGauge(limit: group.limits[i])
                                         if i + 1 < group.limits.count {
+                                            LimitGauge(limit: group.limits[i])
                                             LimitGauge(limit: group.limits[i + 1])
                                         } else {
-                                            Color.clear.frame(height: 1)
+                                            LimitGauge(limit: group.limits[i]).gridCellColumns(2)
                                         }
                                     }
                                 }
@@ -204,6 +204,7 @@ struct AccountCard: View {
                                  systemImage: "clock.arrow.circlepath", tint: .secondary)
                 }
             }
+            Spacer(minLength: 0)
             Divider()
             Label(usage.machines.map(Nicknames.shared.machine).joined(separator: ", "), systemImage: "desktopcomputer")
                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -473,48 +474,83 @@ struct AgentsPage: View {
     // MARK: Usage
 
     private var usage: some View {
-        let shown = agents.accounts
+        let order = agentProfiles().map(\.id)
+        let shown = agents.accounts.sorted { (order.firstIndex(of: $0.agent) ?? 99) < (order.firstIndex(of: $1.agent) ?? 99) }
+        // A login E.T. could not read (no email) is a note, not a card.
+        let cards = shown.filter { $0.account.email != nil }
+        let unreadable = shown.filter { $0.account.email == nil }
         let hidden = agents.hiddenAccounts
         return AgentsBlock(title: "Usage", subtitle: "each login once, with the machines that use it") {
-            VStack(alignment: .leading, spacing: 18) {
-                if shown.isEmpty {
+            VStack(alignment: .leading, spacing: 14) {
+                if cards.isEmpty {
                     Text("No logins yet.").font(.callout).foregroundStyle(.secondary).agentsCard()
                 }
-                ForEach(agentProfiles().filter { profile in shown.contains { $0.agent == profile.id } }) { profile in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 6) {
-                            AgentMark(profile: profile, size: 14)
-                            Text(profile.name).font(.subheadline.weight(.semibold))
-                        }
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 12, alignment: .top)], alignment: .leading, spacing: 12) {
-                            ForEach(shown.filter { $0.agent == profile.id }) { usage in
-                                AccountCard(usage: usage) { agents.setHidden(usage, true) }
-                            }
-                        }
-                    }
+                CardGrid(items: cards, minWidth: 320) { usage in
+                    AccountCard(usage: usage) { agents.setHidden(usage, true) }
                 }
-                if !hidden.isEmpty {
-                    DisclosureGroup {
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(hidden) { usage in
-                                HStack(spacing: 8) {
-                                    if let profile = AgentProfile.profile(id: usage.agent) { AgentMark(profile: profile, size: 14) }
-                                    Text(usage.account.email ?? usage.account.name ?? usage.id).font(.callout).lineLimit(1)
-                                    Text(usage.machines.map(Nicknames.shared.machine).joined(separator: ", "))
-                                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                    Spacer()
-                                    Button("Show") { agents.setHidden(usage, false) }.font(.caption)
-                                }
+                if !unreadable.isEmpty || !hidden.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(unreadable) { usage in
+                            HStack(alignment: .center, spacing: 8) {
+                                if let profile = AgentProfile.profile(id: usage.agent) { AgentMark(profile: profile, size: 14) }
+                                Text(usage.machines.map(Nicknames.shared.machine).joined(separator: ", ")).font(.caption.weight(.semibold))
+                                Text(usage.usageError ?? "Login not readable").font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                                Spacer()
+                                Button("Hide") { agents.setHidden(usage, true) }.font(.caption).buttonStyle(.borderless)
                             }
                         }
-                        .padding(.top, 6)
-                    } label: {
-                        Label("\(hidden.count) hidden login\(hidden.count == 1 ? "" : "s")", systemImage: "eye.slash")
-                            .font(.caption).foregroundStyle(.secondary)
+                        if !hidden.isEmpty {
+                            DisclosureGroup {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    ForEach(hidden) { usage in
+                                        HStack(spacing: 8) {
+                                            if let profile = AgentProfile.profile(id: usage.agent) { AgentMark(profile: profile, size: 14) }
+                                            Text(usage.account.email ?? AgentProfile.profile(id: usage.agent)?.name ?? usage.id)
+                                                .font(.callout).lineLimit(1)
+                                            Text(usage.machines.map(Nicknames.shared.machine).joined(separator: ", "))
+                                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                            Spacer()
+                                            Button("Show") { agents.setHidden(usage, false) }.font(.caption).buttonStyle(.borderless)
+                                        }
+                                    }
+                                }
+                                .padding(.top, 6)
+                            } label: {
+                                Label("\(hidden.count) hidden login\(hidden.count == 1 ? "" : "s")", systemImage: "eye.slash")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
                     }
+                    .agentsCard()
                 }
             }
         }
+    }
+}
+
+/// Cards in rows of equal height: as many columns as fit at `minWidth`,
+/// the last row padded so every card has the same width.
+struct CardGrid<Item: Identifiable, Card: View>: View {
+    let items: [Item]
+    var minWidth: CGFloat = 300
+    var spacing: CGFloat = 12
+    @ViewBuilder let card: (Item) -> Card
+    @State private var width: CGFloat = 0
+
+    var body: some View {
+        let columns = max(1, Int((width + spacing) / (minWidth + spacing)))
+        let rows = stride(from: 0, to: items.count, by: columns).map { Array(items[$0..<min($0 + columns, items.count)]) }
+        VStack(alignment: .leading, spacing: spacing) {
+            ForEach(rows.indices, id: \.self) { r in
+                HStack(alignment: .top, spacing: spacing) {
+                    ForEach(rows[r]) { card($0) }
+                    ForEach(0..<(columns - rows[r].count), id: \.self) { _ in Color.clear.frame(maxWidth: .infinity, maxHeight: 1) }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
     }
 }
 

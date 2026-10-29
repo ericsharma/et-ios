@@ -229,12 +229,15 @@ final class Agents {
                 return
             }
             known.machines.append(machine)
-            // The newest limits win; a newer error shows with them.
+            // The newest limits win, with that answer's error (if any). An
+            // error from another machine shows only when no machine has limits.
             if !usage.limits.isEmpty, (usage.fetched ?? .distantPast) > (known.fetched ?? .distantPast) {
                 known.limits = usage.limits
                 known.fetched = usage.fetched
+                known.usageError = usage.usageError
+            } else if known.limits.isEmpty {
+                known.usageError = known.usageError ?? usage.usageError
             }
-            known.usageError = known.usageError ?? usage.usageError
             known.plan = known.plan ?? usage.plan
             byId[usage.id] = known
         }
@@ -359,14 +362,19 @@ final class Agents {
         await installedTask.value
     }
 
-    /// Each login's usage is asked from one machine only (the first by
-    /// name), and not while the API rate-limits it. Returns the shell
-    /// lines that turn the asks off, per machine.
+    /// Each login's usage is asked from one machine only, and not while
+    /// the API rate-limits it: the first by name whose last answer for that
+    /// login had no error (an expired token on one machine must not stop
+    /// the others). Returns the shell lines that turn the asks off.
     private func usageSkips(hosts: [String: IrohHost]) -> [String: String] {
         var asker: [String: String] = [:]
-        for machine in machines where hosts[machine.name] != nil {
-            for key in [machine.claudeKey].compactMap({ $0 }) + machine.logins.map(\.key) where asker[key] == nil {
-                asker[key] = machine.name
+        for failedLast in [false, true] {
+            for machine in machines where hosts[machine.name] != nil {
+                var keys: [(String, Bool)] = machine.claudeKey.map { [($0, machine.usageError != nil)] } ?? []
+                keys += machine.logins.map { ($0.key, $0.error != nil) }
+                for (key, failed) in keys where failed == failedLast && asker[key] == nil {
+                    asker[key] = machine.name
+                }
             }
         }
         func skip(_ key: String?, _ name: String) -> Bool {
@@ -602,7 +610,7 @@ final class Agents {
       email=$(jq -r '.id_token_email // empty' "$f" 2>/dev/null)
       quota='{}'
       if [ ! -f "$f" ] && [ "$(uname)" = Darwin ]; then
-        quota='{"error":"Antigravity CLI keeps its login in the Keychain here: E.T. cannot read its quota on this machine yet"}'
+        quota='{"error":"Login is in the macOS Keychain: E.T. cannot read its quota here yet"}'
       elif [ ! -f "$f" ]; then
         quota='{"error":"Antigravity CLI is not logged in here: run agy to log in"}'
       elif [ -z "$SKIP_AGY_QUOTA" ]; then
