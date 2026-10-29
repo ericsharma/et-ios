@@ -37,9 +37,9 @@ struct AgentsSection: View {
         return "\(running.count) running · \(accounts) account\(accounts == 1 ? "" : "s")"
     }
 
-    /// The most used 5-hour limit of all accounts.
+    /// The most used 5-hour limit of all accounts (Claude and Antigravity).
     private var fullest: Agents.Limit? {
-        agents.accounts.compactMap { $0.limits.first { $0.name == "five_hour" } }.max { $0.percent < $1.percent }
+        agents.accounts.compactMap { $0.limits.first(where: \.isFiveHour) }.max { $0.percent < $1.percent }
     }
 }
 
@@ -50,7 +50,7 @@ struct TerminalAgentStrip: View {
 
     var body: some View {
         if let agent = agents.agent(machine: ref.machine, mmSession: ref.name) {
-            AgentStrip(agent: agent, machine: agents.machine(ref.machine))
+            AgentStrip(agent: agent, machine: agents.machine(ref.machine), limits: agents.limits(machine: ref.machine, agent: agent.agent))
             Divider()
         }
     }

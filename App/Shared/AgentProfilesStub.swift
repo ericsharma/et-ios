@@ -71,6 +71,12 @@ func agentProfiles() -> [AgentProfile] {
                      launch: ["grok"], processes: ["grok"], versionArgs: ["--version"],
                      keys: claudeKeys, multiline: "bracketed-paste", mention: "@", replyMarker: nil,
                      headless: ["grok", "-p"]),
+        // Owner's ask (2026-10-29), not in D1: Google's Antigravity CLI.
+        // M0: check the keys, multi-line paste, mention and reply marker.
+        AgentProfile(id: "antigravity", name: "Antigravity CLI", mark: "A", accent: "teal",
+                     launch: ["agy"], processes: ["agy"], versionArgs: ["--version"],
+                     keys: claudeKeys, multiline: "bracketed-paste", mention: "@", replyMarker: nil,
+                     headless: ["agy", "-p"]),
     ]
 }
 
@@ -89,9 +95,13 @@ extension IrohHost {
         return profiles.map { profile in
             let version = found[profile.id].map(Self.versionNumber)
             let isClaude = profile.id == "claude"
+            // Antigravity CLI: running sessions and quota on the Agents page.
+            let isAgy = profile.id == "antigravity"
             let transcript = isClaude && claudeFiles
             let hint: String? = if version == nil {
                 "\(profile.name) is not installed here, or not on etd's PATH."
+            } else if isAgy {
+                "E.T. shows Antigravity CLI sessions and quota; it can't read its transcripts or state yet (PLAN-multi-agent M2, M3)."
             } else if !isClaude {
                 "E.T. can't read \(profile.name) transcripts or state yet (PLAN-multi-agent M2, M3)."
             } else if !transcript {

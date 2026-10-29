@@ -10,7 +10,7 @@ struct UsageMeter: View {
     var body: some View {
         if compact {
             HStack(spacing: 4) {
-                Text(limit.name == "five_hour" ? "5h" : limit.name == "seven_day" ? "wk" : limit.label)
+                Text(limit.compactLabel)
                     .foregroundStyle(.secondary)
                 UsageBar(percent: limit.percent).frame(width: 36, height: 5)
                 Text("\(Int(limit.percent.rounded()))%").monospacedDigit()
@@ -61,15 +61,19 @@ struct UsageBar: View {
     }
 }
 
-/// A Claude login: who, the plan, its limits, and the machines that use it.
+/// A Claude or Antigravity CLI login: who, the plan, its limits, and the
+/// machines that use it. Limits from an earlier ask show "as of".
 struct AccountCard: View {
     let usage: Agents.AccountUsage
+
+    private var profile: AgentProfile? { AgentProfile.profile(id: usage.agent) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
+                if let profile { AgentMark(profile: profile).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 3 } }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(usage.account.email ?? usage.account.name ?? "Claude account").font(.headline).lineLimit(1)
+                    Text(usage.account.email ?? usage.account.name ?? "\(profile?.name ?? "Claude") account").font(.headline).lineLimit(1)
                     if let org = usage.account.org {
                         Text(org).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
@@ -84,6 +88,10 @@ struct AccountCard: View {
             ForEach(usage.limits) { UsageMeter(limit: $0) }
             if let error = usage.usageError, usage.limits.isEmpty {
                 Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
+            } else if usage.isStale, let fetched = usage.fetched {
+                Label("As of \(UsageMeter.resetText(fetched))" + (usage.usageError.map { " · \($0)" } ?? ""),
+                      systemImage: "clock.arrow.circlepath")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Text("On " + usage.machines.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
         }
@@ -92,7 +100,7 @@ struct AccountCard: View {
     }
 }
 
-/// A running Claude: its title, where it runs, the model and context.
+/// A running agent: its title, where it runs, the model and context.
 struct AgentRow: View {
     let agent: Agents.Agent
     var title: String?
@@ -100,8 +108,9 @@ struct AgentRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             LogbookStatusDot(status: agent.status).padding(.top, 5)
+            if let profile = agent.profile { AgentMark(profile: profile).padding(.top, 1) }
             VStack(alignment: .leading, spacing: 2) {
-                Text(title ?? (agent.mmSession.isEmpty ? "Claude (pid \(agent.pid))" : agent.mmSession))
+                Text(title ?? (agent.mmSession.isEmpty ? "\(agent.profile?.shortName ?? "Claude") (pid \(agent.pid))" : agent.mmSession))
                     .font(.callout).lineLimit(1)
                 Text(agent.mmSession.isEmpty ? agent.machine : "\(agent.machine)/\(agent.mmSession)")
                     .font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
@@ -113,7 +122,7 @@ struct AgentRow: View {
     }
 
     private var details: String {
-        var parts = [agent.status]
+        var parts = agent.status.isEmpty ? [agent.profile?.name ?? agent.agent] : [agent.status]
         if let model = agent.modelName { parts.append(model) }
         if let context = agent.contextText { parts.append(context) }
         if let version = agent.version { parts.append("v\(version)") }
@@ -148,12 +157,12 @@ struct AgentsPage: View {
                         ForEach(agents.accounts) { AccountCard(usage: $0) }
                     }
                 }
-                ForEach(agents.machines.filter { !$0.noClaude }) { machine in
+                ForEach(agents.machines.filter { !$0.noClaude || $0.agy != nil }) { machine in
                     machineSection(machine)
                 }
-                let others = agents.machines.filter(\.noClaude).map(\.name)
+                let others = agents.machines.filter { $0.noClaude && $0.agy == nil }.map(\.name)
                 if !others.isEmpty {
-                    Text("No Claude on " + others.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
+                    Text("No agents on " + others.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
                 }
                 if !agents.installed.isEmpty {
                     WhatWorks(installed: agents.installed)
@@ -203,14 +212,15 @@ struct AgentsPage: View {
                     Text(email).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer()
-                if !machine.limits.isEmpty {
-                    HStack(spacing: 10) { ForEach(machine.limits.prefix(2)) { UsageMeter(limit: $0, compact: true) } }
+                let limits = agents.limits(machine: machine.name)
+                if !limits.isEmpty {
+                    HStack(spacing: 10) { ForEach(limits.prefix(2)) { UsageMeter(limit: $0, compact: true) } }
                 }
             }
             if let error = machine.error {
                 Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
             } else if live.isEmpty {
-                Text("No Claude running in a session").font(.caption).foregroundStyle(.secondary)
+                Text("No agent running in a session").font(.caption).foregroundStyle(.secondary)
             }
             ForEach(live) { agent in
                 Button { open(agent) } label: {
@@ -223,7 +233,7 @@ struct AgentsPage: View {
                 DisclosureGroup {
                     ForEach(orphans) { AgentRow(agent: $0, title: title($0)) }
                 } label: {
-                    Text("\(orphans.count) Claude process\(orphans.count == 1 ? "" : "es") with no session")
+                    Text("\(orphans.count) agent process\(orphans.count == 1 ? "" : "es") with no session")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -344,11 +354,14 @@ struct WhatWorks: View {
     }
 }
 
-/// One line over a session's terminal when Claude runs in it: status,
-/// model, context, the login and its limits.
+/// One line over a session's terminal when an agent runs in it: status,
+/// model, context, the login and its limits (the login's newest).
 struct AgentStrip: View {
     let agent: Agents.Agent
     let machine: Agents.Machine?
+    let limits: [Agents.Limit]
+
+    private var isAgy: Bool { agent.agent == "antigravity" }
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -364,19 +377,20 @@ struct AgentStrip: View {
         HStack(spacing: 10) {
             HStack(spacing: 5) {
                 LogbookStatusDot(status: agent.status)
-                Text(agent.modelName ?? "Claude").font(.caption.weight(.semibold))
+                if let profile = agent.profile { AgentMark(profile: profile, size: 13) }
+                Text(agent.modelName ?? agent.profile?.name ?? "Claude").font(.caption.weight(.semibold))
             }
             if let context = agent.contextText {
                 Text(context).font(.caption).foregroundStyle(.secondary)
             }
-            if full, let email = machine?.account?.email {
+            if full, let email = isAgy ? machine?.agy?.email : machine?.account?.email {
                 Text(email).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
-            if full, let plan = machine?.plan {
+            if full, !isAgy, let plan = machine?.plan {
                 Text(plan).font(.caption2).foregroundStyle(.secondary)
             }
             Spacer(minLength: 4)
-            ForEach(machine?.limits.prefix(2) ?? []) { UsageMeter(limit: $0, compact: true) }
+            ForEach(limits.prefix(2)) { UsageMeter(limit: $0, compact: true) }
         }
         .lineLimit(1)
     }

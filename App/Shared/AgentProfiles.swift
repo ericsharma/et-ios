@@ -1,3 +1,4 @@
+import ETCore
 import SwiftUI
 
 // PLAN-multi-agent M1: which profile a session runs, and its mark. Stays
@@ -8,12 +9,16 @@ extension AgentProfile {
         agentProfiles().first { $0.id == id }
     }
 
-    /// The first profile whose program runs here, or whose id is in the
-    /// command, the name or the title. A window that runs an agent over ssh
-    /// shows "ssh", so the name and title matter too.
+    /// The first profile whose program runs here or starts the command, or
+    /// whose id or program is in the name, or whose id is in the command or
+    /// title. A window that runs an agent over ssh shows "ssh", so the name
+    /// and title matter too. ("agy" sessions are named "agy", "agy2", …)
     static func matching(currentCommand: String = "", command: String = "", name: String, title: String) -> AgentProfile? {
-        agentProfiles().first { profile in
+        let program = command.isEmpty ? "" : Manymux.programName(command)
+        return agentProfiles().first { profile in
             profile.processes.contains(currentCommand)
+                || profile.processes.contains(program)
+                || profile.processes.contains { name.lowercased().hasPrefix($0) }
                 || command.localizedCaseInsensitiveContains(profile.id)
                 || name.localizedCaseInsensitiveContains(profile.id)
                 || title.localizedCaseInsensitiveContains(profile.id)
@@ -32,6 +37,7 @@ extension AgentProfile {
         case "green": Color(red: 0xA6 / 255, green: 0xE3 / 255, blue: 0xA1 / 255)
         case "blue": Color(red: 0x89 / 255, green: 0xB4 / 255, blue: 0xFA / 255)
         case "mauve": Color(red: 0xCB / 255, green: 0xA6 / 255, blue: 0xF7 / 255)
+        case "teal": Color(red: 0x94 / 255, green: 0xE2 / 255, blue: 0xD5 / 255)
         default: Color(red: 0x6C / 255, green: 0x70 / 255, blue: 0x86 / 255)
         }
     }

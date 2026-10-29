@@ -31,7 +31,7 @@ struct SessionAgentStrip: View {
     var body: some View {
         VStack(spacing: 0) {
             if let agent = agents.agent(machine: machine, mmSession: name) {
-                AgentStrip(agent: agent, machine: agents.machine(machine))
+                AgentStrip(agent: agent, machine: agents.machine(machine), limits: agents.limits(machine: machine, agent: agent.agent))
             } else {
                 Color.clear.frame(height: 0)
             }

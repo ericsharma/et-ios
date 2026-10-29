@@ -32,19 +32,50 @@ final class Agents {
             case "seven_day_opus": "Weekly · Opus"
             case "seven_day_sonnet": "Weekly · Sonnet"
             case "seven_day_oauth_apps": "Weekly · apps"
+            // Antigravity CLI's quota groups.
+            case "gemini-5h": "Gemini · 5-hour"
+            case "gemini-weekly": "Gemini · Weekly"
+            case "3p-5h": "Claude + GPT · 5-hour"
+            case "3p-weekly": "Claude + GPT · Weekly"
             default: name.replacingOccurrences(of: "_", with: " ")
             }
         }
+
+        /// For a meter in a row: "5h", "wk".
+        var compactLabel: String {
+            if name == "five_hour" || name.hasSuffix("-5h") { return "5h" }
+            if name == "seven_day" || name.hasSuffix("-weekly") { return "wk" }
+            return label
+        }
+
+        var isFiveHour: Bool { name == "five_hour" || name.hasSuffix("-5h") }
     }
 
-    /// A running Claude process.
+    /// An Antigravity CLI login (~/.gemini/antigravity-cli) and its quota.
+    struct AgyAccount: Equatable, Sendable {
+        var machine: String
+        var email: String?
+        var limits: [Limit] = []
+        var error: String?
+        var rateLimited = false
+        /// When `limits` came from the quota API.
+        var limitsFetched: Date?
+
+        /// One card per login; a login with no email is one per machine.
+        var key: String { "antigravity:" + (email ?? "?@" + machine) }
+    }
+
+    /// A running agent process: Claude Code or Antigravity CLI.
     struct Agent: Identifiable, Equatable, Sendable {
         var machine: String
+        /// Its profile id (PLAN-multi-agent).
+        var agent = "claude"
         var pid: Int
         var ppid: Int
         var sessionId: String
         var cwd: String
-        /// "busy", "idle" (Claude's "shell" and "waiting" are busy and idle).
+        /// "busy", "idle" (Claude's "shell" and "waiting" are busy and idle);
+        /// empty when the agent has no state E.T. can read.
         var status: String
         var version: String?
         var updated: Date?
@@ -56,6 +87,7 @@ final class Agents {
         var context: Int
 
         var id: String { "\(machine)/\(pid)" }
+        var profile: AgentProfile? { AgentProfile.profile(id: agent) }
         /// Its manymux session ended; it lives on with no terminal.
         var isOrphan: Bool { ppid == 1 || mmSession.isEmpty }
 
@@ -84,6 +116,12 @@ final class Agents {
         var plan: String?
         var limits: [Limit] = []
         var usageError: String?
+        /// The usage API said "rate limited".
+        var rateLimited = false
+        /// When `limits` came from the usage API; older limits are kept
+        /// when a later ask fails or is skipped.
+        var limitsFetched: Date?
+        var agy: AgyAccount?
         var agents: [Agent] = []
         /// The script failed or the machine did not answer.
         var error: String?
@@ -92,6 +130,7 @@ final class Agents {
         var fetched: Date?
 
         var id: String { name }
+        var claudeKey: String? { account.map { "claude:" + $0.uuid } }
     }
 
     /// An account with its limits and the machines logged in with it.
@@ -101,9 +140,14 @@ final class Agents {
         var limits: [Limit]
         var usageError: String?
         var machines: [String]
+        /// When the limits came from the API.
         var fetched: Date?
+        /// "claude" or "antigravity".
+        var agent = "claude"
 
         var id: String { account.uuid }
+        /// Older than 3 minutes: shown with "as of".
+        var isStale: Bool { fetched.map { Date().timeIntervalSince($0) > 180 } ?? false }
     }
 
     /// By name.
@@ -115,8 +159,11 @@ final class Agents {
 
     @ObservationIgnored private let hosts: @MainActor () -> [String: IrohHost]
     @ObservationIgnored private let log: @MainActor (String) -> Void
+    /// An account the usage API rate-limited is not asked until then.
+    @ObservationIgnored private var backoff: [String: Date] = [:]
     /// The usage API is asked at most this often.
     private static let interval: Duration = .seconds(60)
+    private static let rateLimitWait: TimeInterval = 300
 
     init(hosts: @escaping @MainActor () -> [String: IrohHost], log: @escaping @MainActor (String) -> Void) {
         self.hosts = hosts
@@ -130,34 +177,54 @@ final class Agents {
         machines.flatMap(\.agents).filter { !$0.isOrphan }
     }
 
+    /// Claude logins, then Antigravity CLI logins, each once with the
+    /// machines that use it.
     var accounts: [AccountUsage] {
         var byId: [String: AccountUsage] = [:]
         var order: [String] = []
+        func add(_ usage: AccountUsage, machine: String) {
+            guard var known = byId[usage.id] else {
+                order.append(usage.id)
+                byId[usage.id] = usage
+                return
+            }
+            known.machines.append(machine)
+            // The newest limits win; a newer error shows with them.
+            if !usage.limits.isEmpty, (usage.fetched ?? .distantPast) > (known.fetched ?? .distantPast) {
+                known.limits = usage.limits
+                known.fetched = usage.fetched
+            }
+            known.usageError = known.usageError ?? usage.usageError
+            byId[usage.id] = known
+        }
         for machine in machines {
             guard let account = machine.account else { continue }
-            if var known = byId[account.uuid] {
-                known.machines.append(machine.name)
-                // The newest answer has the newest limits.
-                if (machine.fetched ?? .distantPast) > (known.fetched ?? .distantPast), !machine.limits.isEmpty {
-                    known.limits = machine.limits
-                    known.usageError = machine.usageError
-                    known.fetched = machine.fetched
-                }
-                byId[account.uuid] = known
-            } else {
-                order.append(account.uuid)
-                byId[account.uuid] = AccountUsage(account: account, plan: machine.plan, limits: machine.limits,
-                                                  usageError: machine.usageError, machines: [machine.name], fetched: machine.fetched)
-            }
+            add(AccountUsage(account: account, plan: machine.plan, limits: machine.limits, usageError: machine.usageError,
+                             machines: [machine.name], fetched: machine.limitsFetched), machine: machine.name)
+        }
+        for machine in machines {
+            guard let agy = machine.agy else { continue }
+            add(AccountUsage(account: Account(uuid: agy.key, email: agy.email, name: nil, org: "Antigravity CLI"),
+                             plan: nil, limits: agy.limits, usageError: agy.error, machines: [machine.name],
+                             fetched: agy.limitsFetched, agent: "antigravity"), machine: machine.name)
         }
         return order.compactMap { byId[$0] }
+    }
+
+    /// The limits of the login an agent on this machine uses (the
+    /// account's newest, also when another machine asked for them).
+    func limits(machine name: String, agent: String = "claude") -> [Limit] {
+        guard let machine = machine(name) else { return [] }
+        let key = agent == "antigravity" ? machine.agy?.key : machine.account?.uuid
+        guard let key else { return [] }
+        return accounts.first { $0.id == key }?.limits ?? []
     }
 
     func machine(_ name: String) -> Machine? {
         machines.first { $0.name == name }
     }
 
-    /// The agent in a manymux session, if Claude runs there.
+    /// The agent in a manymux session, if one runs there.
     func agent(machine: String, mmSession: String) -> Agent? {
         self.machine(machine)?.agents
             .filter { !$0.isOrphan && $0.mmSession == mmSession }
@@ -201,6 +268,7 @@ final class Agents {
         // Machines that left the network go.
         machines.removeAll { hosts[$0.name] == nil }
         installed = installed.filter { hosts[$0.key] != nil }
+        let skips = usageSkips(hosts: hosts)
         let installedTask = Task {
             await withTaskGroup(of: Void.self) { group in
                 for name in hosts.keys {
@@ -210,9 +278,10 @@ final class Agents {
         }
         await withTaskGroup(of: (String, Result<String, any Error>).self) { group in
             for (name, host) in hosts {
+                let skip = skips[name] ?? ""
                 group.addTask {
                     do {
-                        let answer = try await Self.withTimeout(.seconds(30)) { try await host.run(Self.script) }
+                        let answer = try await Self.withTimeout(.seconds(30)) { try await host.run(skip + Self.script) }
                         return (name, .success(answer.output))
                     } catch {
                         return (name, .failure(error))
@@ -220,11 +289,13 @@ final class Agents {
                 }
             }
             for await (name, result) in group {
-                var machine = machine(name) ?? Machine(name: name)
+                let old = machine(name)
+                var machine = old ?? Machine(name: name)
                 switch result {
                 case .success(let output):
                     do {
                         machine = try Self.parse(output, machine: name)
+                        keepLimits(&machine, from: old)
                     } catch {
                         machine.error = "Unexpected answer: \(error)"
                         log("Agents: \(name): \(error); output \(output.prefix(300))")
@@ -244,6 +315,53 @@ final class Agents {
         await installedTask.value
     }
 
+    /// Each login's usage is asked from one machine only (the first by
+    /// name), and not while the API rate-limits it. Returns the shell
+    /// lines that turn the asks off, per machine.
+    private func usageSkips(hosts: [String: IrohHost]) -> [String: String] {
+        var asker: [String: String] = [:]
+        for machine in machines where hosts[machine.name] != nil {
+            for key in [machine.claudeKey, machine.agy?.key].compactMap({ $0 }) where asker[key] == nil {
+                asker[key] = machine.name
+            }
+        }
+        func skip(_ key: String?, _ name: String) -> Bool {
+            guard let key else { return false }
+            return asker[key] != name || (backoff[key] ?? .distantPast) > Date()
+        }
+        var skips: [String: String] = [:]
+        for machine in machines {
+            var lines = ""
+            if skip(machine.claudeKey, machine.name) { lines += "SKIP_CLAUDE_USAGE=1\n" }
+            if skip(machine.agy?.key, machine.name) { lines += "SKIP_AGY_QUOTA=1\n" }
+            skips[machine.name] = lines
+        }
+        return skips
+    }
+
+    /// A failed or skipped ask keeps the limits from before (shown "as
+    /// of"); a rate limit waits 5 minutes before the next ask.
+    private func keepLimits(_ machine: inout Machine, from old: Machine?) {
+        if machine.rateLimited, let key = machine.claudeKey {
+            backoff[key] = Date().addingTimeInterval(Self.rateLimitWait)
+            log("Agents: \(machine.name): Claude usage rate-limited; next ask in 5 min")
+        }
+        if machine.agy?.rateLimited == true, let key = machine.agy?.key {
+            backoff[key] = Date().addingTimeInterval(Self.rateLimitWait)
+            log("Agents: \(machine.name): Antigravity quota rate-limited; next ask in 5 min")
+        }
+        guard let old else { return }
+        if machine.limits.isEmpty, old.account?.uuid == machine.account?.uuid {
+            machine.limits = old.limits
+            machine.limitsFetched = old.limitsFetched
+        }
+        if var agy = machine.agy, agy.limits.isEmpty, let previous = old.agy, previous.email == agy.email {
+            agy.limits = previous.limits
+            agy.limitsFetched = previous.limitsFetched
+            machine.agy = agy
+        }
+    }
+
     // MARK: - The script's answer
 
     private struct Answer: Decodable {
@@ -253,6 +371,12 @@ final class Agents {
         var plan: Plan?
         var usage: Usage?
         var agents: [RawAgent]?
+        var agy: Agy?
+
+        struct Agy: Decodable {
+            var email: String?
+            var quota: Usage?
+        }
 
         struct Plan: Decodable {
             var plan: String?
@@ -262,6 +386,7 @@ final class Agents {
         struct Usage: Decodable {
             var limits: [RawLimit]?
             var error: String?
+            var rateLimited: Bool?
         }
 
         struct RawLimit: Decodable {
@@ -271,6 +396,7 @@ final class Agents {
         }
 
         struct RawAgent: Decodable {
+            var agent: String?
             var pid: Int
             var ppid: Int?
             var sessionId: String?
@@ -299,10 +425,30 @@ final class Agents {
         machine.limits = (answer.usage?.limits ?? []).map {
             Limit(name: $0.name, percent: $0.percent, resets: $0.resets.flatMap(date))
         }
+        if !machine.limits.isEmpty { machine.limitsFetched = Date() }
         machine.usageError = answer.usage?.error
+        machine.rateLimited = answer.usage?.rateLimited ?? false
+        if let agy = answer.agy {
+            let limits = (agy.quota?.limits ?? []).map {
+                Limit(name: $0.name, percent: $0.percent, resets: $0.resets.flatMap(date))
+            }
+            // Gemini's first, and 5-hour before weekly in each group, as for Claude.
+            .enumerated().sorted { a, b in
+                let ga = a.element.name.hasPrefix("gemini") ? 0 : 1, gb = b.element.name.hasPrefix("gemini") ? 0 : 1
+                if ga != gb { return ga < gb }
+                if a.element.isFiveHour != b.element.isFiveHour { return a.element.isFiveHour }
+                return a.offset < b.offset
+            }
+            .map(\.element)
+            machine.agy = AgyAccount(machine: name, email: agy.email, limits: limits, error: agy.quota?.error,
+                                     rateLimited: agy.quota?.rateLimited ?? false,
+                                     limitsFetched: limits.isEmpty ? nil : Date())
+        }
         machine.agents = (answer.agents ?? []).map {
-            Agent(machine: name, pid: $0.pid, ppid: $0.ppid ?? 0, sessionId: $0.sessionId ?? "", cwd: $0.cwd ?? "",
-                  status: status($0.status), version: $0.version,
+            let agent = $0.agent ?? "claude"
+            // Only Claude tells its state; no state is shown for the others.
+            return Agent(machine: name, agent: agent, pid: $0.pid, ppid: $0.ppid ?? 0, sessionId: $0.sessionId ?? "", cwd: $0.cwd ?? "",
+                  status: agent == "claude" ? status($0.status) : "", version: $0.version,
                   updated: $0.updatedAt.map { Date(timeIntervalSince1970: $0 / 1000) },
                   mmSession: $0.mmSession ?? "", model: $0.model, context: $0.context ?? 0)
         }
@@ -357,8 +503,10 @@ final class Agents {
 
     /// Runs on each machine with etd's exec. Needs jq and curl.
     nonisolated static let script = #"""
-    [ -d ~/.claude ] || { echo '{"noClaude":true}'; exit 0; }
     command -v jq >/dev/null || { echo '{"error":"jq is not installed on this machine"}'; exit 0; }
+    noClaude=true acct=null plan=null usage=null agents='[]'
+    if [ -d ~/.claude ]; then
+    noClaude=false
     acct=$(jq -c '.oauthAccount // null | if . == null then null else {uuid: .accountUuid, email: .emailAddress, name: .displayName, org: .organizationName} end' ~/.claude.json 2>/dev/null)
     if [ "$(uname)" = Darwin ]; then
       creds=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
@@ -369,9 +517,11 @@ final class Agents {
     token=$(printf %s "$creds" | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
     unset creds
     usage='{"error":"not logged in with a Claude account"}'
-    if [ -n "$token" ]; then
+    if [ -n "$token" ] && [ -n "$SKIP_CLAUDE_USAGE" ]; then
+      usage='{}'
+    elif [ -n "$token" ]; then
       usage=$(curl -s -m 8 https://api.anthropic.com/api/oauth/usage -H "Authorization: Bearer $token" -H "anthropic-beta: oauth-2025-04-20" |
-        jq -c 'if type == "object" and has("five_hour") then {limits: [to_entries[] | select((.key | test("^(five_hour|seven_day)")) and (.value | type) == "object" and .value.utilization != null) | {name: .key, percent: .value.utilization, resets: .value.resets_at}]} else {error: (.error.message? // "no usage answer")} end' 2>/dev/null)
+        jq -c 'if type == "object" and has("five_hour") then {limits: [to_entries[] | select((.key | test("^(five_hour|seven_day)")) and (.value | type) == "object" and .value.utilization != null) | {name: .key, percent: .value.utilization, resets: .value.resets_at}]} else {error: (.error.message? // "no usage answer"), rateLimited: (.error.type? == "rate_limit_error")} end' 2>/dev/null)
       [ -n "$usage" ] || usage='{"error":"usage request failed"}'
     fi
     unset token
@@ -392,8 +542,47 @@ final class Agents {
         jq -c '{model: .message.model, usage: .message.usage}' 2>/dev/null)
       jq -c --arg mm "$mm" --argjson ppid "${ppid:-0}" --argjson last "${last:-null}" '{pid, sessionId, cwd, status, version, updatedAt, ppid: $ppid, mmSession: $mm, model: $last.model?, context: (($last.usage? // {}) | (.input_tokens // 0) + (.cache_read_input_tokens // 0) + (.cache_creation_input_tokens // 0))}' "$f"
     done | jq -s -c .)
-    jq -n -c --argjson account "${acct:-null}" --argjson plan "${plan:-null}" --argjson usage "$usage" --argjson agents "${agents:-[]}" \
-      '{account: $account, plan: $plan, usage: $usage, agents: $agents}'
+    fi
+    # Antigravity CLI: its login, its quota (the call its /usage makes; the
+    # token is agy's own and is never refreshed here) and its processes.
+    agy=null
+    f=~/.gemini/antigravity-cli/antigravity-oauth-token
+    if [ -f "$f" ] || command -v agy >/dev/null 2>&1; then
+      email=$(jq -r '.id_token_email // empty' "$f" 2>/dev/null)
+      quota='{}'
+      if [ ! -f "$f" ] && [ "$(uname)" = Darwin ]; then
+        quota='{"error":"Antigravity CLI keeps its login in the Keychain here: E.T. cannot read its quota on this machine yet"}'
+      elif [ ! -f "$f" ]; then
+        quota='{"error":"Antigravity CLI is not logged in here: run agy to log in"}'
+      elif [ -z "$SKIP_AGY_QUOTA" ]; then
+        t=$(jq -r '.token.access_token // empty' "$f" 2>/dev/null)
+        project=$(cat ~/.gemini/antigravity-cli/cache/default_project_id.txt 2>/dev/null)
+        quota=$(curl -s -m 8 -X POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary \
+          -H "Authorization: Bearer $t" -H "Content-Type: application/json" \
+          -H "User-Agent: antigravity/hub/2.9.1 $(uname -s | tr A-Z a-z)/$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')" \
+          -d "{\"project\":\"${project:-default-cli-project}\"}" |
+          jq -c '(.response // .) as $r | if ($r.groups | type) == "array" then {limits: [$r.groups[].buckets[] | select(.remainingFraction != null) | {name: .bucketId, percent: ((1 - .remainingFraction) * 100), resets: .resetTime}]} elif .error.code? == 401 then {error: "Antigravity CLI login expired: open agy here to renew it"} else {error: (.error.message? // "no quota answer"), rateLimited: (.error.code? == 429)} end' 2>/dev/null)
+        unset t
+        [ -n "$quota" ] || quota='{"error":"quota request failed"}'
+      fi
+      agy=$(jq -n -c --arg email "$email" --argjson quota "$quota" '{email: (if $email == "" then null else $email end), quota: $quota}')
+      more=$(for pid in $(pgrep -x agy 2>/dev/null); do
+        ppid=$(ps -o ppid= -p "$pid" | tr -d ' ')
+        if [ "$(uname)" = Darwin ]; then
+          mm=$(ps -E -p "$pid" -o command= | tr ' ' '\n' | sed -n 's/^MM_SESSION=//p' | head -1)
+          cwd=$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)
+        else
+          mm=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | sed -n 's/^MM_SESSION=//p' | head -1)
+          cwd=$(readlink "/proc/$pid/cwd" 2>/dev/null)
+        fi
+        jq -n -c --argjson pid "$pid" --argjson ppid "${ppid:-0}" --arg mm "$mm" --arg cwd "$cwd" \
+          '{agent: "antigravity", pid: $pid, ppid: $ppid, mmSession: $mm, cwd: $cwd}'
+      done | jq -s -c .)
+      agents=$(jq -n -c --argjson a "${agents:-[]}" --argjson b "${more:-[]}" '$a + $b')
+    fi
+    jq -n -c --argjson noClaude "$noClaude" --argjson account "${acct:-null}" --argjson plan "${plan:-null}" --argjson usage "${usage:-null}" \
+      --argjson agents "${agents:-[]}" --argjson agy "${agy:-null}" \
+      '{noClaude: $noClaude, account: $account, plan: $plan, usage: $usage, agents: $agents, agy: $agy}'
     """#
 }
 
