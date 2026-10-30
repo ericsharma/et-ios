@@ -1,6 +1,6 @@
 # Plan: Multi-agent — E.T. for every terminal AI agent, not only Claude Code
 
-Status: 2026-10-29. D1–D9 ACCEPTED (owner). M0 started (A: trigkey, B: mac-mini installs done). M1-B DONE on a Swift stub (`App/Shared/AgentProfilesStub.swift`); M1-A installed agents in etd f98347b, not yet in Vendor/etd (the apps use the stub until then).
+Status: 2026-10-30. D1–D9 ACCEPTED (owner). M0 started (A: trigkey, B: mac-mini installs done); M0 part 2 DONE for Grok Build and Antigravity CLI (Codex and Gemini wait for login). M1-B DONE on a Swift stub (`App/Shared/AgentProfilesStub.swift`); M1-A installed agents in etd f98347b, not yet in Vendor/etd (the apps use the stub until then).
 
 Follows [PLAN-agents.md](PLAN-agents.md) (AG1 built: the **Agents page** with each machine's Claude login, usage limits and running Claude agents; AG2: the same data from etd, a proposal) and [PLAN-logbook.md](PLAN-logbook.md) (D5: "Claude Code only, behind a `Reader` trait so Codex / Gemini come later"). Work split as in that plan: **A** = the trigkey Claude session (etd, et-proto, et-link), **B** = the Mac agent (apps, builds), **C** = the owner (tests).
 
@@ -54,7 +54,8 @@ E.T. works for "any tmux user" (SPEC §1). It must also work for any **agent** u
 |---|---|---|---|---|
 | Codex CLI (OpenAI) | `~/.codex/sessions/YYYY/MM/DD/rollout-<time>-<uuid>.jsonl`, append-only JSONL, first line `session_meta` with `cwd` | Hooks (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop) behind `codex_hooks = true`; older `notify` key | `codex exec` | third-party blogs |
 | Gemini CLI (Google) | `~/.gemini/tmp/<project hash>/chats/`; JSONL in new versions, one `session-*.json` in old ones; deleted after 30 days by default | Hooks incl. `Notification` (matcher may be `ToolPermission`); `GEMINI_SESSION_ID` in hook env | `gemini -p` | geminicli.com docs |
-| Grok Build (xAI) | Unknown | Unknown | `grok -p`; ACP with `grok agent stdio` | third-party guides |
+| Grok Build (xAI) | **Checked (M0 part 2):** `~/.grok/sessions/<url-encoded cwd>/<id>/updates.jsonl`, append-only JSONL | **Checked:** own state file `events.jsonl`; Claude-format hooks | `grok -p … --output-format json` | M0 part 2 |
+| Antigravity CLI (Google) | **Checked (M0 part 2):** `~/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript.jsonl`, append-only JSONL | **Checked:** no state file; own hook format, no "needs you" event | `agy -p … --output-format json` | M0 part 2 |
 | All three + Claude | — | Agent Client Protocol (ACP): Gemini native, Claude and Codex through Zed adapters, Grok native | — | agentclientprotocol.com |
 
 ## 3. Decisions
@@ -200,6 +201,38 @@ Times are for the agent that runs the step. ✅ = owner can see it work.
 | Files, Codex | `~/.codex`: `config.toml`, `version.json`, `installation_id`, SQLite stores `state_5`, `logs_2`, `memories_1`, `queue_1`, `goals_1` (WAL), `skills/.system`, `tmp/`. No `sessions/` before login. | Supports part 1: Codex keeps state in SQLite. Check the transcript after login. |
 | Files, Gemini | `~/.gemini`: `state.json` (+ `.bak`), `projects.json`, `installation_id`, `history/tmp`, `tmp/`. `--version` alone wrote two `projects.json.*.tmp` files. | No chats before login. |
 | Files, Grok | `~/.grok`: `config.toml`, `version.json`, `agent_id`, `README.md`, `docs/`, `skills/`, `completions/`, `logs/`, `sessions/session_search.sqlite`, `bin/`, `downloads/`. | Sessions are in SQLite (search index); check the transcript after login. |
+
+**M0 results, part 2: Grok Build and Antigravity CLI (2026-10-30, A, trigkey, logged in):**
+
+Method: one session of each in an isolated tmux (`-S <socket>`, no `$TMUX`), in `~/.local/share/agents-m0/m0-grok` and `m0-agy`. Each run: a `date` command, a file write (permission prompt), a bracketed paste of three lines, an `@hel` mention, `/clear`, exit, then a headless resume. Logging hooks in the scratch folders only (`.grok/hooks/m0.json`, `.agents/hooks.json`). Versions: Grok **1.0.70**, agy **1.4.10**, both from nixos-config.
+
+Correction to part 1: trigkey's `grok-build` is **not** from nixpkgs. It is the local package `nixos-config/pkgs/grok-build.nix` (xAI's binary), now 1.0.70 on trigkey, gmktec and (after its switch) the mini. nixos-config turns off agy's self-update (`AGY_CLI_DISABLE_AUTO_UPDATE`). On trigkey, Grok 1.0.70 made no `~/.grok/bin` (no self-update seen).
+
+| Check | Grok Build 1.0.70 | Antigravity CLI 1.4.10 |
+|---|---|---|
+| Process | One process, `grok` (argv0, no path), child of the pane shell. | One process, `agy` (the nix wrapper `exec`s with argv0 `agy`). |
+| Process → session | `~/.grok/active_sessions.json`: rows `{session_id, pid, pid_start, cwd, opened_at}`, as Claude's `sessions/<pid>.json`. `/clear` **adds** a row for the same pid; the old row stays until exit. Exit removes the pid's rows. Use the newest `opened_at` for a pid. | No pid file. The process keeps `presence/<id>.lock` **open** for the current conversation only (`/clear` moves it to the new id). The lock files stay after exit: the test is the open fd (`/proc/<pid>/fd` on Linux, `lsof -p` on macOS), not the file. `cache/last_conversations.json` = cwd → last id. |
+| Transcript | `~/.grok/sessions/<url-encoded cwd>/<id>/updates.jsonl`: JSONL, append-only, one ACP `session/update` per line (`user_message_chunk`, `agent_message_chunk`, `tool_call`, `tool_call_update`, `turn_completed`, `hook_execution`). The docs call it "the authoritative conversation log". Also `chat_history.jsonl` (raw model messages), `summary.json` (title, counts, model). The process does **not** keep it open. | `~/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript.jsonl` (+ `transcript_full.jsonl`, same steps): JSONL, one line per step (`USER_INPUT`, `PLANNER_RESPONSE` with `tool_calls` and tokens, `GENERIC` tool result), written when the step is `DONE`. Append-only. Also one SQLite db per conversation (`conversations/<id>.db`, open). |
+| `/clear` | New session id, new folder. Old folder stays. | New conversation id. Old one stays. |
+| Resume | `grok -r <id>` appends to the same `updates.jsonl` (28 → 37 lines). | `agy --conversation <id>` appends to the same `transcript.jsonl` (6 → 9 lines, first 6 unchanged). |
+| Title (terminal) | Sets it: `<title> - grok`; working: `⠼ - Waiting for response… - grok`; permission prompt: **`⚠ Action Required - … - grok`**. Session title in `summary.json` (`generated_title`, `title_is_manual`). | Sets **no** terminal title (the pane kept tmux's default). Conversation title is in its db. |
+| Live state | **Own state file:** `<session>/events.jsonl` (append-only): `turn_started`, `phase_changed` (`waiting_for_model`, `streaming_text`, `tool_execution`, **`permission_prompt`**), `permission_requested` / `permission_resolved`, `turn_ended`. | **No state file.** Its log (`log/cli-<time>.log`, the process's stdout/stderr) has `Surfacing tool confirmation: "WriteFile" at step 2` and `Responding to tool confirmation: convID=<id>, stepIdx=2, approved=true`. A debug log, not an API. |
+| Hooks | Claude format and Claude payload keys (`hook_event_name`, `session_id`, `transcript_path`, `tool_name`, …) next to Grok's camelCase ones. Grok also **runs the hooks in `~/.claude/settings.json`** (on by default; `[compat.claude] hooks = false` turns it off). Events seen: `SessionStart` (`source: new`), `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Notification` (**`notificationType: permission_prompt`**), `Stop` (`end_turn`, `shutdown`), `SessionEnd` (`shutdown`). Project hooks need folder trust (`--trust`). | Own format: `~/.gemini/config/hooks.json` (shared with the other Antigravity apps) or `<project>/.agents/hooks.json`, `{"<name>": {"<Event>": [...]}}`. Events: `SessionStart`, `PreToolUse`, `PostToolUse`, `PreInvocation`, `PostInvocation`, `Stop`. camelCase payload: `conversationId`, `transcriptPath`, `workspacePaths`, `toolCall`, `stepIdx`. **No notification event.** `PreToolUse` fires **before** the permission prompt, so a hook cannot tell "needs you" from "tool runs". |
+| Permission prompt keys | Menu 1–4; a digit picks **and** confirms. Tab, Ctrl+O (always approve), Ctrl+C, Esc. | Menu 1–2 (file) or 1–4 (command); a digit picks and confirms. ↑/↓, Enter, Tab (amend), Esc (cancel). |
+| Other keys | Shift+Tab mode, Alt+Enter newline, Ctrl+X shortcuts. | `?` shortcuts. Shift+Tab not checked. |
+| Multi-line | Bracketed paste: three lines in the composer, Enter sends. | Same. |
+| Mention | `@hel` opens a file picker (`hello.txt`). | Same (`hello.txt  File  <path>`). |
+| Reply marker | None: the reply is indented text. Tool lines start with `◆`. | None: indented text. Tool lines start with `●`. |
+| Headless | `grok -p "<prompt>" --output-format json` → `{text, stopReason, sessionId, usage, total_cost_usd, …}`. ~2 s. | `agy -p "<prompt>" --output-format json` → `{conversation_id, status, response, duration_seconds, num_turns, usage}`. **Slow:** 87 s, 3 turns for "reply ok" (resumed). |
+| First run | A "Help improve Grok" opt-in banner (data retention, off by default). Left for the owner. | A folder trust prompt (written to `settings.json` `trustedWorkspaces`). |
+
+Effect on the design:
+
+1. **D4:** neither needs a converter. Both write append-only JSONL. The capture tails it by byte offset as for Claude.
+2. **Grok `Reader`:** a near copy of Claude's. `live()` reads `active_sessions.json` (pid → id, newest row per pid); the transcript path comes from the cwd and the id. State is **`own`**: the last `phase_changed` in `events.jsonl` (`permission_prompt` = **needs you**, `turn_ended` = idle). Hooks are a second source, and Claude-format hook lines work for both agents.
+3. **agy `Reader`:** `live()` finds the conversation from the open `presence/<id>.lock`. Busy/idle from the transcript (a `USER_INPUT` with no later `PLANNER_RESPONSE` without `tool_calls` = busy). **Needs you** has no clean source: the choice is the debug log lines or nothing. Proposal: state = `transcript` (busy/idle only), no alerts, and the hint says so (§1.1 rule 3). Reading the log can come later if the owner wants it.
+4. **Key sets:** both need **4** (a fourth menu choice); Claude's set stops at 3. Grok: Claude's set + `4`. agy: Claude's set + `4` + `tab` (amend), and `⇧tab` only if a later check finds a use.
+5. **Profiles:** `reply_marker` stays empty for both (Speaker uses the transcript). `headless` = `grok -p … --output-format json` and `agy -p … --output-format json`; agy is too slow for the watcher (D7): keep Claude or Grok for reports.
 
 ### Phase M1 — profiles, + and the session look (A ~½ day, B ~1 day)
 
