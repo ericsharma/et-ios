@@ -231,7 +231,7 @@ Effect on the design:
 1. **D4:** neither needs a converter. Both write append-only JSONL. The capture tails it by byte offset as for Claude.
 2. **Grok `Reader`:** a near copy of Claude's. `live()` reads `active_sessions.json` (pid → id, newest row per pid); the transcript path comes from the cwd and the id. State is **`own`**: the last `phase_changed` in `events.jsonl` (`permission_prompt` = **needs you**, `turn_ended` = idle). Hooks are a second source, and Claude-format hook lines work for both agents.
 3. **agy `Reader`:** `live()` finds the conversation from the open `presence/<id>.lock`. Busy/idle from the transcript (a `USER_INPUT` with no later `PLANNER_RESPONSE` without `tool_calls` = busy). **Needs you** has no clean source: the choice is the debug log lines or nothing. Proposal: state = `transcript` (busy/idle only), no alerts, and the hint says so (§1.1 rule 3). Reading the log can come later if the owner wants it.
-4. **Key sets:** both need **4** (a fourth menu choice); Claude's set stops at 3. Grok: Claude's set + `4`. agy: Claude's set + `4` + `tab` (amend), and `⇧tab` only if a later check finds a use.
+4. **Key sets (DONE in etd 653013a, with 5):** both need **4** (a fourth menu choice); Claude's set stops at 3. Grok: Claude's set + `4`. agy: Claude's set + `4` + `tab` (amend), and `⇧tab` only if a later check finds a use.
 5. **Profiles:** `reply_marker` stays empty for both (Speaker uses the transcript). `headless` = `grok -p … --output-format json` and `agy -p … --output-format json`; agy is too slow for the watcher (D7): keep Claude or Grok for reports.
 
 ### Phase M1 — profiles, + and the session look (A ~½ day, B ~1 day)
