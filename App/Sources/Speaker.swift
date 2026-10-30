@@ -31,10 +31,12 @@ enum NextStep {
         return s.replacingOccurrences(of: "**", with: "")
     }
 
-    /// Lines that begin something else: Claude's markers, boxes, the prompt.
+    /// Lines that begin something else: Claude's markers, boxes, the
+    /// prompt, and Grok's (◆) and agy's (●) tool lines. Grok and agy have
+    /// no reply marker: their reply is indented text.
     private static func startsBlock(_ trimmed: String) -> Bool {
         guard let c = trimmed.first else { return true }
-        return "⏺⎿╭╰│─>❯✻✶✳✢·".contains(c)
+        return "⏺⎿╭╰│─>❯✻✶✳✢·◆●".contains(c)
     }
 
     /// Text that reads well aloud.
@@ -56,7 +58,12 @@ enum ClaudeReply {
         // Drop the input box at the bottom: from the second-to-last
         // horizontal rule down.
         let rules = lines.indices.filter { isRule(lines[$0]) }
-        if rules.count >= 2 { lines = Array(lines[..<rules[rules.count - 2]]) }
+        if rules.count >= 2 {
+            lines = Array(lines[..<rules[rules.count - 2]])
+        } else if let top = composerBox(lines) {
+            // Grok's input box is a ╭─╮ … ╰─╯ box, not two rules.
+            lines = Array(lines[..<top])
+        }
         // The user's last message starts with "❯ " or "> " at column 0.
         if let lastPrompt = lines.lastIndex(where: { $0.hasPrefix("❯ ") || $0.hasPrefix("> ") }) {
             var end = lastPrompt + 1
@@ -92,6 +99,13 @@ enum ClaudeReply {
         }
         let prompt = parts.joined(separator: " ").trimmingCharacters(in: .whitespaces)
         return prompt.isEmpty ? nil : prompt
+    }
+
+    /// The top line of a ╭ … ╰ box in the last 6 lines: Grok's composer.
+    private static func composerBox(_ lines: [String]) -> Int? {
+        let tail = lines.indices.suffix(6)
+        guard let bottom = tail.last(where: { lines[$0].trimmingCharacters(in: .whitespaces).hasPrefix("╰") }) else { return nil }
+        return tail.last { $0 < bottom && lines[$0].trimmingCharacters(in: .whitespaces).hasPrefix("╭") }
     }
 
     private static func isRule(_ line: String) -> Bool {
