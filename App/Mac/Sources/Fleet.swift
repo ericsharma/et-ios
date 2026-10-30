@@ -87,6 +87,9 @@ final class Fleet {
         center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.wokeUp() }
         }
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.holdOnlyWhileUsed() }
+        }
         if hub != nil { connect() }
     }
 
@@ -195,15 +198,22 @@ final class Fleet {
                 await self.refreshMachines()
             }
         })
-        // While E.T. is the front app, the machines send no pushes to the phone.
+        // While E.T. is the front app and in use, the machines send no
+        // pushes to the phone.
         tasks.append(Task { [weak self] in
             while !Task.isCancelled {
                 guard let self, self.hubHost === host else { return }
-                if NSApp.isActive {
+                if NSApp.isActive, Self.idleSeconds < 60 {
                     try? await host.foreground(seconds: 60)
                     for member in self.mmHosts.values { Task { try? await member.foreground(seconds: 60) } }
                 }
                 try? await Task.sleep(for: .seconds(20))
+            }
+        })
+        tasks.append(Task { [weak self] in
+            while !Task.isCancelled {
+                self?.holdOnlyWhileUsed()
+                try? await Task.sleep(for: .seconds(5))
             }
         })
         for (ref, terminal) in terminals where recent.contains(ref) { reattach(terminal) }
@@ -609,6 +619,34 @@ final class Fleet {
         }
         if !terminal.isAttached, phase == .ready { reattach(terminal) }
         return terminal
+    }
+
+    // MARK: - Attached only while in use
+
+    /// Seconds since the last keyboard, mouse or trackpad input on this Mac.
+    static var idleSeconds: TimeInterval {
+        CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
+    }
+
+    /// etd sends no push for a session with a client attached, so the app
+    /// holds sessions only while you can see them. In front: the newest
+    /// `keepAttached`. In the background: the visible ones, until the Mac
+    /// is idle 2 minutes (or locked or asleep). Then none: the screen stays
+    /// as it was, and the session attaches again when you come back.
+    private func holdOnlyWhileUsed() {
+        guard phase == .ready, DebugHooks.offscreenWindow == nil else { return }
+        let active = NSApp.isActive
+        let used = Self.idleSeconds < 120
+        for ref in recent {
+            guard let terminal = terminals[ref] else { continue }
+            let hold = used && (active || terminal.isVisible)
+            if hold, !terminal.isAttached, terminal.status == .detached {
+                reattach(terminal)
+            } else if !hold, terminal.isAttached {
+                log.add("Detaching \(ref.id): \(active ? "idle" : "E.T. in the background")")
+                terminal.detach()
+            }
+        }
     }
 
     func reattach(_ terminal: SessionTerminal) {
