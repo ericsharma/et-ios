@@ -1,3 +1,4 @@
+import EtLink
 import SwiftUI
 
 /// All windows as live thumbnails (SPEC §5.5). Tap to open; long-press for

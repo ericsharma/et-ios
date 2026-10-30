@@ -1,8 +1,12 @@
 import ETCore
+import EtLink
 import SwiftUI
 
-// PLAN-multi-agent M1: which profile a session runs, and its mark. Stays
-// when AgentProfilesStub.swift goes.
+// PLAN-multi-agent M1: which profile a session runs, and its mark. The
+// profiles and the installed agents come from etd (et-link §4.1).
+
+extension AgentProfile: Identifiable {}
+extension AgentOnMachine: Identifiable {}
 
 extension AgentProfile {
     static func profile(id: String) -> AgentProfile? {

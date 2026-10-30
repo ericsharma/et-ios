@@ -1,3 +1,5 @@
+import struct EtLink.AgentProfile
+import func EtLink.agentProfiles
 import ETCore
 import ETSSH
 import Foundation

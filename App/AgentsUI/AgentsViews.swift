@@ -1,3 +1,4 @@
+import EtLink
 import SwiftUI
 
 // Agents views for the Mac and iOS (PLAN-agents).

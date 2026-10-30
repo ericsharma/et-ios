@@ -1,3 +1,4 @@
+import EtLink
 import ETSSH
 import Foundation
 import Observation

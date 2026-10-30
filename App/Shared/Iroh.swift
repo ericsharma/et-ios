@@ -166,6 +166,71 @@ final class IrohHost: HostConnection, @unchecked Sendable {
         return SentFiles(paths: delivered.paths, typed: delivered.typed)
     }
 
+    // MARK: - Agents (PLAN-multi-agent §4.1)
+
+    /// The built-ins on this machine: `Request::Agents` (33). An etd older
+    /// than f98347b does not know the request; then a script finds them.
+    func agents() async throws -> [AgentOnMachine] {
+        do {
+            return try await host.agents()
+        } catch LinkError.Protocol {
+            return try await scriptedAgents()
+        } catch LinkError.Remote(let message) where message.contains("does not know this request") {
+            return try await scriptedAgents()
+        } catch {
+            throw IrohLink.map(error)
+        }
+    }
+
+    /// `command -v` and the version command for each profile, as AG1's
+    /// Agents script does. Only Claude's transcript and state are known.
+    private func scriptedAgents() async throws -> [AgentOnMachine] {
+        let profiles = agentProfiles()
+        let answer = try await run(Self.agentsScript(profiles))
+        var found: [String: String] = [:]
+        for line in answer.output.split(whereSeparator: \.isNewline) {
+            let parts = line.split(separator: "\t", maxSplits: 1, omittingEmptySubsequences: false)
+            guard parts.count == 2, parts[0].hasPrefix("agent:") else { continue }
+            found[String(parts[0].dropFirst(6))] = String(parts[1])
+        }
+        let claudeFiles = answer.output.contains("claude-projects:yes")
+        return profiles.map { profile in
+            let version = found[profile.id].map(Self.versionNumber)
+            let isClaude = profile.id == "claude"
+            let transcript = isClaude && claudeFiles
+            let hint: String? = if version == nil {
+                "\(profile.name) is not installed here, or not on etd's PATH."
+            } else if !isClaude {
+                "E.T. can't read \(profile.name) transcripts or state yet (PLAN-multi-agent M2, M3)."
+            } else if !transcript {
+                "No Claude transcripts here yet (~/.claude/projects)."
+            } else {
+                nil
+            }
+            return AgentOnMachine(id: profile.id, version: version, path: nil, transcript: transcript,
+                                  state: isClaude && version != nil ? "own" : "none",
+                                  alerts: isClaude && version != nil, setupHint: hint)
+        }
+    }
+
+    /// One `agent:<id>\t<version line>` per installed agent.
+    nonisolated static func agentsScript(_ profiles: [AgentProfile]) -> String {
+        var script = ""
+        for profile in profiles {
+            guard let exe = profile.launch.first else { continue }
+            let args = profile.versionArgs.joined(separator: " ")
+            script += "if command -v \(exe) >/dev/null 2>&1; then printf 'agent:\(profile.id)\\t%s\\n' \"$(\(exe) \(args) 2>/dev/null </dev/null | head -1)\"; fi\n"
+        }
+        script += "[ -d ~/.claude/projects ] && echo claude-projects:yes\n"
+        return script
+    }
+
+    /// "2.1.4" from "2.1.4 (Claude Code)", "codex-cli 0.166.0", "grok 0.2.11 (3247ce8f833)".
+    nonisolated static func versionNumber(_ line: String) -> String {
+        let match = line.firstMatch(of: /\d+(\.\d+)+/)
+        return match.map { String($0.output.0) } ?? line.trimmingCharacters(in: .whitespaces)
+    }
+
     // MARK: - Shared files (PLAN-files §4.7)
 
     /// The files sent to this machine that are still there, newest first.
