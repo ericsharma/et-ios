@@ -634,7 +634,11 @@ final class Fleet {
     /// is idle 2 minutes (or locked or asleep). Then none: the screen stays
     /// as it was, and the session attaches again when you come back.
     private func holdOnlyWhileUsed() {
-        guard phase == .ready, DebugHooks.offscreenWindow == nil else { return }
+        guard phase == .ready else { return }
+        #if DEBUG
+        // Headless snapshots are never the front app.
+        if DebugHooks.offscreenWindow != nil { return }
+        #endif
         let active = NSApp.isActive
         let used = Self.idleSeconds < 120
         for ref in recent {
