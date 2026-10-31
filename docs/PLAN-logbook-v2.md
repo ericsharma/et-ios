@@ -292,6 +292,8 @@ Notes for A1, from the stub on real data: (1) skip prompts that are not the owne
 
 **After A2 + A3 (2026-10-31, mac-mini):** et-ios 43df487, `Vendor/etd` bda7f67 (0.0.16), TestFlight 202610311652, Mac zip E.T.-0.1-202610311656 (notarized, not yet published). `LogbookV2Stub.swift` is deleted: signals and friction come from etd. The transcript view folds a `/compact` summary's turn into the turn before and maps its uuid (`LogbookTranscript.aliases`), so A2's `turn` for a signal after a compaction lands on a shown turn.
 
+**Owner change (2026-10-31, mac-mini):** grouping suggestions are no longer reviewed: the app accepts each one when a report loads (`Logbook.acceptAll`), and the Suggestions place and its cards are gone (Mac, iPad, iPhone). Rename / Move stay as edits. Two apps open at once may both send the same accept; A: please make a repeated accept a no-op, or have the watcher apply its own suggestions and stop sending `proposals`. Meta findings (B6) are unchanged: still the owner's Apply (D8).
+
 ## 9. Risks
 
 | Risk | Effect | Mitigation |

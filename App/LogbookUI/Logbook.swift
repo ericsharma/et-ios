@@ -49,6 +49,8 @@ final class Logbook {
     @ObservationIgnored private var lastSignals: UInt64 = 0
     @ObservationIgnored private var signalsFailed = false
     @ObservationIgnored private var watching = false
+    /// Suggestions sent by acceptAll (a reload must not send them twice).
+    @ObservationIgnored private var accepting: Set<LogbookReport.Proposal> = []
     @ObservationIgnored private var reportTask: Task<Void, Never>?
 
     /// `hosts`: every machine connected directly (Apply writes on each).
@@ -181,6 +183,7 @@ final class Logbook {
             let last = try LogbookReport.decode(try await host.logbookReport(refresh: false) { _, _, _ in })
             // "id": null = no report yet.
             report = last.id.isEmpty ? nil : last
+            acceptAll()
         } catch {
             // No report yet: the Refresh button makes the first.
         }
@@ -208,6 +211,7 @@ final class Logbook {
                     }
                 }
                 report = try LogbookReport.decode(json)
+                acceptAll()
                 await reload()
             } catch {
                 log("Logbook: report failed: \(error)")
@@ -219,14 +223,17 @@ final class Logbook {
 
     // MARK: - Grouping (D4)
 
-    func accept(_ proposal: LogbookReport.Proposal) {
-        sendGrouping(["decision": "accept", "kind": proposal.kind, "detail": proposal.detail, "why": proposal.why]) {
-            $0.proposals.removeAll { $0 == proposal }
+    /// The owner does not review grouping suggestions: each one is accepted
+    /// as it comes (owner, 2026-10-31). Rename and Move stay as edits.
+    private func acceptAll() {
+        for proposal in report?.proposals ?? [] where !accepting.contains(proposal) {
+            accepting.insert(proposal)
+            accept(proposal)
         }
     }
 
-    func reject(_ proposal: LogbookReport.Proposal) {
-        sendGrouping(["decision": "reject", "kind": proposal.kind, "detail": proposal.detail, "why": proposal.why]) {
+    func accept(_ proposal: LogbookReport.Proposal) {
+        sendGrouping(["decision": "accept", "kind": proposal.kind, "detail": proposal.detail, "why": proposal.why]) {
             $0.proposals.removeAll { $0 == proposal }
         }
     }

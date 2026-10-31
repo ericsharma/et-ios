@@ -68,9 +68,6 @@ struct LogbookWindow: View {
         })) {
             placeRow(.now, "Now", systemImage: "circle.fill", tint: .green)
             placeRow(.findings, "Findings", systemImage: "flag", tint: .orange)
-            if logbook.count(.suggestions) > 0 {
-                placeRow(.suggestions, "Suggestions", systemImage: "exclamationmark.triangle", tint: .orange)
-            }
             Section("Projects") {
                 if let report = logbook.report {
                     ForEach(report.projects) { project in
@@ -118,13 +115,6 @@ struct LogbookWindow: View {
         switch logbook.place {
         case .findings:
             LogbookFindingsView(logbook: logbook, machines: machines)
-        case .suggestions:
-            ScrollView {
-                if let report = logbook.report {
-                    LogbookProposals(report: report, logbook: logbook) { editing = $0 }.padding(14)
-                }
-            }
-            .navigationTitle("Suggestions")
         default:
             cardList
         }
@@ -185,7 +175,6 @@ struct LogbookWindow: View {
         switch logbook.place {
         case .now: "Now"
         case .findings: "Findings"
-        case .suggestions: "Suggestions"
         case .project(let id): logbook.project(id: id)?.name ?? "Project"
         case .unsorted: "Unsorted"
         case .archive: "Archive"

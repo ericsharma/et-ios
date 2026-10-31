@@ -6,8 +6,6 @@ enum LogbookPlace: Hashable {
     case now
     /// The meta agent's findings (B6).
     case findings
-    /// The report's grouping suggestions.
-    case suggestions
     /// A report project, by id.
     case project(String)
     /// Sessions in no project (all of them before the first report).
@@ -79,7 +77,7 @@ extension Logbook {
                     .compactMap { $0 }.joined(separator: " ").lowercased()
                 return words.allSatisfy { text.contains($0) }
             }
-        case .findings, .suggestions:
+        case .findings:
             return []
         }
     }
@@ -100,7 +98,6 @@ extension Logbook {
     func count(_ place: LogbookPlace) -> Int {
         switch place {
         case .findings: findings.shown.count
-        case .suggestions: report?.proposals.count ?? 0
         case .archive: sessions.count
         default: cards(place).count
         }

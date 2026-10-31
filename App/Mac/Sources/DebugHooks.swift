@@ -22,7 +22,7 @@ import SwiftUI
 ///                             finding's first evidence link
 ///   --apply                   with --logbook findings: Apply the first
 ///                             finding's write proposal, log each machine
-///   --logbook-grouping        with --logbook last: reject a proposal, rename
+///   --logbook-grouping        with --logbook last: rename
 ///                             project 1, move a session of the last project
 ///                             to none; then log the report
 ///   --logbook-send <m/s>      after 8 s, send the shown transcript's last
@@ -118,7 +118,6 @@ enum DebugHooks {
                 dump("loaded")
                 guard args.contains("--logbook-grouping") else { return }
                 let r = logbook.report!
-                if let proposal = r.proposals.first { logbook.reject(proposal) }
                 if let first = r.projects.first { logbook.rename(project: first.id, to: first.name + " (renamed)") }
                 if let last = r.projects.last, let key = last.sessions.first?.key { logbook.move(session: key, to: nil) }
                 try? await Task.sleep(for: .seconds(5))

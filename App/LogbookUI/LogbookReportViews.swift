@@ -1,39 +1,5 @@
 import SwiftUI
 
-/// The report's grouping suggestions: Accept, Reject, Edit…
-struct LogbookProposals: View {
-    let report: LogbookReport
-    let logbook: Logbook
-    let edit: (LogbookEdit) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("\(report.proposals.count) suggestion\(report.proposals.count == 1 ? "" : "s")", systemImage: "exclamationmark.triangle")
-                .font(.headline).foregroundStyle(.orange)
-            ForEach(report.proposals, id: \.self) { proposal in
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(proposal.kind.capitalized).font(.caption.weight(.semibold))
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(.orange.opacity(0.2), in: Capsule())
-                        Text(proposal.detail).fontWeight(.medium)
-                    }
-                    Text(proposal.why).font(.callout).foregroundStyle(.secondary)
-                    HStack {
-                        Button("Accept") { logbook.accept(proposal) }.buttonStyle(.borderedProminent)
-                        Button("Reject") { logbook.reject(proposal) }
-                        Button("Edit…") { edit(LogbookEdit(project: report.projects.first, session: nil)) }
-                    }
-                    .controlSize(.small)
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
-            }
-        }
-    }
-}
-
 /// The edit sheet's subject: a project to rename or move sessions into.
 struct LogbookEdit: Identifiable {
     var project: LogbookReport.Project?
