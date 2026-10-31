@@ -80,6 +80,8 @@ final class Logbook {
             // The last run every minute: a nightly or another device's run
             // is applied here too.
             if !findings.loaded || tick % 12 == 0 { await findings.load() }
+            // The nightly report (A6) shows up without a restart.
+            if tick % 12 == 0, run == nil { await loadReport() }
             tick += 1
             try? await Task.sleep(for: .seconds(5))
         }
@@ -184,7 +186,8 @@ final class Logbook {
         do {
             let last = try LogbookReport.decode(try await host.logbookReport(refresh: false) { _, _, _ in })
             // "id": null = no report yet.
-            report = last.id.isEmpty ? nil : last
+            guard !last.id.isEmpty, last != report else { return }
+            report = last
             acceptAll()
         } catch {
             // No report yet: the Refresh button makes the first.
