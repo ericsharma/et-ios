@@ -66,6 +66,40 @@ Fix: on a member's `foreground` error, run the same heartbeat script on that mem
 
 Fix: reject empty, `.`, `..` and names with `/` (or use a hash of the name as the folder). After `fetchFile` returns, refuse a URL that is not under `cacheFolder` (`standardizedFileURL.path.hasPrefix`).
 
+## Added 2026-10-31: the follow-up review (Logbook v2 UI)
+
+From `review-etd-et-ios-followup-2026-10-31.md`. The etd side is done in **etd 0.0.24** (gmktec deployed): `fresh` no longer applies a change twice, `@` imports of settings / keys are never listed or writable, `ConfigWrite`s of one file no longer interleave. 0.0.24 also adds two JSON fields the app can use (read with `decodeIfPresent`): `targets[].route` (`write` / `agent` per machine; the proposal's `route` is `agent` only when every target is) and `proposals[].undo` (`machine`, `path`, `base`, `content`: Undo = `configWrite(path, base, content)` for a machine already in `applied`). Line numbers below are from et-ios `9e9d7de` (after B7).
+
+Do 9 and 10 before more auto-apply: with etd's `fresh` fix they close the path where a finding becomes a wrong file and then looks finished.
+
+### 9. Auto-apply marks a proposal done before the write succeeds, and writes proposals for one file at once — `App/LogbookUI/LogbookFindings.swift:120–128`, `apply` at `:143`
+
+`applyAll` inserts `run.id|proposal.key` into the UserDefaults `done` set, then `apply` sends `configWrite` for every target in parallel. Two `write` proposals for one path carry the same base: one wins, the other is refused, and `done` keeps it from being retried. An offline machine, a stale base or a failed `metaDecision` ends the same way; after a restart the Retry state is gone. `decide` stamps `self.run.id` when it sends, so an apply still running when the next run arrives is recorded against the new run.
+
+Fix: add to `done` only after `configWrite` **and** `metaDecision` succeed. On each load, write what the response still lists in `targets` (etd 0.0.24 rebuilds them against the files as they are). Apply proposals that share a `path` one at a time, reloading between them. Pass the run id that was loaded into `decide`. Skip targets whose `route` is `agent`.
+
+### 10. A finished apply shows "Not applied" — `LogbookFindings.swift:468`
+
+The status counts machines still in `targets`; etd moves a machine that has the change to `applied` and drops its target. After a successful apply (or when another device wrote it) `targets` is empty and the card says "Not applied". Fix: show "Applied on …" from `proposal.applied`; "Not applied" only when a target is outstanding.
+
+### 11. Closing one Logbook window stops polling for all — `App/LogbookUI/Logbook.swift:70` (`watch()`)
+
+`watch()` returns at once if another caller runs it, and the owner's `defer` clears `watching` when its task ends. The Mac starts it from every main window and from the Logbook window; closing the window that won stops the 5 s poll, the report reload and auto-apply for the others. Fix: one loop owned by `Logbook`, refcounted; cancel at zero.
+
+### 12. A failed grouping accept is never retried — `Logbook.swift:234–235`
+
+`accepting.insert(proposal)` happens before `logbookGrouping` returns; on failure it stays, so `loadReport` skips the proposal until the app restarts. Fix: insert after success, or remove it in the `catch`.
+
+### 13. The sidebar "needs you" count is always 0 — `App/Mac/Sources/LogbookSidebar.swift:34`
+
+It counts `session.status == "needs-you"`; status is `busy` / `idle` / `gone`. Count from `Logbook.state` (`LogbookPlaces.swift`), which the cards use.
+
+### 14. Comments that retell the plan — `LogbookFindings.swift`, `Logbook.swift`
+
+Drop the dates and the allow-list tour; keep one line where behavior surprises (etd drops finished targets).
+
+Also: the reviewer found the worktree's `Vendor/etd` checked out at `5192f1c`, older than the committed pin. `git submodule update` before building.
+
 ## When done
 
 Change the Status line to "R1: DONE <commit>, TestFlight <build>" with one line per item (fixed / skipped and why), and push.
