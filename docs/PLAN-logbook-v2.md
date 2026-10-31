@@ -200,7 +200,7 @@ Times are for the agent that runs the package. ✅ = the owner can see it work. 
 |---|---|---|---|---|
 | **W0** | A (one machine) | owner accepts §3 | Append all §4.4 variants in et-proto + `PROTOCOL.md`. Empty handlers in `server.rs` that call one function per new module (`logbook/overview.rs`, `logbook/signals.rs`, `agentcfg.rs`, `meta/mod.rs`), each answering "not built yet". All §4.5 et-link methods. Swift names checked with uniffi-bindgen. Release etd (next patch), deploy trigkey + gmktec. | ~2 h |
 | **B1** | B | now | Sidebar: delete `LogbookSection`, add one `LogbookRow` (D1) that counts from the current `logbook.sessions` (busy/idle). Toolbar **Logbook** button opens the window (empty for now). ✅ The sidebar has one Logbook row. | ~1 h |
-| **B2** | B | now | `LogbookV2Stub.swift` with §4.5 names + fixtures made from the real archive (A gives `etd logbook overview --json` output in W0; until then, hand-written from §2). `Window("Logbook", id: "logbook")` with the 3 columns, Now / projects / Unsorted / Archive, cards (D4), filters (D5), inspector. Transcript column reuses `LogbookTranscriptView` with the new header. | ~1 day |
+| **B2** | B | now | `LogbookV2Stub.swift` with §4.5 names + fixtures made from the real archive (hand-written from §2 and §4.5; A1 makes `etd logbook overview --json` for real fixtures). `Window("Logbook", id: "logbook")` with the 3 columns, Now / projects / Unsorted / Archive, cards (D4), filters (D5), inspector. Transcript column reuses `LogbookTranscriptView` with the new header. | ~1 day |
 
 ### Wave 2 — after W0 is released
 
@@ -255,6 +255,8 @@ Wave 4                  A5                      B7
 ## 8. Results
 
 (Each package adds its results here.)
+
+**W0 (2026-10-31, trigkey):** etd 82921c5, release 0.0.13 (120bcd9). Requests 34 `LogOverview`, 35 `LogSignals`, 36 `AgentConfig`, 37 `Meta`, 38 `MetaDecision`, 39 `ConfigWrite`; `LogSelection::Finding` = index 2. A test (`et-proto` `logbook_v2_request_numbers`) keeps the numbers. Each answers `Error("not built yet: … (PLAN-logbook-v2 <package>)")` (test `etd/tests/logbook_v2.rs`). Modules for the packages: A1 `crates/etd/src/logbook/overview.rs`, A2 `logbook/signals.rs`, A3 `crates/etd/src/agentcfg.rs`, A4 + A5 `crates/etd/src/meta/mod.rs`; CLI arms are in `main.rs` already (`etd logbook overview [--json]`, `etd meta signals|drift|run [--refresh]|schedule on|off`). et-link: `logbook_overview`, `logbook_signals`, `meta`, `meta_decision` (logbook.rs), `agent_config`, `config_write` (new `agentcfg.rs`). Swift names checked with uniffi-bindgen on Linux: `logbookOverview(since:)`, `logbookSignals(since:)`, `meta(refresh:progress:)`, `metaDecision(decisionJson:)`, `agentConfig()`, `configWrite(path:base:content:)`, `LogSelection.finding(runId:findingId:)`. Release 0.0.13 also carries the unreleased PLAN-multi-agent commits (f98347b, 8503d4d, 653013a). PLAN-multi-agent `SessionAgents` now takes 40.
 
 ## 9. Risks
 

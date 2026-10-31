@@ -105,7 +105,7 @@ fn parse_turns(agent: String, lines: Vec<String>) -> Vec<Turn>;     // D3
 ```
 
 - `Request::Agents` (33) is **AG2, made multi-vendor**: one answer per machine with the installed agents (`Vec<AgentOnMachine>`), the running agents of every vendor, the machine's extra profiles from `agents.toml`, and AG1's Claude login + usage (other vendors' logins and limits: later, only where the vendor has an API). `Agents.refresh` moves from the script to it; the views stay. An old etd does not answer: the app then shows built-ins with "update etd for details", the same as the Logbook archive check.
-- Session → profile: etd already knows each agent process under each manymux session (Logbook capture). Add `Request::SessionAgents` (34) → `[(mm session, agent id, state, question)]`. Fallback for an old etd: match `MmSession.command` against `processes`.
+- Session → profile: etd already knows each agent process under each manymux session (Logbook capture). Add `Request::SessionAgents` (40; 34–39 are PLAN-logbook-v2) → `[(mm session, agent id, state, question)]`. Fallback for an old etd: match `MmSession.command` against `processes`.
 
 ### 4.2 Screens
 
