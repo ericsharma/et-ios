@@ -14,6 +14,8 @@ final class ShareModel {
         case loading
         case picking
         case sending
+        /// Cancel waits for the send to stop before deleting its files.
+        case cancelling
         case sent(String)
         case queued
         case failed(String)
@@ -65,7 +67,7 @@ final class ShareModel {
             }
             taken.insert(copy.lastPathComponent)
             files.append(copy)
-            totalBytes += Int64((try? copy.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+            totalBytes += Self.size(copy)
         }
         phase = .picking
         if machines.count == 1 { machine = machines[0] }
@@ -95,6 +97,20 @@ final class ShareModel {
                 _ = provider.loadFileRepresentation(forTypeIdentifier: type) { url, _ in place(url) }
             }
         }
+    }
+
+    /// A file's size, or the sum of every file in a folder or package.
+    nonisolated private static func size(_ url: URL) -> Int64 {
+        let keys: [URLResourceKey] = [.isDirectoryKey, .isRegularFileKey, .fileSizeKey]
+        guard (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {
+            return Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+        }
+        var total: Int64 = 0
+        for case let file as URL in FileManager.default.enumerator(at: url, includingPropertiesForKeys: keys) ?? .init() {
+            guard let values = try? file.resourceValues(forKeys: Set(keys)), values.isRegularFile == true else { continue }
+            total += Int64(values.fileSize ?? 0)
+        }
+        return total
     }
 
     nonisolated private static func freeName(_ name: String, taken: Set<String>) -> String {
@@ -173,11 +189,20 @@ final class ShareModel {
         }
     }
 
+    /// Stops a send, waits until it has stopped (it may still read the
+    /// files), then deletes the copies and closes the sheet.
     func close() {
+        guard phase != .cancelling else { return }
+        let task = task
+        let host = host
+        if case .sending = phase { phase = .cancelling }
         task?.cancel()
-        if let host { Task { await host.close() } }
-        for file in files { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
-        finish()
+        Task {
+            await host?.close()
+            await task?.value
+            for file in files { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+            finish()
+        }
     }
 
     nonisolated private static func describe(_ error: any Error) -> String {

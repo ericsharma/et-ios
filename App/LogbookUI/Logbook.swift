@@ -31,7 +31,7 @@ final class Logbook {
     var inspector = false
     /// A turn the open transcript scrolls to once it has it (evidence links).
     var pendingTurn: LogbookTurnRef?
-    /// The meta agent's findings (B6).
+    /// The meta agent's findings.
     @ObservationIgnored private(set) var findings: LogbookFindings!
 
     struct ReportRun: Equatable {
@@ -48,7 +48,10 @@ final class Logbook {
     @ObservationIgnored private var overviewFailed = false
     @ObservationIgnored private var lastSignals: UInt64 = 0
     @ObservationIgnored private var signalsFailed = false
-    @ObservationIgnored private var watching = false
+    /// The archive the cursors came from: another one starts from 0.
+    @ObservationIgnored private var cursorHost: ObjectIdentifier?
+    @ObservationIgnored private var watchers = 0
+    @ObservationIgnored private var watchTask: Task<Void, Never>?
     /// Suggestions sent by acceptAll (a reload must not send them twice).
     @ObservationIgnored private var accepting: Set<LogbookReport.Proposal> = []
     @ObservationIgnored private var reportTask: Task<Void, Never>?
@@ -64,13 +67,21 @@ final class Logbook {
 
     // MARK: - Sessions
 
-    /// The session list again every 5 s, while the caller's task runs. A
-    /// second caller (the Logbook window beside the main window's sidebar)
-    /// returns at once.
+    /// The session list again every 5 s, while any caller's task runs (the
+    /// Logbook window and each main window): one loop for all of them.
     func watch() async {
-        guard !watching else { return }
-        watching = true
-        defer { watching = false }
+        watchers += 1
+        if watchTask == nil { watchTask = Task { await poll() } }
+        // Returns when the caller's task is cancelled.
+        while !Task.isCancelled { try? await Task.sleep(for: .seconds(3600)) }
+        watchers -= 1
+        if watchers == 0 {
+            watchTask?.cancel()
+            watchTask = nil
+        }
+    }
+
+    private func poll() async {
         if report == nil { await loadReport() }
         var tick = 1
         while !Task.isCancelled {
@@ -80,7 +91,7 @@ final class Logbook {
             // The last run every minute: a nightly or another device's run
             // is applied here too.
             if !findings.loaded || tick % 12 == 0 { await findings.load() }
-            // The nightly report (A6) shows up without a restart.
+            // The nightly report shows up without a restart.
             if tick % 12 == 0, run == nil { await loadReport() }
             tick += 1
             try? await Task.sleep(for: .seconds(5))
@@ -90,12 +101,13 @@ final class Logbook {
     /// The overview entries changed since the last call. An etd without
     /// the API leaves `overview` empty: the cards fall back to the title.
     func reloadOverview() async {
-        guard let host = archive() else { return }
+        guard let host = archive(), sameArchive(host) else { return }
         let since = lastOverview
+        // The list's cursor, read before: the archive's clock, no gap.
+        let next = lastList
         do {
-            let started = UInt64(Date().timeIntervalSince1970)
             let entries = try await host.logbookOverview(since: since)
-            lastOverview = started
+            lastOverview = next
             if since == 0 { log("Logbook: overview: \(entries.count) entries") }
             var merged = overview
             for entry in entries { merged[entry.key] = entry }
@@ -111,10 +123,15 @@ final class Logbook {
             error = "No archive machine connected"
             return
         }
+        if !sameArchive(host) {
+            cursorHost = ObjectIdentifier(host)
+            (lastList, lastOverview, lastSignals) = (0, 0, 0)
+        }
         let since = lastList
         do {
             let list = try await host.logbookSessions(since: since)
-            lastList = UInt64(Date().timeIntervalSince1970)
+            // The newest `last` (the archive's clock); `>=` sends that row again.
+            lastList = list.map { UInt64($0.last.timeIntervalSince1970) }.max().map { max($0, since) } ?? since
             // `since` > 0 lists only the sessions that changed.
             var merged = since == 0 ? [:] : Dictionary(uniqueKeysWithValues: sessions.map { ($0.key, $0) })
             for session in list { merged[session.key] = session }
@@ -125,6 +142,10 @@ final class Logbook {
             self.error = Self.describe(error)
         }
         loaded = true
+    }
+
+    private func sameArchive(_ host: IrohHost) -> Bool {
+        cursorHost == ObjectIdentifier(host)
     }
 
     func session(_ key: LogbookKey) -> LogbookSession? {
@@ -138,12 +159,12 @@ final class Logbook {
     /// The signals of the transcripts changed since the last call; each
     /// one's list replaces the old one. Empty until etd has A2.
     func reloadSignals() async {
-        guard let host = archive() else { return }
+        guard let host = archive(), sameArchive(host) else { return }
         let since = lastSignals
+        let next = lastList
         do {
-            let started = UInt64(Date().timeIntervalSince1970)
             let found = try await host.logbookSignals(since: since)
-            lastSignals = started
+            lastSignals = next
             if since == 0 { log("Logbook: signals: " + Dictionary(grouping: found, by: \.key).map { "\($0.key) \($0.value.count)" }.sorted().joined(separator: ", ")) }
             var merged = signals
             for (key, list) in Dictionary(grouping: found, by: \.key) { merged[key] = list.sorted { $0.time < $1.time } }
@@ -186,8 +207,8 @@ final class Logbook {
         do {
             let last = try LogbookReport.decode(try await host.logbookReport(refresh: false) { _, _, _ in })
             // "id": null = no report yet.
-            guard !last.id.isEmpty, last != report else { return }
-            report = last
+            guard !last.id.isEmpty else { return }
+            if last != report { report = last }
             acceptAll()
         } catch {
             // No report yet: the Refresh button makes the first.
@@ -226,20 +247,18 @@ final class Logbook {
         }
     }
 
-    // MARK: - Grouping (D4)
+    // MARK: - Grouping
 
-    /// The owner does not review grouping suggestions: each one is accepted
-    /// as it comes (owner, 2026-10-31). Rename and Move stay as edits.
+    /// Grouping suggestions are not reviewed: each one is accepted as it
+    /// comes. Rename and Move stay as edits.
     private func acceptAll() {
         for proposal in report?.proposals ?? [] where !accepting.contains(proposal) {
             accepting.insert(proposal)
-            accept(proposal)
-        }
-    }
-
-    func accept(_ proposal: LogbookReport.Proposal) {
-        sendGrouping(["decision": "accept", "kind": proposal.kind, "detail": proposal.detail, "why": proposal.why]) {
-            $0.proposals.removeAll { $0 == proposal }
+            // A failed accept is sent again with the next report load.
+            sendGrouping(["decision": "accept", "kind": proposal.kind, "detail": proposal.detail, "why": proposal.why],
+                         failed: { self.accepting.remove(proposal) }) {
+                $0.proposals.removeAll { $0 == proposal }
+            }
         }
     }
 
@@ -272,8 +291,10 @@ final class Logbook {
 
     /// Sends one change; on success, shows it in the report at once (the
     /// next report has it as a fixed choice).
-    private func sendGrouping(_ change: [String: String], apply: @escaping (inout LogbookReport) -> Void) {
+    private func sendGrouping(_ change: [String: String], failed: @escaping () -> Void = {},
+                              apply: @escaping (inout LogbookReport) -> Void) {
         guard let host = archive() else {
+            failed()
             notice = "No archive machine connected"
             return
         }
@@ -288,12 +309,13 @@ final class Logbook {
                     self.report = report
                 }
             } catch {
+                failed()
                 notice = "Grouping failed: \(Self.describe(error))"
             }
         }
     }
 
-    // MARK: - Send to session (D7)
+    // MARK: - Send to session
 
     func send(_ selection: LogbookSelection, to machine: String, session: String) {
         guard let host = archive() else {

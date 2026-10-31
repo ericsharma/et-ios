@@ -31,7 +31,7 @@ struct LogbookRow: View {
         }
     }
 
-    private var needYou: Int { logbook.sessions.filter { $0.status == "needs-you" }.count }
+    private var needYou: Int { logbook.sessions.filter { logbook.state($0) == "needs-you" }.count }
 
     private var caption: String {
         if let error = logbook.error, logbook.sessions.isEmpty { return error }

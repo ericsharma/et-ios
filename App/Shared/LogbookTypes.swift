@@ -334,9 +334,20 @@ struct MetaRun: Decodable, Equatable, Sendable {
         /// Machines etd knows it is applied on (from its decisions; none
         /// when etd does not send it).
         var applied: [String]
+        /// For machines in `applied`: Undo = config_write(path, base, content).
+        var undo: [Undo]
+
+        struct Undo: Decodable, Equatable, Sendable {
+            var machine: String
+            var path: String
+            /// The file now, with the change.
+            var base: String
+            /// The file without the change.
+            var content: String
+        }
 
         init(from decoder: any Decoder) throws {
-            enum Keys: String, CodingKey { case id, route, targets, patch, why, expect, applied }
+            enum Keys: String, CodingKey { case id, route, targets, patch, why, expect, applied, undo }
             let c = try decoder.container(keyedBy: Keys.self)
             id = try c.decode(String.self, forKey: .id)
             route = try c.decodeIfPresent(String.self, forKey: .route) ?? "note"
@@ -345,12 +356,15 @@ struct MetaRun: Decodable, Equatable, Sendable {
             why = try c.decodeIfPresent(String.self, forKey: .why) ?? ""
             expect = try c.decodeIfPresent(String.self, forKey: .expect) ?? ""
             applied = try c.decodeIfPresent([String].self, forKey: .applied) ?? []
+            undo = try c.decodeIfPresent([Undo].self, forKey: .undo) ?? []
         }
     }
 
     struct Target: Decodable, Equatable, Hashable, Sendable {
         var machine: String
         var path: String
+        /// "agent" for a machine where the file is in git or a Nix link.
+        var route: String?
         /// sha256 of the file the patch applies to ("" = a new file).
         var base: String
         /// The whole file after the patch: what Apply writes (config_write).

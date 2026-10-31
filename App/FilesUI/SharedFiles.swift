@@ -92,10 +92,18 @@ final class SharedFiles {
     /// opens in Finder on the Mac).
     func open(_ item: SharedItem) {
         run(item, "Fetching \(item.name)") { host, progress in
+            // etd allows "." and ".." as machine names: never a path out of the cache.
+            guard !["", ".", ".."].contains(item.machine), !item.machine.contains("/") else {
+                throw HostError.other("bad machine name \(item.machine)")
+            }
+            let cache = Self.cacheFolder.standardizedFileURL.path + "/"
             let folder = Self.cacheFolder.appendingPathComponent(item.machine)
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            let local = try await host.fetchFile(item.path, into: folder.path, progress: progress)
-            return URL(fileURLWithPath: local)
+            let local = URL(fileURLWithPath: try await host.fetchFile(item.path, into: folder.path, progress: progress))
+            guard local.standardizedFileURL.path.hasPrefix(cache) else {
+                throw HostError.other("\(item.name) landed outside the cache")
+            }
+            return local
         } done: { url in
             #if os(macOS)
             if item.isDir {

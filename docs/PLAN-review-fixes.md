@@ -1,6 +1,6 @@
 # Plan: et-ios review fixes (package R1, track B)
 
-Status: R1: IN PROGRESS (mac-mini). Owner: the **mac-mini** agent (track B, PLAN-logbook-v2 §6 rule 4). Claim it the same way: change this Status line to "R1: IN PROGRESS (mac-mini)", commit, push.
+Status: R1: DONE (mac-mini, see "Result" at the end). Owner: the **mac-mini** agent (track B, PLAN-logbook-v2 §6 rule 4). Claim it the same way: change this Status line to "R1: IN PROGRESS (mac-mini)", commit, push.
 
 Source: `review-etd-and-et-ios.md` (2026-10-31, reviewed at et-ios `e5b70fe`). Each finding below was re-checked on et-ios `eba7b3a`; line numbers are from that commit. The etd side of the review is handled separately (etd 0.0.18: issues 2–7 and 10; issues 1 and 9 next). Nothing here needs an etd change.
 
@@ -103,3 +103,22 @@ Also: the reviewer found the worktree's `Vendor/etd` checked out at `5192f1c`, o
 ## When done
 
 Change the Status line to "R1: DONE <commit>, TestFlight <build>" with one line per item (fixed / skipped and why), and push.
+
+## Result (2026-10-31, mac-mini)
+
+1. Fixed: the list cursor is the newest `last` in the answer (the archive's clock, `>=` repeats the boundary row); overview and signals take the list's cursor read before their call.
+2. Fixed: the cursors belong to one archive host object; another host (or a reconnect) starts from 0 and replaces the list. Shared by iOS and Mac.
+3. Fixed: a folder or package counts the size of every regular file in it.
+4. Fixed: Cancel shows "Cancelling…", closes the host, waits for the send task, then deletes the copies and closes the sheet.
+5. Fixed: the shutdown runs in a background task, waits for the heartbeat task (whose per-machine calls are now its children), then sends `foreground(0)` + clears the heartbeat file on every machine.
+6. Fixed: a member name wins over the hub's host-name alias.
+7. Fixed: every machine falls back to the heartbeat file on a `foreground` error; the shutdown clears it on every machine.
+8. Fixed: `""`, `.`, `..` and names with `/` are refused, and a fetched file outside the cache is refused.
+9. Fixed: one write per file per read, targets with `route: agent` skipped, `done` only after `configWrite` and `meta_decision` both succeed (a failed target waits 10 min), decisions carry the loaded run's id. Undo uses `proposals[].undo` (etd 0.0.24).
+10. Fixed in 88f2f12: "Applied on" from `applied` ∪ follow-up ∪ this device's writes.
+11. Fixed: one poll loop owned by `Logbook`, counted by watchers, cancelled at zero.
+12. Fixed: a failed accept is removed from `accepting`; every report load (each minute) sends it again.
+13. Fixed: counted from `Logbook.state`.
+14. Fixed: plan tags and dates dropped from the Logbook comments.
+
+Checked: iOS and Mac build; Mac headless on the real archive (25 sessions, live card updating). Not checked: 3, 4, 5, 7 need the phone (share sheet, backgrounding).

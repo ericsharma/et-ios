@@ -12,6 +12,7 @@ struct ShareView: View {
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button(model.phase == .queued ? "Done" : "Cancel") { model.close() }
+                            .disabled(model.phase == .cancelling)
                     }
                     if model.phase == .picking {
                         ToolbarItem(placement: .confirmationAction) {
@@ -40,6 +41,8 @@ struct ShareView: View {
                 }
             }
             .padding(32)
+        case .cancelling:
+            ProgressView("Cancelling…").padding(32)
         case .sent(let paths):
             VStack(spacing: 10) {
                 Image(systemName: "checkmark.circle.fill").font(.largeTitle).foregroundStyle(.green)

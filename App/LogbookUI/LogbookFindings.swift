@@ -1,11 +1,9 @@
 import SwiftUI
 
-// The Findings place (PLAN-logbook-v2 B6): the meta agent's findings, each
-// with evidence (links into transcripts) and proposed changes to the
-// agents' instruction files. The owner chose (2026-10-31) not to review
-// them: every `write` proposal is applied on its machines as a run comes
-// in. etd still checks each one (allow-list, base, secrets) and keeps a
-// backup of each file it replaces.
+// The Findings place: the meta agent's findings, each with evidence (links
+// into transcripts) and changes to the agents' instruction files. Every
+// `write` change is applied as a run comes in, without review; etd checks
+// each write and keeps a backup.
 
 /// The last meta run, a Run in progress, and what the owner did with it.
 @MainActor @Observable
@@ -20,7 +18,7 @@ final class LogbookFindings {
     /// Per target ("proposal|machine|path"): writing, applied or failed.
     private(set) var writes: [String: WriteState] = [:]
     /// Undo per follow-up row (its id), and "Make the same" per drift
-    /// file id: writing, applied or failed (B7).
+    /// file id: writing, applied or failed.
     private(set) var undos: [String: WriteState] = [:]
     private(set) var syncs: [String: WriteState] = [:]
 
@@ -40,8 +38,10 @@ final class LogbookFindings {
     @ObservationIgnored private var task: Task<Void, Never>?
     /// "machine|path" being written now: one write per file at a time.
     @ObservationIgnored private var inFlight: Set<String> = []
-    /// "run|finding/proposal|machine|path|base" tried from this device, so a reload
-    /// or a restart does not write them again.
+    /// Targets ("run|finding/proposal|machine|path|base") last tried at.
+    @ObservationIgnored private var tried: [String: Date] = [:]
+    /// Targets written and recorded from this device: a restart does not
+    /// write them again.
     @ObservationIgnored private var done: Set<String> {
         get { Set(UserDefaults.standard.stringArray(forKey: "logbook.metaApplied") ?? []) }
         set { UserDefaults.standard.set(Array(newValue.suffix(500)), forKey: "logbook.metaApplied") }
@@ -117,28 +117,32 @@ final class LogbookFindings {
         applyAll()
     }
 
-    /// Writes every `write` target that etd still lists and does not mark
-    /// applied. etd rebuilds the targets on each read (A4-fix), so a file
-    /// gets one write per read: the next read (1 min) gives the next
-    /// proposal on that file its new base. A target is tried once per base.
+    /// Writes every `write` target etd still lists: etd drops a machine
+    /// whose file has the change and rebuilds the rest against the file as
+    /// it is now. One write per file per read; the next read (1 min) gives
+    /// the next proposal on that file its new base. A failed target waits
+    /// 10 minutes.
     private func applyAll() {
         guard let run else { return }
         var files = inFlight
         for finding in run.findings where !rejected.contains(finding.id) {
             for proposal in finding.proposals where proposal.route == "write" {
-                // etd lists a target only where the file lacks the change (A4-fix).
-                let applied = Set(proposal.applied)
                 let targets = proposal.targets.filter { target in
                     let file = target.machine + "|" + target.path
-                    let id = [run.id, proposal.key, file, target.base].joined(separator: "|")
-                    guard !applied.contains(target.machine), !files.contains(file), !done.contains(id) else { return false }
+                    let id = Self.attempt(run, proposal, target)
+                    guard target.route != "agent", !proposal.applied.contains(target.machine), !files.contains(file),
+                          !done.contains(id), tried[id].map({ Date().timeIntervalSince($0) > 600 }) ?? true else { return false }
                     files.insert(file)
-                    done.insert(id)
+                    tried[id] = Date()
                     return true
                 }
-                if !targets.isEmpty { apply(targets, of: proposal, in: finding) }
+                if !targets.isEmpty { apply(targets, of: proposal, in: finding, run: run) }
             }
         }
+    }
+
+    private static func attempt(_ run: MetaRun, _ proposal: MetaRun.Proposal, _ target: MetaRun.Target) -> String {
+        [run.id, proposal.key, target.machine, target.path, target.base].joined(separator: "|")
     }
 
     // MARK: - Decisions
@@ -149,8 +153,9 @@ final class LogbookFindings {
     }
 
     /// Writes each target's new content on its machine, then tells the
-    /// archive where it was applied.
-    private func apply(_ targets: [MetaRun.Target], of proposal: MetaRun.Proposal, in finding: MetaRun.Finding) {
+    /// archive where it was applied. Done (not written again after a
+    /// restart) only once both succeeded.
+    private func apply(_ targets: [MetaRun.Target], of proposal: MetaRun.Proposal, in finding: MetaRun.Finding, run: MetaRun) {
         let files = targets.map { $0.machine + "|" + $0.path }
         inFlight.formUnion(files)
         Task {
@@ -160,25 +165,25 @@ final class LogbookFindings {
                 }
             }
             inFlight.subtract(files)
-            // Offline is not an answer about the file: try again on the next read.
-            for target in targets where writes[Self.targetKey(proposal, target)] == .failed("offline") {
-                done.remove([run?.id ?? "", proposal.key, target.machine + "|" + target.path, target.base].joined(separator: "|"))
-            }
             let applied = targets.filter {
                 if case .applied = writes[Self.targetKey(proposal, $0)] { return true }
                 return false
             }
             guard !applied.isEmpty else { return }
-            decide(["decision": "applied", "finding": finding.id, "proposal": proposal.id, "machines": applied.map(\.machine)])
             notify("\(finding.title): applied on \(applied.map(\.machine).joined(separator: ", "))")
+            if await decide(["decision": "applied", "finding": finding.id, "proposal": proposal.id,
+                             "machines": applied.map(\.machine)], run: run.id) {
+                done.formUnion(applied.map { Self.attempt(run, proposal, $0) })
+            }
         }
     }
 
     func retry(_ target: MetaRun.Target, of proposal: MetaRun.Proposal, in finding: MetaRun.Finding) {
+        guard let run else { return }
         Task {
             await write(target, of: proposal)
             if case .applied = writes[Self.targetKey(proposal, target)] {
-                decide(["decision": "applied", "finding": finding.id, "proposal": proposal.id, "machines": [target.machine]])
+                await decide(["decision": "applied", "finding": finding.id, "proposal": proposal.id, "machines": [target.machine]], run: run.id)
             }
         }
     }
@@ -205,7 +210,7 @@ final class LogbookFindings {
         }
     }
 
-    // MARK: - Undo (B7, A5)
+    // MARK: - Undo
 
     /// Machines the follow-up rows say a proposal is applied on (and not
     /// undone); all of the proposal's machines for a row without machines.
@@ -227,7 +232,12 @@ final class LogbookFindings {
     func undoTargets(_ row: MetaRun.Followup) -> [MetaRun.Target] {
         guard let finding = run?.findings.first(where: { $0.id == row.finding }),
               let proposal = finding.proposals.first(where: { $0.id == (row.proposal ?? "") }) else { return [] }
-        return proposal.targets.filter { ($0.after ?? "").isEmpty == false && (row.machines.isEmpty || row.machines.contains($0.machine)) }
+        let wanted = { (machine: String) in row.machines.isEmpty || row.machines.contains(machine) }
+        // etd ≥ 0.0.24 lists how to undo each applied machine; before, the targets carried it.
+        let undo = proposal.undo.filter { wanted($0.machine) }.map {
+            MetaRun.Target(machine: $0.machine, path: $0.path, base: "", old: $0.content, after: $0.base)
+        }
+        return undo.isEmpty ? proposal.targets.filter { ($0.after ?? "").isEmpty == false && wanted($0.machine) } : undo
     }
 
     /// Writes each machine's old file back, if the file is still the one
@@ -261,11 +271,11 @@ final class LogbookFindings {
         }
     }
 
-    // MARK: - Make the same (B7, A3)
+    // MARK: - Make the same
 
     /// Copies `source`'s version of the file to every other machine that
     /// answered and has another version or none. Files in git and Nix
-    /// links are left to an agent (D8).
+    /// links are left to an agent.
     func makeSame(_ drift: MetaRun.Drift, as source: String) {
         syncs[drift.id] = .writing
         log("Findings: make \(drift.id) the same as on \(source)")
@@ -327,18 +337,24 @@ final class LogbookFindings {
     }
 
     private func decide(_ decision: [String: Any]) {
-        guard let run, let host = archive() else { return }
+        guard let run else { return }
+        Task { await decide(decision, run: run.id) }
+    }
+
+    /// `run`: the run the decision is about (a newer one may have loaded since).
+    @discardableResult private func decide(_ decision: [String: Any], run: String) async -> Bool {
+        guard let host = archive() else { return false }
         var decision = decision
-        decision["run"] = run.id
+        decision["run"] = run
         let data = (try? JSONSerialization.data(withJSONObject: decision, options: [.sortedKeys])) ?? Data()
         let json = String(decoding: data, as: UTF8.self)
         log("Findings: decision \(json)")
-        Task {
-            do {
-                try await host.metaDecision(json)
-            } catch {
-                notify("Decision not saved: \(Logbook.describe(error))")
-            }
+        do {
+            try await host.metaDecision(json)
+            return true
+        } catch {
+            notify("Decision not saved: \(Logbook.describe(error))")
+            return false
         }
     }
 
@@ -469,7 +485,7 @@ struct FindingCard: View {
     @ViewBuilder private func status(_ proposal: MetaRun.Proposal) -> some View {
         switch proposal.route {
         case "write":
-            // etd moves a machine that has the change from `targets` to `applied` (A4-fix).
+            // etd moves a machine that has the change from `targets` to `applied`.
             let applied = Set(proposal.applied)
                 .union(findings.appliedOn(finding: finding.id, proposal: proposal.id))
                 .union(proposal.targets.filter { isApplied($0, proposal) }.map(\.machine))
@@ -533,7 +549,7 @@ struct FindingCard: View {
     }
 }
 
-/// Applied changes (B7): what changed, where, the friction before and
+/// Applied changes: what changed, where, the friction before and
 /// after, and Undo.
 struct LogbookAppliedSection: View {
     let rows: [MetaRun.Followup]
@@ -587,7 +603,7 @@ struct LogbookAppliedSection: View {
     }
 }
 
-/// Agent files that differ between machines (B7): folded, by kind; a file
+/// Agent files that differ between machines: folded, by kind; a file
 /// can be made the same as on one machine.
 struct LogbookDriftSection: View {
     let drift: [MetaRun.Drift]

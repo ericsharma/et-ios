@@ -437,7 +437,9 @@ final class SessionController {
     }
 
     private func closeConnection(releasing windows: [WindowID] = []) {
+        let heartbeat = heartbeatTask
         heartbeatTask?.cancel()
+        heartbeatTask = nil
         pathTask?.cancel()
         pathLabel = nil
         for task in tasks { task.cancel() }
@@ -458,17 +460,27 @@ final class SessionController {
         networkLoaded = nil
         self.client = nil
         self.connection = nil
+        // iOS may suspend the app right after backgrounding: finish the
+        // "no longer open" calls first, or pushes stay muted up to 60 s.
+        let background = UIApplication.shared.beginBackgroundTask(withName: "disconnect")
         Task {
+            defer { if background != .invalid { UIApplication.shared.endBackgroundTask(background) } }
+            await heartbeat?.value
+            if wasManymux, let connection {
+                // No longer open: pushes resume right away.
+                let hosts = members + [connection as? IrohHost].compactMap { $0 }.filter { hub in !members.contains { $0 === hub } }
+                await withTaskGroup(of: Void.self) { group in
+                    for host in hosts {
+                        group.addTask {
+                            try? await host.foreground(seconds: 0)
+                            _ = try? await host.run(Self.heartbeatClearScript)
+                        }
+                    }
+                }
+            }
             // Leave the session running for its other clients.
             for attachment in attachments { await attachment.detach() }
             for feed in events { await feed.close() }
-            if wasManymux, let connection {
-                // No longer open: pushes resume right away.
-                for host in members + [connection as? IrohHost].compactMap({ $0 }) {
-                    try? await host.foreground(seconds: 0)
-                }
-                _ = try? await connection.run(Self.heartbeatClearScript)
-            }
             for host in members { await host.close() }
             if let client {
                 for id in windows { await client.post(TmuxCommand.releaseWindowSize(id)) }
@@ -1067,6 +1079,17 @@ final class SessionController {
     private static let heartbeatTouchScript = "mkdir -p ~/.local/state/et-notify && touch ~/.local/state/et-notify/foreground"
     private static let heartbeatClearScript = "rm -f ~/.local/state/et-notify/foreground"
 
+    /// "E.T. is open" for 60 s; an etd without `Foreground` gets the heartbeat file.
+    nonisolated private static func markOpen(_ host: IrohHost) async {
+        guard !Task.isCancelled else { return }
+        do {
+            try await host.foreground(seconds: 60)
+        } catch {
+            guard !Task.isCancelled else { return }
+            _ = try? await host.run(heartbeatTouchScript)
+        }
+    }
+
     private func startHeartbeat() {
         heartbeatTask?.cancel()
         guard let client else { return }
@@ -1601,8 +1624,9 @@ extension SessionController {
     /// A machine name from a push or an event (a network name, or a node's
     /// host name for itself) → the name on the Machines screen.
     func mmMachineName(for name: String) -> String {
+        // A member name first: another machine may be named like the hub's host name.
+        if mmHostNames[name] != nil || name == hubName || networkMachines.contains(where: { $0.name == name }) { return name }
         if name == hubHostName, let hubName { return hubName }
-        if mmHostNames[name] != nil { return name }
         return mmHostNames.first { $0.value == name }?.key ?? name
     }
 
@@ -1641,15 +1665,14 @@ extension SessionController {
         // "E.T. is open" to every connected machine: none sends a push for
         // 60 s. An etd without `Foreground` gets the heartbeat file instead.
         heartbeatTask?.cancel()
+        // Children of the task: closeConnection waits for them before it
+        // sends foreground(0), so a late foreground(60) can't land after it.
         heartbeatTask = Task {
             while !Task.isCancelled {
-                do {
-                    try await host.foreground(seconds: 60)
-                } catch {
-                    _ = try? await host.run(Self.heartbeatTouchScript)
-                }
-                for member in self.mmHosts.values {
-                    Task { try? await member.foreground(seconds: 60) }
+                await withTaskGroup(of: Void.self) { group in
+                    for member in [host] + self.mmHosts.values.filter({ $0 !== host }) {
+                        group.addTask { await Self.markOpen(member) }
+                    }
                 }
                 try? await Task.sleep(for: .seconds(20))
             }
