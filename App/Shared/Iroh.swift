@@ -379,6 +379,12 @@ final class IrohHost: HostConnection, @unchecked Sendable {
         try await mapped { try await host.report(refresh: refresh, progress: ReportRelay(progress)) }
     }
 
+    /// Overview JSON (PLAN-logbook-v2 §4.5): a headline, the last thing
+    /// asked and said, per transcript changed at or after `since`.
+    func logbookOverview(since: UInt64) async throws -> [LogbookOverviewEntry] {
+        try LogbookOverviewEntry.decode(try await mapped { try await host.logbookOverview(since: since) })
+    }
+
     /// The owner accepts or edits a grouping (one §4.4 proposal, as JSON).
     func logbookGrouping(_ changeJSON: String) async throws {
         try await mapped { try await host.grouping(changeJson: changeJSON) }

@@ -31,8 +31,8 @@ struct MainWindow: View {
         } detail: {
             detail
         }
-        .navigationTitle(logbookPage == nil ? title : logbookPage == .agents ? "Agents" : "Logbook")
-        .navigationSubtitle(logbookPage == nil ? selection.map { Nicknames.shared.machine($0.machine) } ?? "" : logbookSubtitle)
+        .navigationTitle(logbookPage == nil ? title : "Agents")
+        .navigationSubtitle(logbookPage == nil ? selection.map { Nicknames.shared.machine($0.machine) } ?? "" : "")
         .onChange(of: selection) { _, ref in if ref != nil { logbookPage = nil } }
         .toolbar {
             // Also in the sidebar, under Files (it can be below the fold).
@@ -114,16 +114,6 @@ struct MainWindow: View {
         if let nickname = Nicknames.shared.nickname(for: .session(selection)) { return nickname }
         let info = fleet.info(for: selection)
         return info.map { $0.title.isEmpty ? $0.name : $0.title } ?? selection.name
-    }
-
-    @Environment(Logbook.self) private var logbook
-
-    private var logbookSubtitle: String {
-        switch logbookPage {
-        case .session(let key): logbook.session(key)?.label ?? key.id
-        case .report: "Report"
-        case .agents, nil: ""
-        }
     }
 
     @ViewBuilder private var detail: some View {

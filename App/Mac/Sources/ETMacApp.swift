@@ -74,7 +74,7 @@ struct ETMacApp: App {
 
         // PLAN-logbook-v2 D2: beside the terminals, not in place of them.
         Window("Logbook", id: "logbook") {
-            LogbookWindow()
+            LogbookScene()
                 .environment(fleet)
                 .environment(logbook)
         }

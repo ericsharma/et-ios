@@ -20,6 +20,13 @@ final class Logbook {
     private(set) var pausing: Set<String> = []
     /// The last action's result, for a short notice.
     var notice: String?
+    /// Per transcript: headline, asked, said (PLAN-logbook-v2 §4.5), by "machine/sessionId".
+    private(set) var overview: [String: LogbookOverviewEntry] = [:]
+    /// The Logbook window's place and open transcript (one window per app).
+    var place: LogbookPlace = .now
+    var selected: LogbookKey?
+    /// ⌘I: machine, folder, ids of the open transcript.
+    var inspector = false
 
     struct ReportRun: Equatable {
         var stage = "starting"
@@ -31,6 +38,9 @@ final class Logbook {
     @ObservationIgnored private let archive: @MainActor () -> IrohHost?
     @ObservationIgnored private let log: @MainActor (String) -> Void
     @ObservationIgnored private var lastList: UInt64 = 0
+    @ObservationIgnored private var lastOverview: UInt64 = 0
+    @ObservationIgnored private var overviewFailed = false
+    @ObservationIgnored private var watching = false
     @ObservationIgnored private var reportTask: Task<Void, Never>?
 
     init(archive: @escaping @MainActor () -> IrohHost?, log: @escaping @MainActor (String) -> Void) {
@@ -40,12 +50,37 @@ final class Logbook {
 
     // MARK: - Sessions
 
-    /// The session list again every 5 s, while the caller's task runs.
+    /// The session list again every 5 s, while the caller's task runs. A
+    /// second caller (the Logbook window beside the main window's sidebar)
+    /// returns at once.
     func watch() async {
+        guard !watching else { return }
+        watching = true
+        defer { watching = false }
         if report == nil { await loadReport() }
         while !Task.isCancelled {
             await reload()
+            await reloadOverview()
             try? await Task.sleep(for: .seconds(5))
+        }
+    }
+
+    /// The overview entries changed since the last call. An etd without
+    /// the API leaves `overview` empty: the cards fall back to the title.
+    func reloadOverview() async {
+        guard let host = archive() else { return }
+        let since = lastOverview
+        do {
+            let started = UInt64(Date().timeIntervalSince1970)
+            let entries = try await host.logbookOverview(since: since)
+            lastOverview = started
+            if since == 0 { log("Logbook: overview: \(entries.count) entries") }
+            var merged = overview
+            for entry in entries { merged[entry.key] = entry }
+            if merged != overview { overview = merged }
+        } catch {
+            if !overviewFailed { log("Logbook: overview: \(Self.describe(error))") }
+            overviewFailed = true
         }
     }
 

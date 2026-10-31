@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// What the Logbook (or Agents) shows in place of the terminal.
+/// What the main window shows in place of the terminal. The Logbook has
+/// its own window (PLAN-logbook-v2 D2).
 enum LogbookPage: Hashable {
-    case session(LogbookKey)
-    case report
     /// Every machine's Claude agents and usage limits (PLAN-agents).
     case agents
 }
@@ -46,7 +45,7 @@ struct LogbookRow: View {
     }
 }
 
-/// The Logbook page in the detail column.
+/// The Agents page in the detail column.
 struct LogbookDetail: View {
     @Environment(Fleet.self) private var fleet
     @Environment(Logbook.self) private var logbook
@@ -55,16 +54,47 @@ struct LogbookDetail: View {
 
     var body: some View {
         switch page {
-        case .session(let key):
-            LogbookTranscriptView(key: key, logbook: logbook, machines: fleet.machines)
-        case .report:
-            LogbookReportView(logbook: logbook, machines: fleet.machines) { key in
-                fleet.requestedLogbook = .session(key)
-            }
         case .agents:
             AgentsPage(agents: agents, title: { logbook.title(for: $0) }) { agent in
                 fleet.requestedRef = SessionRef(machine: agent.machine, name: agent.mmSession)
             }
         }
+    }
+}
+
+/// The Logbook window's content on the Mac: Show Terminal brings a main
+/// window forward with the session.
+struct LogbookScene: View {
+    @Environment(Fleet.self) private var fleet
+    @Environment(Logbook.self) private var logbook
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        LogbookWindow(logbook: logbook, machines: fleet.machines) { session in
+            let ref = SessionRef(machine: session.key.machine, name: session.mmSession)
+            let main = NSApp.windows.first { $0.isVisible && !["Logbook", "Debug Log", "Send Files"].contains($0.title) && $0.contentView != nil }
+            if let main {
+                fleet.requestedRef = ref
+                main.makeKeyAndOrderFront(nil)
+            } else {
+                openWindow(value: ref)
+            }
+        }
+        .frame(minWidth: 760, minHeight: 420)
+        .task(id: fleet.phase) {
+            guard fleet.phase == .ready else { return }
+            await logbook.watch()
+        }
+        // The main window's sidebar turns Logbook notices into these.
+        .overlay(alignment: .bottom) {
+            if let notice = fleet.notice {
+                Text(notice)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(.regularMaterial, in: Capsule())
+                    .padding(.bottom, 16)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.default, value: fleet.notice)
     }
 }

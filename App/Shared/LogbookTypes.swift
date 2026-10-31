@@ -123,3 +123,50 @@ struct LogbookReport: Codable, Equatable, Sendable {
         proposals = try c.decodeIfPresent([Proposal].self, forKey: .proposals) ?? []
     }
 }
+
+/// One transcript in the Overview (PLAN-logbook-v2 §4.5): what it does,
+/// the last thing asked and said. Fields are optional: etd may add some.
+struct LogbookOverviewEntry: Decodable, Equatable, Sendable {
+    /// "machine/sessionId".
+    var key: String
+    var agent: String
+    var machine: String
+    var mm: String
+    var headline: String?
+    /// "title", "prompt" or "digest".
+    var headlineFrom: String?
+    var asked: String?
+    var said: String?
+    /// "busy", "idle", "needs-you" or "gone".
+    var state: String
+    var prompts: Int
+    /// Fewer than 2 prompts: hidden by default (D5).
+    var trivial: Bool
+    /// Signal kind → count ("interrupt", "denied", "tool-error"); empty until A2.
+    var friction: [String: Int]
+
+    enum CodingKeys: String, CodingKey {
+        case key, agent, machine, mm, headline, headlineFrom = "headline_from", asked, said, state, prompts, trivial, friction
+    }
+
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        key = try c.decode(String.self, forKey: .key)
+        agent = try c.decodeIfPresent(String.self, forKey: .agent) ?? "claude"
+        machine = try c.decodeIfPresent(String.self, forKey: .machine) ?? ""
+        mm = try c.decodeIfPresent(String.self, forKey: .mm) ?? ""
+        headline = try c.decodeIfPresent(String.self, forKey: .headline)
+        headlineFrom = try c.decodeIfPresent(String.self, forKey: .headlineFrom)
+        asked = try c.decodeIfPresent(String.self, forKey: .asked)
+        said = try c.decodeIfPresent(String.self, forKey: .said)
+        state = try c.decodeIfPresent(String.self, forKey: .state) ?? "gone"
+        prompts = try c.decodeIfPresent(Int.self, forKey: .prompts) ?? 0
+        trivial = try c.decodeIfPresent(Bool.self, forKey: .trivial) ?? false
+        friction = try c.decodeIfPresent([String: Int].self, forKey: .friction) ?? [:]
+    }
+
+    static func decode(_ json: String) throws -> [LogbookOverviewEntry] {
+        struct Overview: Decodable { var sessions: [LogbookOverviewEntry]? }
+        return try JSONDecoder().decode(Overview.self, from: Data(json.utf8)).sessions ?? []
+    }
+}

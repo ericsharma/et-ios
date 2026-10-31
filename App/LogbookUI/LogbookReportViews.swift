@@ -19,7 +19,9 @@ struct LogbookReportView: View {
                         .font(.callout).foregroundStyle(.orange).textSelection(.enabled)
                 }
                 if let report = logbook.report {
-                    if !report.proposals.isEmpty { proposals(report) }
+                    if !report.proposals.isEmpty {
+                        LogbookProposals(report: report, logbook: logbook) { editing = $0 }
+                    }
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 14, alignment: .top)], spacing: 14) {
                         ForEach(report.projects) { project in
                             ProjectCard(project: project, logbook: logbook, openSession: openSession,
@@ -82,7 +84,23 @@ struct LogbookReportView: View {
         }
     }
 
-    private func proposals(_ report: LogbookReport) -> some View {
+    @ViewBuilder private func memberRow(key: String, role: String?) -> some View {
+        if let session = logbook.session(id: key) {
+            Button { openSession(session.key) } label: { LogbookSessionRow(session: session, role: role) }
+                .buttonStyle(.plain)
+        } else {
+            Text(key).font(.caption.monospaced()).foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// The report's grouping suggestions: Accept, Reject, Edit…
+struct LogbookProposals: View {
+    let report: LogbookReport
+    let logbook: Logbook
+    let edit: (LogbookEdit) -> Void
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label("\(report.proposals.count) suggestion\(report.proposals.count == 1 ? "" : "s")", systemImage: "exclamationmark.triangle")
                 .font(.headline).foregroundStyle(.orange)
@@ -98,7 +116,7 @@ struct LogbookReportView: View {
                     HStack {
                         Button("Accept") { logbook.accept(proposal) }.buttonStyle(.borderedProminent)
                         Button("Reject") { logbook.reject(proposal) }
-                        Button("Edit…") { editing = LogbookEdit(project: report.projects.first, session: nil) }
+                        Button("Edit…") { edit(LogbookEdit(project: report.projects.first, session: nil)) }
                     }
                     .controlSize(.small)
                 }
@@ -106,15 +124,6 @@ struct LogbookReportView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
             }
-        }
-    }
-
-    @ViewBuilder private func memberRow(key: String, role: String?) -> some View {
-        if let session = logbook.session(id: key) {
-            Button { openSession(session.key) } label: { LogbookSessionRow(session: session, role: role) }
-                .buttonStyle(.plain)
-        } else {
-            Text(key).font(.caption.monospaced()).foregroundStyle(.secondary)
         }
     }
 }
@@ -277,6 +286,7 @@ struct LogbookEditSheet: View {
             name = edit.project?.name ?? ""
             session = edit.session ?? members.first?.key ?? ""
             target = projects.first?.id ?? ""
+            if edit.session != nil { mode = .move }
         }
         .onChange(of: project) { _, id in name = projects.first { $0.id == id }?.name ?? "" }
     }

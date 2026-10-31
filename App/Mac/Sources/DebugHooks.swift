@@ -10,10 +10,14 @@ import SwiftUI
 ///   --type <text>             after 6 s, type into the selected session
 ///   --drop <file>             once the shown session is live, send the file
 ///                             as a drop on its terminal does
-///   --logbook <id|report>     show a Logbook transcript (machine/session id,
-///                             a session id on mac-mini, or machine/* for its
-///                             newest), the report (and Refresh it), or
-///                             "last" (the last report, no Refresh)
+///   --logbook <id|place>      with --offscreen, build the Logbook window, and
+///                             show a transcript (machine/session id, a
+///                             session id on mac-mini, or machine/* for its
+///                             newest), a place (now, findings, unsorted,
+///                             archive, project:<n> = the n-th project),
+///                             "report" (Refresh the report) or "last" (the
+///                             last report, no Refresh)
+///   --inspector               with --logbook <id>: open the inspector
 ///   --logbook-grouping        with --logbook last: reject a proposal, rename
 ///                             project 1, move a session of the last project
 ///                             to none; then log the report
@@ -57,7 +61,22 @@ enum DebugHooks {
                     key = logbook.sessions.filter { $0.key.machine == key.machine }.max { $0.last < $1.last }?.key ?? key
                     fleet.log.add("Debug: Logbook \(key.id)")
                 }
-                fleet.requestedLogbook = page == "report" || page == "last" ? .report : .session(key)
+                let places: [String: LogbookPlace] = ["now": .now, "findings": .findings, "unsorted": .unsorted, "archive": .archive]
+                if let place = places[page] {
+                    logbook?.place = place
+                    return
+                }
+                if page.hasPrefix("project:"), let logbook {
+                    while logbook.report == nil { try? await Task.sleep(for: .milliseconds(300)) }
+                    let n = Int(page.dropFirst(8)) ?? 1
+                    if let project = logbook.report?.projects.dropFirst(n - 1).first { logbook.place = .project(project.id) }
+                    return
+                }
+                if page != "report", page != "last", let logbook {
+                    while !logbook.loaded { try? await Task.sleep(for: .milliseconds(300)) }
+                    logbook.open(key)
+                    logbook.inspector = args.contains("--inspector")
+                }
                 if let logbook, page != "report", page != "last" {
                     while !logbook.loaded { try? await Task.sleep(for: .milliseconds(300)) }
                     let session = logbook.session(key)
@@ -222,7 +241,9 @@ enum DebugHooks {
         let window = NSWindow(contentRect: frame,
                               styleMask: [.titled, .resizable, .closable, .fullSizeContentView], backing: .buffered, defer: false)
         window.toolbar = NSToolbar()
-        window.contentViewController = NSHostingController(rootView: root)
+        window.contentViewController = args.contains("--logbook") && logbook != nil
+            ? NSHostingController(rootView: AnyView(LogbookScene().environment(fleet).environment(logbook!)))
+            : NSHostingController(rootView: AnyView(root))
         window.setFrame(frame, display: true)
         offscreenWindow = window
         setup.start()

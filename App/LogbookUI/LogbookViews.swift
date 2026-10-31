@@ -3,15 +3,18 @@ import SwiftUI
 
 // Logbook views for the Mac and iOS (PLAN-logbook §4.6).
 
-/// Green = busy, grey ring = idle, nothing = gone.
+/// Orange ring = needs you, green = busy, grey ring = idle, dashed red =
+/// a blocked project, nothing = gone.
 struct LogbookStatusDot: View {
     let status: String
 
     var body: some View {
         Group {
             switch status {
+            case "needs-you": Circle().fill(.orange).overlay(Circle().strokeBorder(.orange.opacity(0.4), lineWidth: 3).padding(-3))
             case "busy": Circle().fill(.green)
             case "idle": Circle().strokeBorder(.secondary, lineWidth: 1.5)
+            case "blocked": Circle().strokeBorder(.red, style: StrokeStyle(lineWidth: 1.5, dash: [2, 2]))
             default: Circle().fill(.clear)
             }
         }
@@ -76,7 +79,7 @@ struct LogbookTranscriptView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            content
+            content.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
@@ -113,23 +116,29 @@ struct LogbookTranscriptView: View {
         .onDisappear { transcript?.stop() }
     }
 
+    /// Headline, state, project (PLAN-logbook-v2 §4.1); ids are in the inspector.
     private var header: some View {
         HStack(spacing: 8) {
-            LogbookStatusDot(status: session?.status ?? "gone")
-            Text(headerText).font(.callout).lineLimit(1).truncationMode(.middle)
+            LogbookStatusDot(status: session.map(logbook.state) ?? "gone")
+            VStack(alignment: .leading, spacing: 1) {
+                Text(session.map(logbook.headline) ?? key.id).font(.headline).lineLimit(1).truncationMode(.middle)
+                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
             Spacer()
             if !selected.isEmpty {
                 Button("Clear selection") { selected = [] }.controlSize(.small)
             }
+            Button { logbook.inspector.toggle() } label: { Image(systemName: "info.circle") }
+                .buttonStyle(.borderless)
+                .help("Machine, folder, ids (⌘I)")
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
-        .foregroundStyle(.secondary)
     }
 
-    private var headerText: String {
-        guard let session else { return key.id }
-        return [session.label, LogbookSession.tilde(session.cwd), session.branch, session.status]
-            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    private var subtitle: String {
+        guard let session else { return "" }
+        let state = logbook.state(session) == "needs-you" ? "needs you" : session.status == "gone" ? "ended" : session.status
+        return [session.key.machine, state, logbook.project(of: session)?.name].compactMap { $0 }.joined(separator: " · ")
     }
 
     @ViewBuilder private var content: some View {
