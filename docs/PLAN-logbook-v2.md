@@ -1,6 +1,6 @@
 # Plan: Logbook v2 — a Logbook window, then a meta agent that improves the agents
 
-Status: 2026-10-31. D1–D10 ACCEPTED (owner). W0: DONE etd 82921c5, released 0.0.13, nixos-config 22568a4 (§8). A1: DONE etd da0bb5e, released 0.0.14, nixos-config ba48457 (§8). B3 can start. A2, A3: IN PROGRESS (trigkey). B1: DONE 3e49e03. B2: DONE 5a2a99b (stub; §8). B4: DONE 2c5f33f, TestFlight 202610311550. B5: DONE 0fe4c99 (stub), TestFlight 202610311600; signals JSON for A2 in §8. B3: IN PROGRESS (mac-mini).
+Status: 2026-10-31. D1–D10 ACCEPTED (owner). W0: DONE etd 82921c5, released 0.0.13, nixos-config 22568a4 (§8). A1: DONE etd da0bb5e, released 0.0.14, nixos-config ba48457 (§8). B3 can start. A2, A3: IN PROGRESS (trigkey). B1: DONE 3e49e03. B2: DONE 5a2a99b (stub; §8). B4: DONE 2c5f33f, TestFlight 202610311550. B5: DONE 0fe4c99 (stub), TestFlight 202610311600; signals JSON for A2 in §8. B3: DONE b758064 (etd 0.0.14), TestFlight 202610311617. B track waits for A2 (real signals) and A4 (B6).
 
 Follows [PLAN-logbook.md](PLAN-logbook.md) (L1–L5 built: capture, archive, read API, watcher report, Send to session, iOS) and [PLAN-multi-agent.md](PLAN-multi-agent.md) (M0–M5, in progress: profiles, one Rust parser per agent, live state with **needs you**).
 
@@ -276,6 +276,8 @@ Notes for A1, from the stub on real data: (1) skip prompts that are not the owne
 - `turn` must be the uuid that `Transcript.parse` uses as the turn id: the last owner prompt before the signal (`type: user`, text content, not `isMeta`, not `isCompactSummary`, not `<command-`, `<local-command`, `[Request interrupted`). Before the first prompt: `"leading"`. The app jumps by this id.
 - `since`: **all** signals of each transcript that changed at or after `since` (the app replaces that transcript's list), as the overview does.
 - `friction` in the overview = the counts of these signals by `kind`.
+
+**B3 (2026-10-31, mac-mini):** et-ios b758064, `Vendor/etd` e3bc2ca (0.0.14), TestFlight 202610311617. The Logbook window on mac-mini shows trigkey, gmktec and mac-mini sessions (22) with etd's headlines (checked headless; "<task-notification>" headlines are gone). `LogbookV2Stub.swift` keeps only the device-side signal finder: `IrohHost.logbookSignals` uses it while etd answers "not built yet", and cards count friction from the signals while the overview's `friction` is empty. After A2: delete the file and the fallback in `Iroh.swift`.
 
 ## 9. Risks
 
