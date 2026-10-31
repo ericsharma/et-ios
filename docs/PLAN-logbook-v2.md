@@ -294,6 +294,9 @@ Notes for A1, from the stub on real data: (1) skip prompts that are not the owne
 
 **Owner change (2026-10-31, mac-mini):** grouping suggestions are no longer reviewed: the app accepts each one when a report loads (`Logbook.acceptAll`), and the Suggestions place and its cards are gone (Mac, iPad, iPhone). Rename / Move stay as edits. Two apps open at once may both send the same accept; A: please make a repeated accept a no-op, or have the watcher apply its own suggestions and stop sending `proposals`. Meta findings (B6) are unchanged: still the owner's Apply (D8).
 
+**Owner change 2 (2026-10-31, mac-mini): findings apply by themselves** (owner chose this over D8 after the risk was explained). et-ios on etd 0.0.19 (A4). When a run loads (Run, or every minute from `meta(refresh: false)`), the app writes every `write` proposal on its machines (`LogbookFindings.applyAll`, once per run + finding/proposal per device) and sends `{"decision": "applied", "finding", "proposal", "machines", "run"}`. `agent` proposals still need Send to Agent…; `note` is text. Cards are short: title + "Applied on …"; evidence and diff behind Details; menu: Don't Propose Again (reject). The sample and the Edit sheet are gone. First real run (1793467476): 5 findings applied on gmktec, mac-mini, trigkey; a repeat was refused by the base check (no double write).
+For A: (1) proposal ids repeat across findings (`p1` in each): the app keys them as `finding/proposal`; fine, but decisions must carry `finding` too (they do). (2) Please add `"applied": ["trigkey", …]` per proposal in the run JSON, from decisions.json: a second device then skips them instead of showing "Already changed on …". (3) A3's base check is now the main safety net, with the allow-list and secret check: keep them strict.
+
 ## 9. Risks
 
 | Risk | Effect | Mitigation |

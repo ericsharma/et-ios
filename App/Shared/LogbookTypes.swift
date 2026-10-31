@@ -231,6 +231,7 @@ struct MetaRun: Decodable, Equatable, Sendable {
             sessions = try c.decodeIfPresent(Int.self, forKey: .sessions) ?? 0
             evidence = try c.decodeIfPresent([Evidence].self, forKey: .evidence) ?? []
             proposals = try c.decodeIfPresent([Proposal].self, forKey: .proposals) ?? []
+            for i in proposals.indices { proposals[i].key = id + "/" + proposals[i].id }
         }
     }
 
@@ -251,7 +252,10 @@ struct MetaRun: Decodable, Equatable, Sendable {
     }
 
     struct Proposal: Decodable, Equatable, Sendable, Identifiable {
+        /// Per finding ("p1", "p2"…): what decisions name.
         var id: String
+        /// "finding/proposal": unique in the run.
+        var key = ""
         /// "write" (Apply on all machines), "agent" (Send to agent…) or
         /// "note" (text only: settings, hooks; D9).
         var route: String
@@ -260,9 +264,12 @@ struct MetaRun: Decodable, Equatable, Sendable {
         var patch: String
         var why: String
         var expect: String
+        /// Machines etd knows it is applied on (from its decisions; none
+        /// when etd does not send it).
+        var applied: [String]
 
         init(from decoder: any Decoder) throws {
-            enum Keys: String, CodingKey { case id, route, targets, patch, why, expect }
+            enum Keys: String, CodingKey { case id, route, targets, patch, why, expect, applied }
             let c = try decoder.container(keyedBy: Keys.self)
             id = try c.decode(String.self, forKey: .id)
             route = try c.decodeIfPresent(String.self, forKey: .route) ?? "note"
@@ -270,6 +277,7 @@ struct MetaRun: Decodable, Equatable, Sendable {
             patch = try c.decodeIfPresent(String.self, forKey: .patch) ?? ""
             why = try c.decodeIfPresent(String.self, forKey: .why) ?? ""
             expect = try c.decodeIfPresent(String.self, forKey: .expect) ?? ""
+            applied = try c.decodeIfPresent([String].self, forKey: .applied) ?? []
         }
     }
 

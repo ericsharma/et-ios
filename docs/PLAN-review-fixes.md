@@ -1,6 +1,6 @@
 # Plan: et-ios review fixes (package R1, track B)
 
-Status: 2026-10-31. Not started (mac-mini is on an owner request first: auto-accept Logbook suggestions). Owner: the **mac-mini** agent (track B, PLAN-logbook-v2 §6 rule 4). Claim it the same way: change this Status line to "R1: IN PROGRESS (mac-mini)", commit, push.
+Status: 2026-10-31. Not started (mac-mini is on owner requests first: auto-accept Logbook suggestions and findings). Owner: the **mac-mini** agent (track B, PLAN-logbook-v2 §6 rule 4). Claim it the same way: change this Status line to "R1: IN PROGRESS (mac-mini)", commit, push.
 
 Source: `review-etd-and-et-ios.md` (2026-10-31, reviewed at et-ios `e5b70fe`). Each finding below was re-checked on et-ios `eba7b3a`; line numbers are from that commit. The etd side of the review is handled separately (etd 0.0.18: issues 2–7 and 10; issues 1 and 9 next). Nothing here needs an etd change.
 

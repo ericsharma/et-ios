@@ -2,7 +2,10 @@ import SwiftUI
 
 // The Findings place (PLAN-logbook-v2 B6): the meta agent's findings, each
 // with evidence (links into transcripts) and proposed changes to the
-// agents' instruction files. Nothing changes without the owner (D8).
+// agents' instruction files. The owner chose (2026-10-31) not to review
+// them: every `write` proposal is applied on its machines as a run comes
+// in. etd still checks each one (allow-list, base, secrets) and keeps a
+// backup of each file it replaces.
 
 /// The last meta run, a Run in progress, and what the owner did with it.
 @MainActor @Observable
@@ -12,18 +15,17 @@ final class LogbookFindings {
     private(set) var running: Logbook.ReportRun?
     private(set) var error: String?
     private(set) var loaded = false
-    /// etd answers "not built yet" (before A4): `run` is the sample.
-    private(set) var isSample = false
     /// Findings and proposals the owner rejected in this run.
     private(set) var rejected: Set<String> = []
     /// Per target ("proposal|machine|path"): writing, applied or failed.
     private(set) var writes: [String: WriteState] = [:]
-    /// The owner's edit of a target's new content, by target key.
-    var edited: [String: String] = [:]
 
     enum WriteState: Equatable {
         case writing
         case applied(backup: String)
+        /// etd refused: the file changed after the run read it (most
+        /// likely another device applied it first).
+        case stale
         case failed(String)
     }
 
@@ -31,17 +33,20 @@ final class LogbookFindings {
     @ObservationIgnored private let hosts: @MainActor () -> [String: IrohHost]
     @ObservationIgnored private let log: @MainActor (String) -> Void
     @ObservationIgnored private let notify: @MainActor (String) -> Void
-    @ObservationIgnored private let signals: @MainActor () -> [LogbookSignal]
     @ObservationIgnored private var task: Task<Void, Never>?
+    /// "run|proposal" applied from this device, so a reload or a restart
+    /// does not write them again.
+    @ObservationIgnored private var done: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: "logbook.metaApplied") ?? []) }
+        set { UserDefaults.standard.set(Array(newValue.suffix(500)), forKey: "logbook.metaApplied") }
+    }
 
     init(archive: @escaping @MainActor () -> IrohHost?, hosts: @escaping @MainActor () -> [String: IrohHost],
-         log: @escaping @MainActor (String) -> Void, notify: @escaping @MainActor (String) -> Void,
-         signals: @escaping @MainActor () -> [LogbookSignal]) {
+         log: @escaping @MainActor (String) -> Void, notify: @escaping @MainActor (String) -> Void) {
         self.archive = archive
         self.hosts = hosts
         self.log = log
         self.notify = notify
-        self.signals = signals
     }
 
     /// Findings the owner has not rejected.
@@ -50,19 +55,20 @@ final class LogbookFindings {
     }
 
     static func targetKey(_ proposal: MetaRun.Proposal, _ target: MetaRun.Target) -> String {
-        proposal.id + "|" + target.machine + "|" + target.path
+        proposal.key + "|" + target.machine + "|" + target.path
     }
 
-    /// The last run, without making a new one.
+    /// The last run, without making a new one (a nightly run, or one from
+    /// another device, shows up here).
     func load() async {
-        guard !loaded, let host = archive() else { return }
+        guard running == nil, let host = archive() else { return }
         do {
-            set(try MetaRun.decode(try await host.meta(refresh: false) { _, _, _ in }), sample: false)
+            set(try MetaRun.decode(try await host.meta(refresh: false) { _, _, _ in }))
         } catch {
-            fallBack(error)
+            self.error = Logbook.describe(error)
         }
+        if !loaded { log("Findings: \(run?.findings.count ?? 0) findings\(error.map { ", " + $0 } ?? "")") }
         loaded = true
-        log("Findings: \(run?.findings.count ?? 0) findings\(isSample ? " (sample)" : "")\(error.map { ", " + $0 } ?? "")")
     }
 
     /// A new run (minutes: a headless agent reads the signals); a second
@@ -87,33 +93,35 @@ final class LogbookFindings {
                         if self.running != nil { self.running = Logbook.ReportRun(stage: stage, done: done, total: total) }
                     }
                 }
-                set(try MetaRun.decode(json), sample: false)
+                set(try MetaRun.decode(json))
             } catch {
                 log("Findings: run failed: \(error)")
-                fallBack(error)
+                self.error = Logbook.describe(error)
             }
         }
     }
 
-    private func set(_ run: MetaRun, sample: Bool) {
+    private func set(_ run: MetaRun) {
         if run.id != self.run?.id {
             rejected = []
             writes = [:]
-            edited = [:]
         }
         self.run = run.id.isEmpty ? nil : run
-        isSample = sample
         error = nil
+        applyAll()
     }
 
-    /// STUB until A4: an etd that answers "not built yet" gets the sample
-    /// made from the real signals, so evidence links can be tried.
-    private func fallBack(_ error: any Error) {
-        let text = Logbook.describe(error)
-        if text.contains("not built yet"), let sample = try? MetaRun.decode(LogbookFindings.sample(signals(), machines: hosts().keys.sorted())) {
-            set(sample, sample: true)
-        } else {
-            self.error = text
+    /// Every `write` proposal of the run that this device has not applied
+    /// and etd does not list as applied on all its machines.
+    private func applyAll() {
+        guard let run else { return }
+        for finding in run.findings {
+            for proposal in finding.proposals where proposal.route == "write" {
+                let id = run.id + "|" + proposal.key
+                guard !done.contains(id), !proposal.targets.allSatisfy({ proposal.applied.contains($0.machine) }) else { continue }
+                done.insert(id)
+                apply(proposal, in: finding)
+            }
         }
     }
 
@@ -124,15 +132,11 @@ final class LogbookFindings {
         decide(["decision": "reject", "finding": finding.id])
     }
 
-    func reject(_ proposal: MetaRun.Proposal, in finding: MetaRun.Finding) {
-        rejected.insert(proposal.id)
-        decide(["decision": "reject", "finding": finding.id, "proposal": proposal.id])
-    }
-
     /// Writes each target's new content on its machine (only where it is
     /// not applied yet), then tells the archive what was applied.
     func apply(_ proposal: MetaRun.Proposal, in finding: MetaRun.Finding) {
         let targets = proposal.targets.filter {
+            if proposal.applied.contains($0.machine) { return false }
             if case .applied = writes[Self.targetKey(proposal, $0)] { return false }
             return true
         }
@@ -147,23 +151,24 @@ final class LogbookFindings {
                 return false
             }
             guard !applied.isEmpty else { return }
-            var decision: [String: Any] = ["decision": edited.isEmpty ? "accept" : "edit", "finding": finding.id, "proposal": proposal.id,
-                                           "applied": applied.map(\.machine)]
-            let edits = proposal.targets.compactMap { t in edited[Self.targetKey(proposal, t)].map { (t.machine, $0) } }
-            if !edits.isEmpty { decision["content"] = Dictionary(edits, uniquingKeysWith: { a, _ in a }) }
-            decide(decision)
+            decide(["decision": "applied", "finding": finding.id, "proposal": proposal.id, "machines": applied.map(\.machine)])
             notify(applied.count == proposal.targets.count ? "Applied on \(applied.map(\.machine).joined(separator: ", "))"
                                                            : "Applied on \(applied.count) of \(proposal.targets.count) machines")
         }
     }
 
-    func retry(_ target: MetaRun.Target, of proposal: MetaRun.Proposal) {
-        Task { await write(target, of: proposal) }
+    func retry(_ target: MetaRun.Target, of proposal: MetaRun.Proposal, in finding: MetaRun.Finding) {
+        Task {
+            await write(target, of: proposal)
+            if case .applied = writes[Self.targetKey(proposal, target)] {
+                decide(["decision": "applied", "finding": finding.id, "proposal": proposal.id, "machines": [target.machine]])
+            }
+        }
     }
 
     private func write(_ target: MetaRun.Target, of proposal: MetaRun.Proposal) async {
         let key = Self.targetKey(proposal, target)
-        guard let content = edited[key] ?? target.content else {
+        guard let content = target.content else {
             writes[key] = .failed("no new content in the proposal")
             return
         }
@@ -178,7 +183,8 @@ final class LogbookFindings {
             writes[key] = .applied(backup: backup)
         } catch {
             log("Findings: write on \(target.machine) failed: \(error)")
-            writes[key] = .failed(Logbook.describe(error))
+            let text = Logbook.describe(error)
+            writes[key] = text.contains("changed since it was read") ? .stale : .failed(text)
         }
     }
 
@@ -193,74 +199,27 @@ final class LogbookFindings {
             do {
                 try await host.metaDecision(json)
             } catch {
-                // The sample's decisions have nowhere to go before A4.
-                if !isSample { notify("Decision not saved: \(Logbook.describe(error))") }
+                notify("Decision not saved: \(Logbook.describe(error))")
             }
         }
     }
 
-    // MARK: - Sample (STUB until A4)
-
-    /// Findings JSON in the §4.3 shape from the real signals: one finding
-    /// per signal kind, with a `write`, an `agent` and a `note` proposal.
-    /// Each `base` is a value no file has, so an Apply is always refused.
-    static func sample(_ signals: [LogbookSignal], machines: [String]) -> String {
-        let texts: [String: (String, String)] = [
-            "interrupt": ("Claude keeps going after it should stop and ask", "- Before a long or risky step, say what you will do in one line and wait."),
-            "denied": ("Claude runs tools the owner then denies", "- Do not run a command that changes another machine without asking first."),
-            "tool-error": ("The same kind of tool call fails again and again", "- After a tool error, read the error and change the call; never repeat it unchanged."),
-            "compact": ("Long sessions run out of context", "- Keep tool output short: use head, tail and grep instead of printing whole files."),
-        ]
-        let byKind = Dictionary(grouping: signals, by: \.kind).sorted { $0.value.count > $1.value.count }
-        var findings: [[String: Any]] = []
-        for (kind, list) in byKind.prefix(3) {
-            let (title, line) = texts[kind] ?? ("Friction: \(kind)", "- (sample rule for \(kind))")
-            let targets: [[String: Any]] = machines.map {
-                ["machine": $0, "path": "~/.claude/CLAUDE.md", "base": "sample-base-matches-no-file",
-                 "content": "# (sample: E.T. writes this only if the base matches, and no file has this base)\n" + line + "\n"]
-            }
-            let patch = "--- a/~/.claude/CLAUDE.md\n+++ b/~/.claude/CLAUDE.md\n@@ -1,3 +1,4 @@\n # Rules\n \n-(old line)\n+(old line)\n+" + line.dropFirst(2) + "\n"
-            findings.append([
-                "id": "sample-\(kind)", "title": title, "kind": kind, "count": list.count, "sessions": Set(list.map(\.key)).count,
-                "evidence": list.suffix(6).reversed().map { ["key": $0.key, "turn": $0.turn, "excerpt": $0.excerpt] },
-                "proposals": [
-                    ["id": "sample-\(kind)-write", "route": "write", "targets": targets, "patch": patch,
-                     "why": "\(list.count) \(kind) signals in \(Set(list.map(\.key)).count) sessions.",
-                     "expect": "\(kind) drops in new sessions"],
-                    ["id": "sample-\(kind)-agent", "route": "agent",
-                     "targets": [["machine": machines.first ?? "trigkey", "path": "~/.claude/skills/example/SKILL.md", "base": "sample"]],
-                     "patch": "--- a/SKILL.md\n+++ b/SKILL.md\n@@ -1 +1,2 @@\n # Example\n+" + line.dropFirst(2) + "\n",
-                     "why": "The skills repo is in git: an agent commits and pushes the change (D8).", "expect": ""],
-                    ["id": "sample-\(kind)-note", "route": "note", "targets": [], "patch": "",
-                     "why": "Add `Bash(cargo test:*)` to the allow list in ~/.claude/settings.json. E.T. never writes settings (D9).", "expect": ""],
-                ],
-            ])
-        }
-        let json: [String: Any] = ["id": "sample", "taken": Date().timeIntervalSince1970, "findings": findings]
-        return String(decoding: (try? JSONSerialization.data(withJSONObject: json)) ?? Data(), as: UTF8.self)
-    }
 }
 
 // MARK: - Views
 
-/// The Findings place: Run, then a card per finding.
+/// The Findings place: Run, then a short card per finding.
 struct LogbookFindingsView: View {
     let logbook: Logbook
     let machines: [MmMachine]
     @State private var sending: LogbookSendTarget?
-    @State private var editing: FindingEdit?
 
     private var findings: LogbookFindings { logbook.findings }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 10) {
                 header
-                if findings.isSample {
-                    Label("Sample findings: the meta agent (A4) is not built yet. The evidence links are real signals; Apply is always refused.",
-                          systemImage: "flask")
-                        .font(.callout).foregroundStyle(.secondary)
-                }
                 if let error = findings.error {
                     Label(error, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange).textSelection(.enabled)
                 }
@@ -269,13 +228,13 @@ struct LogbookFindingsView: View {
                                            description: Text("Nothing went wrong often enough to change the agents' instructions."))
                 } else if findings.run == nil && findings.loaded && findings.running == nil && findings.error == nil {
                     ContentUnavailableView("No run yet", systemImage: "flag",
-                                           description: Text("Run reads every machine's transcripts and proposes changes to the agents' instructions."))
+                                           description: Text("Run reads every machine's friction and changes the agents' instructions to avoid it."))
                 }
                 ForEach(findings.shown) { finding in
-                    FindingCard(finding: finding, logbook: logbook,
-                                send: { sending = LogbookSendTarget(selection: .finding(runId: findings.run?.id ?? "", findingId: finding.id),
-                                                                    title: "the finding “\(finding.title)”") },
-                                edit: { editing = FindingEdit(finding: finding, proposal: $0) })
+                    FindingCard(finding: finding, logbook: logbook) {
+                        sending = LogbookSendTarget(selection: .finding(runId: findings.run?.id ?? "", findingId: finding.id),
+                                                    title: "the finding “\(finding.title)”")
+                    }
                 }
             }
             .padding(14)
@@ -283,16 +242,15 @@ struct LogbookFindingsView: View {
         .navigationTitle("Findings")
         .task { await findings.load() }
         .sheet(item: $sending) { LogbookSendSheet(target: $0, machines: machines, logbook: logbook) }
-        .sheet(item: $editing) { FindingEditSheet(edit: $0, findings: findings) }
     }
 
     private var header: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Findings").font(.title2.weight(.semibold))
-                if let run = findings.run, !findings.isSample {
-                    Text("Run \(run.takenDate.formatted(.relative(presentation: .named)))").font(.caption).foregroundStyle(.secondary)
-                }
+                Text(findings.run.map { "Run \($0.takenDate.formatted(.relative(presentation: .named))) · changes apply by themselves" }
+                     ?? "Changes apply by themselves")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             if let running = findings.running {
@@ -308,172 +266,121 @@ struct LogbookFindingsView: View {
             }
             Button { findings.runNow() } label: { Label("Run", systemImage: "play.fill") }
                 .disabled(findings.running != nil)
-                .help("Read every transcript's friction and propose changes (minutes; uses the subscription)")
+                .help("Read every transcript's friction and change the agents' instructions (minutes; uses the subscription)")
         }
     }
 }
 
-/// A finding: what goes wrong, where (evidence), and the proposals.
+/// A finding: its title and where its change went. Evidence and the diff
+/// are behind Details.
 struct FindingCard: View {
     let finding: MetaRun.Finding
     let logbook: Logbook
     let send: () -> Void
-    let edit: (MetaRun.Proposal) -> Void
-    @State private var allEvidence = false
+    @State private var details = false
+
+    private var findings: LogbookFindings { logbook.findings }
 
     var body: some View {
         let kind = LogbookSignalKind(finding.kind)
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
                 Image(systemName: kind.symbol).foregroundStyle(kind.color)
                 Text(finding.title).font(.headline)
                 Spacer()
                 Menu {
-                    Button("Send to Agent…", systemImage: "paperplane", action: send)
-                    Button("Reject Finding", systemImage: "xmark", role: .destructive) { logbook.findings.reject(finding) }
+                    if finding.proposals.contains(where: { $0.route == "agent" }) {
+                        Button("Send to Agent…", systemImage: "paperplane", action: send)
+                    }
+                    Button("Don't Propose Again", systemImage: "xmark", role: .destructive) { findings.reject(finding) }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
                 .menuIndicator(.hidden)
                 .fixedSize()
             }
-            Text("\(finding.count) time\(finding.count == 1 ? "" : "s") in \(finding.sessions) session\(finding.sessions == 1 ? "" : "s")")
-                .font(.caption).foregroundStyle(.secondary)
-            if !finding.evidence.isEmpty { evidence }
-            ForEach(finding.proposals.filter { !logbook.findings.rejected.contains($0.id) }) { proposal in
-                ProposalView(proposal: proposal, finding: finding, findings: logbook.findings, send: send) { edit(proposal) }
+            ForEach(finding.proposals) { proposal in status(proposal) }
+            DisclosureGroup(isExpanded: $details) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("\(finding.count) time\(finding.count == 1 ? "" : "s") in \(finding.sessions) session\(finding.sessions == 1 ? "" : "s")")
+                        .font(.caption).foregroundStyle(.secondary)
+                    ForEach(finding.evidence, id: \.self) { item in evidenceRow(item) }
+                    ForEach(finding.proposals) { proposal in
+                        if !proposal.patch.isEmpty { DiffView(patch: proposal.patch) }
+                        if !proposal.why.isEmpty { Text(proposal.why).font(.callout) }
+                    }
+                }
+                .padding(.top, 4)
+            } label: {
+                Text("Details").font(.caption).foregroundStyle(.secondary)
             }
         }
-        .padding(14)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private var evidence: some View {
-        let shown = allEvidence ? finding.evidence : Array(finding.evidence.prefix(3))
-        return VStack(alignment: .leading, spacing: 4) {
-            Text("Evidence").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-            ForEach(shown, id: \.self) { item in
-                Button { open(item) } label: {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Image(systemName: "arrow.right.circle").foregroundStyle(Color.accentColor)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(logbook.session(id: item.key).map(logbook.headline) ?? item.key).font(.callout).lineLimit(1)
-                            Text(item.excerpt).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Open the transcript at this turn")
-            }
-            if finding.evidence.count > 3 {
-                Button(allEvidence ? "Fewer" : "All \(finding.evidence.count)") { allEvidence.toggle() }
-                    .buttonStyle(.borderless).font(.caption)
-            }
-        }
-    }
-
-    /// The transcript beside the findings, scrolled to the turn.
-    private func open(_ item: MetaRun.Evidence) {
-        guard let key = LogbookKey(id: item.key) else { return }
-        logbook.pendingTurn = LogbookTurnRef(key: key, turn: item.turn)
-        logbook.selected = key
-    }
-}
-
-/// One proposed change: targets with their state, the diff, why, and the
-/// buttons its route allows (D8, D9).
-struct ProposalView: View {
-    let proposal: MetaRun.Proposal
-    let finding: MetaRun.Finding
-    let findings: LogbookFindings
-    let send: () -> Void
-    let edit: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(routeName).font(.caption.weight(.semibold))
-                .padding(.horizontal, 6).padding(.vertical, 2)
-                .background(Color.accentColor.opacity(0.15), in: Capsule())
-            if !proposal.targets.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(proposal.targets, id: \.self) { target in targetChip(target) }
-                    }
-                }
-            }
-            if !proposal.patch.isEmpty { DiffView(patch: proposal.patch) }
-            if !proposal.why.isEmpty { Text(proposal.why).font(.callout) }
-            if !proposal.expect.isEmpty {
-                Text("Expect: \(proposal.expect)").font(.caption).foregroundStyle(.secondary)
-            }
-            HStack {
-                switch proposal.route {
-                case "write":
-                    Button("Apply on All Machines") { findings.apply(proposal, in: finding) }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(proposal.targets.allSatisfy { state($0) == .writing || isApplied($0) })
-                    Button("Edit…", action: edit)
-                case "agent":
-                    Button("Send to Agent…", action: send).buttonStyle(.borderedProminent)
-                default:
-                    Text("Change this by hand: E.T. never writes settings, hooks or keys.").font(.caption).foregroundStyle(.secondary)
-                }
-                Button("Reject") { findings.reject(proposal, in: finding) }
-            }
-            .controlSize(.small)
-            ForEach(proposal.targets.filter(isFailed), id: \.self) { target in
-                if case .failed(let error) = state(target) {
-                    HStack(spacing: 6) {
-                        Text("Not applied on \(target.machine): \(error)").font(.caption).foregroundStyle(.red).lineLimit(2)
-                        Button("Retry") { findings.retry(target, of: proposal) }.controlSize(.mini)
-                    }
-                }
-            }
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
-    }
-
-    private var routeName: String {
+    /// One line per proposal: applied where, failed where (Retry), or what
+    /// the owner has to do (agent, note).
+    @ViewBuilder private func status(_ proposal: MetaRun.Proposal) -> some View {
         switch proposal.route {
-        case "write": "Direct write"
-        case "agent": "Via an agent (git)"
-        default: "Note"
-        }
-    }
-
-    private func state(_ target: MetaRun.Target) -> LogbookFindings.WriteState? {
-        findings.writes[LogbookFindings.targetKey(proposal, target)]
-    }
-
-    private func isApplied(_ target: MetaRun.Target) -> Bool {
-        if case .applied = state(target) { return true }
-        return false
-    }
-
-    private func isFailed(_ target: MetaRun.Target) -> Bool {
-        if case .failed = state(target) { return true }
-        return false
-    }
-
-    private func targetChip(_ target: MetaRun.Target) -> some View {
-        let edited = findings.edited[LogbookFindings.targetKey(proposal, target)] != nil
-        return HStack(spacing: 3) {
-            switch state(target) {
-            case .writing: ProgressView().controlSize(.mini)
-            case .applied: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-            case .failed: Image(systemName: "xmark.circle.fill").foregroundStyle(.red)
-            case nil: EmptyView()
+        case "write":
+            let applied = proposal.targets.filter { isApplied($0, proposal) }.map(\.machine)
+            let writing = proposal.targets.contains { findings.writes[LogbookFindings.targetKey(proposal, $0)] == .writing }
+            let stale = proposal.targets.filter { findings.writes[LogbookFindings.targetKey(proposal, $0)] == .stale }.map(\.machine)
+            HStack(spacing: 6) {
+                if writing { ProgressView().controlSize(.mini) }
+                if !applied.isEmpty || stale.isEmpty {
+                    Text(applied.isEmpty ? (writing ? "Applying…" : "Not applied") : "Applied on " + applied.joined(separator: ", "))
+                        .font(.caption).foregroundStyle(applied.isEmpty ? Color.secondary : Color.green)
+                }
+                if !stale.isEmpty {
+                    Text("Already changed on " + stale.joined(separator: ", "))
+                        .font(.caption).foregroundStyle(.secondary)
+                        .help("The file changed after this run read it, most likely because another device applied it first.")
+                }
             }
-            Text(target.machine + (edited ? " (edited)" : "")).lineLimit(1).fixedSize()
+            ForEach(proposal.targets, id: \.self) { target in
+                if case .failed(let error) = findings.writes[LogbookFindings.targetKey(proposal, target)] {
+                    HStack(spacing: 6) {
+                        Text("Not on \(target.machine): \(error)").font(.caption).foregroundStyle(.red).lineLimit(2)
+                        Button("Retry") { findings.retry(target, of: proposal, in: finding) }.controlSize(.mini)
+                    }
+                }
+            }
+        case "agent":
+            HStack(spacing: 6) {
+                Text("In git: an agent has to commit it").font(.caption).foregroundStyle(.secondary)
+                Button("Send to Agent…", action: send).controlSize(.mini)
+            }
+        default:
+            Text("By hand: \(proposal.why)").font(.caption).foregroundStyle(.secondary).lineLimit(3)
         }
-        .font(.caption2.weight(.medium))
-        .padding(.horizontal, 5).padding(.vertical, 1)
-        .background(.quaternary, in: Capsule())
-        .help(target.path + (state(target).flatMap { if case .applied(let backup) = $0, !backup.isEmpty { "\nBackup: " + backup } else { nil } } ?? ""))
+    }
+
+    private func isApplied(_ target: MetaRun.Target, _ proposal: MetaRun.Proposal) -> Bool {
+        if proposal.applied.contains(target.machine) { return true }
+        if case .applied = findings.writes[LogbookFindings.targetKey(proposal, target)] { return true }
+        return false
+    }
+
+    private func evidenceRow(_ item: MetaRun.Evidence) -> some View {
+        Button {
+            guard let key = LogbookKey(id: item.key) else { return }
+            logbook.pendingTurn = LogbookTurnRef(key: key, turn: item.turn)
+            logbook.selected = key
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: "arrow.right.circle").foregroundStyle(Color.accentColor)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(logbook.session(id: item.key).map(logbook.headline) ?? item.key).font(.callout).lineLimit(1)
+                    Text(item.excerpt).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Open the transcript at this turn")
     }
 }
 
@@ -512,65 +419,4 @@ struct DiffView: View {
         if line.hasPrefix("-") { return .red.opacity(0.1) }
         return .clear
     }
-}
-
-/// The edit sheet's subject.
-struct FindingEdit: Identifiable {
-    var finding: MetaRun.Finding
-    var proposal: MetaRun.Proposal
-    var id: String { proposal.id }
-}
-
-/// Edit a proposal's new file content, per target machine, before Apply.
-struct FindingEditSheet: View {
-    let edit: FindingEdit
-    let findings: LogbookFindings
-    @Environment(\.dismiss) private var dismiss
-    @State private var target = 0
-    @State private var texts: [String] = []
-
-    var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 8) {
-                if edit.proposal.targets.count > 1 {
-                    Picker("Machine", selection: $target) {
-                        ForEach(Array(edit.proposal.targets.enumerated()), id: \.offset) { i, t in Text(t.machine).tag(i) }
-                    }
-                    .pickerStyle(.segmented)
-                }
-                if let t = edit.proposal.targets[safe: target] {
-                    Text(t.path).font(.caption.monospaced()).foregroundStyle(.secondary)
-                }
-                if texts.indices.contains(target) {
-                    TextEditor(text: $texts[target])
-                        .font(.caption.monospaced())
-                        .scrollContentBackground(.hidden)
-                        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 6))
-                }
-            }
-            .padding()
-            .navigationTitle("Edit the new file")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        for (i, t) in edit.proposal.targets.enumerated() where texts.indices.contains(i) && texts[i] != (t.content ?? "") {
-                            findings.edited[LogbookFindings.targetKey(edit.proposal, t)] = texts[i]
-                        }
-                        dismiss()
-                    }
-                }
-            }
-        }
-        #if os(macOS)
-        .frame(minWidth: 560, minHeight: 440)
-        #endif
-        .onAppear {
-            texts = edit.proposal.targets.map { findings.edited[LogbookFindings.targetKey(edit.proposal, $0)] ?? $0.content ?? "" }
-        }
-    }
-}
-
-private extension Array {
-    subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
 }

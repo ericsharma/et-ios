@@ -59,8 +59,7 @@ final class Logbook {
         self.archive = archive
         self.log = log
         findings = LogbookFindings(archive: archive, hosts: hosts, log: log,
-                                   notify: { [weak self] in self?.notice = $0 },
-                                   signals: { [weak self] in self?.signals.values.flatMap { $0 } ?? [] })
+                                   notify: { [weak self] in self?.notice = $0 })
     }
 
     // MARK: - Sessions
@@ -73,12 +72,15 @@ final class Logbook {
         watching = true
         defer { watching = false }
         if report == nil { await loadReport() }
+        var tick = 1
         while !Task.isCancelled {
             await reload()
             await reloadOverview()
             await reloadSignals()
-            // After the signals: before A4 the sample is made from them.
-            if !findings.loaded { await findings.load() }
+            // The last run every minute: a nightly or another device's run
+            // is applied here too.
+            if !findings.loaded || tick % 12 == 0 { await findings.load() }
+            tick += 1
             try? await Task.sleep(for: .seconds(5))
         }
     }
