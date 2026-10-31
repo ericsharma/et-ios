@@ -29,7 +29,8 @@ extension RemoteHost {
                 "key": entry.key.machine + "/" + entry.key.sessionId,
                 "agent": "claude", "machine": entry.key.machine, "mm": entry.mmSession,
                 "state": entry.status, "prompts": tail.prompts, "trivial": tail.whole && tail.prompts < 2,
-                "friction": [String: Int](), "first": entry.first, "last": entry.last,
+                "friction": Dictionary(grouping: tail.signals, by: { $0["kind"] as? String ?? "" }).mapValues(\.count),
+                "first": entry.first, "last": entry.last,
             ]
             if let headline {
                 json["headline"] = headline
@@ -43,8 +44,15 @@ extension RemoteHost {
         return String(decoding: data, as: UTF8.self)
     }
 
+    /// Signals JSON (B5's proposal for A2): every signal of each transcript
+    /// changed at or after `since`, from the same tails as the overview.
     public func logbookSignals(since: UInt64) async throws -> String {
-        throw LinkError.Remote(message: "not built yet: A2")
+        var signals: [[String: Any]] = []
+        for entry in try await logbookSessions(since: since) {
+            signals += await LogbookV2Stub.tail(of: entry, host: self).signals
+        }
+        let data = try JSONSerialization.data(withJSONObject: ["signals": signals])
+        return String(decoding: data, as: UTF8.self)
     }
 
     public func meta(refresh: Bool, progress: ReportProgress) async throws -> String {
@@ -65,13 +73,15 @@ extension RemoteHost {
 }
 
 enum LogbookV2Stub {
-    struct Tail: Sendable {
+    struct Tail: @unchecked Sendable {
         var firstPrompt: String?
         var asked: String?
         var said: String?
         var prompts = 0
         /// The tail is the whole transcript (so `prompts` is all of them).
         var whole = false
+        /// §4.3 signals in the tail: interrupt, denied, tool-error, compact.
+        var signals: [[String: Any]] = []
     }
 
     private static let size: UInt64 = 256 * 1024
@@ -96,6 +106,7 @@ enum LogbookV2Stub {
             tail.firstPrompt = from == 0 ? turns.first.map { oneLine($0.prompt) } : nil
             tail.asked = turns.last.map { oneLine($0.prompt) }
             tail.said = all.last(where: { !$0.reply.isEmpty }).map { oneLine($0.reply) }
+            tail.signals = signals(in: lines, key: entry.key.machine + "/" + entry.key.sessionId)
             if !turns.isEmpty || from == 0 { break }
         }
         lock.withLock { cache[id] = (entry.bytes, Date(), tail) }
@@ -116,6 +127,45 @@ enum LogbookV2Stub {
             NSLog("LogbookV2Stub: tail of %@/%@: %@", key.machine, key.sessionId, "\(error)")
             return nil
         }
+    }
+
+    /// The signals A2 finds with no model, by the turn they are in (the
+    /// prompt uuid that starts it, as Transcript.parse names turns).
+    static func signals(in lines: [String], key: String) -> [[String: Any]] {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var turn = Transcript.leadingTurnID
+        var found: [[String: Any]] = []
+        for line in lines {
+            guard let entry = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { continue }
+            let time = (entry["timestamp"] as? String).flatMap { iso.date(from: $0) }.map { UInt64($0.timeIntervalSince1970) } ?? 0
+            func add(_ kind: String, _ excerpt: String) {
+                found.append(["kind": kind, "key": key, "turn": turn, "uuid": entry["uuid"] as? String ?? "",
+                              "time": time, "excerpt": oneLine(excerpt)])
+            }
+            if entry["subtype"] as? String == "compact_boundary" { add("compact", "Context compacted"); continue }
+            guard entry["type"] as? String == "user", entry["isSidechain"] as? Bool != true,
+                  let message = entry["message"] as? [String: Any] else { continue }
+            if let text = message["content"] as? String ?? (message["content"] as? [[String: Any]])?
+                .first(where: { $0["type"] as? String == "text" })?["text"] as? String {
+                if text.hasPrefix("[Request interrupted by user") {
+                    add("interrupt", text)
+                } else if entry["isMeta"] as? Bool != true, !text.hasPrefix("<command-"), !text.hasPrefix("<local-command"),
+                          entry["isCompactSummary"] as? Bool != true {
+                    turn = entry["uuid"] as? String ?? turn
+                }
+            }
+            for block in message["content"] as? [[String: Any]] ?? [] where block["type"] as? String == "tool_result" {
+                let output = block["content"] as? String
+                    ?? (block["content"] as? [[String: Any]])?.compactMap { $0["text"] as? String }.joined(separator: "\n") ?? ""
+                if output.contains("The user doesn't want to proceed with this tool use") {
+                    add("denied", output)
+                } else if block["is_error"] as? Bool == true {
+                    add("tool-error", output)
+                }
+            }
+        }
+        return found
     }
 
     private static func oneLine(_ text: String) -> String {

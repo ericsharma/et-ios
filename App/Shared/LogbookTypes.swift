@@ -170,3 +170,33 @@ struct LogbookOverviewEntry: Decodable, Equatable, Sendable {
         return try JSONDecoder().decode(Overview.self, from: Data(json.utf8)).sessions ?? []
     }
 }
+
+/// A friction signal (PLAN-logbook-v2 §4.3): where the owner interrupted,
+/// denied a tool or corrected the agent, or a tool failed.
+struct LogbookSignal: Decodable, Equatable, Hashable, Sendable {
+    /// "interrupt", "denied", "tool-error", "repeat-error", "correction",
+    /// "compact" or "asked-needlessly".
+    var kind: String
+    /// "machine/sessionId".
+    var key: String
+    /// The uuid of the prompt that starts the turn (Transcript.Turn.id).
+    var turn: String
+    /// Unix seconds.
+    var time: Double
+    var excerpt: String
+
+    init(from decoder: any Decoder) throws {
+        enum Keys: String, CodingKey { case kind, key, turn, time, excerpt }
+        let c = try decoder.container(keyedBy: Keys.self)
+        kind = try c.decode(String.self, forKey: .kind)
+        key = try c.decode(String.self, forKey: .key)
+        turn = try c.decodeIfPresent(String.self, forKey: .turn) ?? ""
+        time = try c.decodeIfPresent(Double.self, forKey: .time) ?? 0
+        excerpt = try c.decodeIfPresent(String.self, forKey: .excerpt) ?? ""
+    }
+
+    static func decode(_ json: String) throws -> [LogbookSignal] {
+        struct Signals: Decodable { var signals: [LogbookSignal]? }
+        return try JSONDecoder().decode(Signals.self, from: Data(json.utf8)).signals ?? []
+    }
+}

@@ -37,8 +37,13 @@ struct LogbookTranscriptView: View {
     @State private var atBottom = true
     /// The turn to keep in view after Load earlier.
     @State private var anchor: String?
+    /// A friction mark was picked: scroll to its turn (B5).
+    @State private var jump: String?
+    /// The turn just jumped to, outlined for a moment.
+    @State private var flashed: String?
 
     private var session: LogbookSession? { logbook.session(key) }
+    private var signals: [LogbookSignal] { logbook.signals[key.id] ?? [] }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -93,11 +98,33 @@ struct LogbookTranscriptView: View {
             if !selected.isEmpty {
                 Button("Clear selection") { selected = [] }.controlSize(.small)
             }
+            if !signals.isEmpty { frictionMenu }
             Button { logbook.inspector.toggle() } label: { Image(systemName: "info.circle") }
                 .buttonStyle(.borderless)
                 .help("Machine, folder, ids (⌘I)")
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
+    }
+
+    /// "⚡3": every signal, newest first; a pick jumps to its turn.
+    private var frictionMenu: some View {
+        let loaded = Set(transcript?.turns.map(\.id) ?? [])
+        return Menu {
+            ForEach(Array(signals.reversed().enumerated()), id: \.offset) { _, signal in
+                let kind = LogbookSignalKind(signal.kind)
+                Button {
+                    if loaded.contains(signal.turn) { jump = signal.turn } else { transcript?.loadEarlier() }
+                } label: {
+                    Label("\(kind.name): \(signal.excerpt)\(loaded.contains(signal.turn) ? "" : " (earlier: Load earlier)")",
+                          systemImage: kind.symbol)
+                }
+            }
+        } label: {
+            LogbookFrictionMarks(friction: Dictionary(grouping: signals, by: \.kind).mapValues(\.count))
+        }
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Where the owner interrupted, denied or corrected, and where tools failed. Pick one to jump to its turn.")
     }
 
     private var subtitle: String {
@@ -142,10 +169,12 @@ struct LogbookTranscriptView: View {
                         }
                         .font(.caption).foregroundStyle(.secondary)
                     }
+                    let byTurn = Dictionary(grouping: signals, by: \.turn)
                     ForEach(transcript.turns) { turn in
-                        LogbookTurnView(turn: turn, selected: selected.contains(turn.id)) {
+                        LogbookTurnView(turn: turn, selected: selected.contains(turn.id), signals: byTurn[turn.id] ?? []) {
                             if selected.contains(turn.id) { selected.remove(turn.id) } else { selected.insert(turn.id) }
                         }
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.orange, lineWidth: flashed == turn.id ? 2 : 0))
                         .id(turn.id)
                     }
                     Color.clear.frame(height: 1).id("end")
@@ -153,8 +182,22 @@ struct LogbookTranscriptView: View {
                         .onDisappear { atBottom = false }
                 }
                 .padding(14)
+                .padding(.trailing, signals.isEmpty ? 0 : 8)
+            }
+            .overlay(alignment: .trailing) {
+                LogbookFrictionStrip(turns: transcript.turns.map(\.id), signals: signals) { jump = $0 }
             }
             .onAppear { proxy.scrollTo("end", anchor: .bottom) }
+            .onChange(of: jump) { _, id in
+                guard let id else { return }
+                jump = nil
+                withAnimation { proxy.scrollTo(id, anchor: .top) }
+                flashed = id
+                Task {
+                    try? await Task.sleep(for: .seconds(1.5))
+                    if flashed == id { flashed = nil }
+                }
+            }
             // Earlier turns came: keep the turn that was at the top in view.
             .onChange(of: transcript.turns.first?.id) { _, _ in
                 guard let id = anchor, transcript.turns.contains(where: { $0.id == id }) else { return }
@@ -183,6 +226,8 @@ struct LogbookTranscriptView: View {
 struct LogbookTurnView: View {
     let turn: Transcript.Turn
     let selected: Bool
+    /// Friction signals in this turn (B5).
+    var signals: [LogbookSignal] = []
     let toggle: () -> Void
 
     var body: some View {
@@ -214,9 +259,14 @@ struct LogbookTurnView: View {
             .buttonStyle(.borderless)
             .help(selected ? "Deselect" : "Select this turn to send it")
             VStack(alignment: .leading, spacing: 2) {
-                if let date = turn.timestamp {
-                    Text(date, format: .dateTime.hour().minute()).font(.caption2).foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    if let date = turn.timestamp {
+                        Text(date, format: .dateTime.hour().minute()).foregroundStyle(.secondary)
+                    }
+                    LogbookFrictionMarks(friction: Dictionary(grouping: signals, by: \.kind).mapValues(\.count))
+                        .help(signals.map { LogbookSignalKind($0.kind).name + ": " + $0.excerpt }.joined(separator: "\n"))
                 }
+                .font(.caption2)
                 Text(turn.prompt).foregroundStyle(.blue).textSelection(.enabled)
             }
         }

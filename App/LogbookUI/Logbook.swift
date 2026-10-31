@@ -22,6 +22,8 @@ final class Logbook {
     var notice: String?
     /// Per transcript: headline, asked, said (PLAN-logbook-v2 §4.5), by "machine/sessionId".
     private(set) var overview: [String: LogbookOverviewEntry] = [:]
+    /// Friction signals (§4.3) per transcript, oldest first, by "machine/sessionId".
+    private(set) var signals: [String: [LogbookSignal]] = [:]
     /// The Logbook window's place and open transcript (one window per app).
     var place: LogbookPlace = .now
     var selected: LogbookKey?
@@ -40,6 +42,8 @@ final class Logbook {
     @ObservationIgnored private var lastList: UInt64 = 0
     @ObservationIgnored private var lastOverview: UInt64 = 0
     @ObservationIgnored private var overviewFailed = false
+    @ObservationIgnored private var lastSignals: UInt64 = 0
+    @ObservationIgnored private var signalsFailed = false
     @ObservationIgnored private var watching = false
     @ObservationIgnored private var reportTask: Task<Void, Never>?
 
@@ -61,6 +65,7 @@ final class Logbook {
         while !Task.isCancelled {
             await reload()
             await reloadOverview()
+            await reloadSignals()
             try? await Task.sleep(for: .seconds(5))
         }
     }
@@ -111,6 +116,25 @@ final class Logbook {
 
     func session(id: String) -> LogbookSession? {
         sessions.first { $0.id == id }
+    }
+
+    /// The signals of the transcripts changed since the last call; each
+    /// one's list replaces the old one. Empty until etd has A2.
+    func reloadSignals() async {
+        guard let host = archive() else { return }
+        let since = lastSignals
+        do {
+            let started = UInt64(Date().timeIntervalSince1970)
+            let found = try await host.logbookSignals(since: since)
+            lastSignals = started
+            if since == 0 { log("Logbook: signals: " + Dictionary(grouping: found, by: \.key).map { "\($0.key) \($0.value.count)" }.sorted().joined(separator: ", ")) }
+            var merged = signals
+            for (key, list) in Dictionary(grouping: found, by: \.key) { merged[key] = list.sorted { $0.time < $1.time } }
+            if merged != signals { signals = merged }
+        } catch {
+            if !signalsFailed { log("Logbook: signals: \(Self.describe(error))") }
+            signalsFailed = true
+        }
     }
 
     // MARK: - Do not record

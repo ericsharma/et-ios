@@ -296,22 +296,6 @@ struct LogbookCard: View {
     }
 }
 
-/// "⚡2" per kind with a count; nothing when there is no friction.
-struct LogbookFrictionMarks: View {
-    let friction: [String: Int]
-
-    var body: some View {
-        let kinds = friction.filter { $0.value > 0 }.sorted { $0.key < $1.key }
-        if !kinds.isEmpty {
-            HStack(spacing: 6) {
-                ForEach(kinds, id: \.key) { kind, count in
-                    Text("⚡\(count)").foregroundStyle(.orange).help("\(count) \(kind)")
-                }
-            }
-        }
-    }
-}
-
 // MARK: - Project header
 
 /// A project's goal, status, progress and Next, over its cards.

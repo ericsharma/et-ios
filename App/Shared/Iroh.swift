@@ -385,6 +385,12 @@ final class IrohHost: HostConnection, @unchecked Sendable {
         try LogbookOverviewEntry.decode(try await mapped { try await host.logbookOverview(since: since) })
     }
 
+    /// Friction signals (PLAN-logbook-v2 §4.3) of each transcript changed
+    /// at or after `since`: all of that transcript's, not only the new ones.
+    func logbookSignals(since: UInt64) async throws -> [LogbookSignal] {
+        try LogbookSignal.decode(try await mapped { try await host.logbookSignals(since: since) })
+    }
+
     /// The owner accepts or edits a grouping (one §4.4 proposal, as JSON).
     func logbookGrouping(_ changeJSON: String) async throws {
         try await mapped { try await host.grouping(changeJson: changeJSON) }
