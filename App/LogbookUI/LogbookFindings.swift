@@ -38,7 +38,9 @@ final class LogbookFindings {
     @ObservationIgnored private let log: @MainActor (String) -> Void
     @ObservationIgnored private let notify: @MainActor (String) -> Void
     @ObservationIgnored private var task: Task<Void, Never>?
-    /// "run|finding/proposal|bases" applied from this device, so a reload
+    /// "machine|path" being written now: one write per file at a time.
+    @ObservationIgnored private var inFlight: Set<String> = []
+    /// "run|finding/proposal|machine|path|base" tried from this device, so a reload
     /// or a restart does not write them again.
     @ObservationIgnored private var done: Set<String> {
         get { Set(UserDefaults.standard.stringArray(forKey: "logbook.metaApplied") ?? []) }
@@ -115,18 +117,26 @@ final class LogbookFindings {
         applyAll()
     }
 
-    /// Every `write` proposal of the run that this device has not applied
-    /// and etd does not list as applied on all its machines.
+    /// Writes every `write` target that etd still lists and does not mark
+    /// applied. etd rebuilds the targets on each read (A4-fix), so a file
+    /// gets one write per read: the next read (1 min) gives the next
+    /// proposal on that file its new base. A target is tried once per base.
     private func applyAll() {
         guard let run else { return }
-        for finding in run.findings {
+        var files = inFlight
+        for finding in run.findings where !rejected.contains(finding.id) {
             for proposal in finding.proposals where proposal.route == "write" {
-                // With the bases: targets read again from changed files (A4-fix) are new.
-                let id = run.id + "|" + proposal.key + "|" + proposal.targets.map { $0.machine + ":" + $0.base.prefix(12) }.joined(separator: ",")
-                let applied = Set(proposal.applied).union(appliedOn(finding: finding.id, proposal: proposal.id))
-                guard !done.contains(id), !proposal.targets.allSatisfy({ applied.contains($0.machine) }) else { continue }
-                done.insert(id)
-                apply(proposal, in: finding)
+                // etd lists a target only where the file lacks the change (A4-fix).
+                let applied = Set(proposal.applied)
+                let targets = proposal.targets.filter { target in
+                    let file = target.machine + "|" + target.path
+                    let id = [run.id, proposal.key, file, target.base].joined(separator: "|")
+                    guard !applied.contains(target.machine), !files.contains(file), !done.contains(id) else { return false }
+                    files.insert(file)
+                    done.insert(id)
+                    return true
+                }
+                if !targets.isEmpty { apply(targets, of: proposal, in: finding) }
             }
         }
     }
@@ -138,29 +148,29 @@ final class LogbookFindings {
         decide(["decision": "reject", "finding": finding.id])
     }
 
-    /// Writes each target's new content on its machine (only where it is
-    /// not applied yet), then tells the archive what was applied.
-    func apply(_ proposal: MetaRun.Proposal, in finding: MetaRun.Finding) {
-        let appliedHere = appliedOn(finding: finding.id, proposal: proposal.id)
-        let targets = proposal.targets.filter {
-            if proposal.applied.contains($0.machine) || appliedHere.contains($0.machine) { return false }
-            if case .applied = writes[Self.targetKey(proposal, $0)] { return false }
-            return true
-        }
+    /// Writes each target's new content on its machine, then tells the
+    /// archive where it was applied.
+    private func apply(_ targets: [MetaRun.Target], of proposal: MetaRun.Proposal, in finding: MetaRun.Finding) {
+        let files = targets.map { $0.machine + "|" + $0.path }
+        inFlight.formUnion(files)
         Task {
             await withTaskGroup(of: Void.self) { group in
                 for target in targets {
                     group.addTask { await self.write(target, of: proposal) }
                 }
             }
-            let applied = proposal.targets.filter {
+            inFlight.subtract(files)
+            // Offline is not an answer about the file: try again on the next read.
+            for target in targets where writes[Self.targetKey(proposal, target)] == .failed("offline") {
+                done.remove([run?.id ?? "", proposal.key, target.machine + "|" + target.path, target.base].joined(separator: "|"))
+            }
+            let applied = targets.filter {
                 if case .applied = writes[Self.targetKey(proposal, $0)] { return true }
                 return false
             }
             guard !applied.isEmpty else { return }
             decide(["decision": "applied", "finding": finding.id, "proposal": proposal.id, "machines": applied.map(\.machine)])
-            notify(applied.count == proposal.targets.count ? "Applied on \(applied.map(\.machine).joined(separator: ", "))"
-                                                           : "Applied on \(applied.count) of \(proposal.targets.count) machines")
+            notify("\(finding.title): applied on \(applied.map(\.machine).joined(separator: ", "))")
         }
     }
 
@@ -459,7 +469,11 @@ struct FindingCard: View {
     @ViewBuilder private func status(_ proposal: MetaRun.Proposal) -> some View {
         switch proposal.route {
         case "write":
-            let applied = proposal.targets.filter { isApplied($0, proposal) }.map(\.machine)
+            // etd moves a machine that has the change from `targets` to `applied` (A4-fix).
+            let applied = Set(proposal.applied)
+                .union(findings.appliedOn(finding: finding.id, proposal: proposal.id))
+                .union(proposal.targets.filter { isApplied($0, proposal) }.map(\.machine))
+                .sorted()
             let writing = proposal.targets.contains { findings.writes[LogbookFindings.targetKey(proposal, $0)] == .writing }
             let stale = proposal.targets.filter { findings.writes[LogbookFindings.targetKey(proposal, $0)] == .stale }.map(\.machine)
             HStack(spacing: 6) {
