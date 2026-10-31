@@ -1,6 +1,6 @@
 # Plan: Logbook v2 — a Logbook window, then a meta agent that improves the agents
 
-Status: 2026-10-31. D1–D10 ACCEPTED (owner). W0: DONE etd 82921c5, released 0.0.13, nixos-config 22568a4 (§8). A1: IN PROGRESS (trigkey). A2, A3: free to claim. B1: DONE 3e49e03. B2: DONE 5a2a99b (stub; §8). Next for B: B4 + B5 (on the stub), B3 after A1.
+Status: 2026-10-31. D1–D10 ACCEPTED (owner). W0: DONE etd 82921c5, released 0.0.13, nixos-config 22568a4 (§8). A1: IN PROGRESS (trigkey). A2, A3: free to claim. B1: DONE 3e49e03. B2: DONE 5a2a99b (stub; §8). B4: IN PROGRESS (mac-mini). Next for B: B5 (on the stub), B3 after A1.
 
 Follows [PLAN-logbook.md](PLAN-logbook.md) (L1–L5 built: capture, archive, read API, watcher report, Send to session, iOS) and [PLAN-multi-agent.md](PLAN-multi-agent.md) (M0–M5, in progress: profiles, one Rust parser per agent, live state with **needs you**).
 
