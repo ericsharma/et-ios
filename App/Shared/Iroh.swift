@@ -407,6 +407,11 @@ final class IrohHost: HostConnection, @unchecked Sendable {
         try await mapped { try await host.metaDecision(decisionJson: json) }
     }
 
+    /// This machine's allow-listed agent files, with their content (A3).
+    func agentConfig() async throws -> [AgentFile] {
+        try AgentFile.decode(try await mapped { try await host.agentConfig() })
+    }
+
     /// Writes an allow-listed agent file on this machine if its sha256 is
     /// still `base`; returns the backup's path (empty: no old file).
     func configWrite(path: String, base: String, content: String) async throws -> String {

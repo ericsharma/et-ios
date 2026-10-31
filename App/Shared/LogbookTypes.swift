@@ -229,6 +229,54 @@ struct MetaRun: Decodable, Equatable, Sendable {
     /// Unix seconds.
     var taken: Double
     var findings: [Finding]
+    /// Applied proposals, with the friction before and after (A5).
+    var followup: [Followup]
+    /// Agent files that differ between the machines that answered (A3).
+    var drift: [Drift]
+
+    struct Followup: Decodable, Equatable, Sendable, Identifiable {
+        var finding: String
+        var proposal: String?
+        var title: String
+        /// Unix seconds: when it was first applied.
+        var applied: Double
+        /// Empty: all machines.
+        var machines: [String]
+        /// The finding's signal kinds that are counted.
+        var kinds: [String]
+        /// Seconds in each window, before and after.
+        var span: Double
+        var before: Int
+        var after: Int
+        var undone: Bool
+
+        var id: String { finding + "/" + (proposal ?? "") }
+        var appliedDate: Date { Date(timeIntervalSince1970: applied) }
+
+        init(from decoder: any Decoder) throws {
+            enum Keys: String, CodingKey { case finding, proposal, title, applied, machines, kinds, span, before, after, undone }
+            let c = try decoder.container(keyedBy: Keys.self)
+            finding = try c.decode(String.self, forKey: .finding)
+            proposal = try c.decodeIfPresent(String.self, forKey: .proposal)
+            title = try c.decodeIfPresent(String.self, forKey: .title) ?? finding
+            applied = try c.decodeIfPresent(Double.self, forKey: .applied) ?? 0
+            machines = try c.decodeIfPresent([String].self, forKey: .machines) ?? []
+            kinds = try c.decodeIfPresent([String].self, forKey: .kinds) ?? []
+            span = try c.decodeIfPresent(Double.self, forKey: .span) ?? 0
+            before = try c.decodeIfPresent(Int.self, forKey: .before) ?? 0
+            after = try c.decodeIfPresent(Int.self, forKey: .after) ?? 0
+            undone = try c.decodeIfPresent(Bool.self, forKey: .undone) ?? false
+        }
+    }
+
+    struct Drift: Decodable, Equatable, Sendable, Identifiable {
+        /// The same file on every machine ("<home>" for the home folder's project).
+        var id: String
+        /// "instructions", "import", "memory" or "skill".
+        var kind: String
+        /// Machine → sha256; nil: that machine does not have it.
+        var machines: [String: String?]
+    }
 
     struct Finding: Decodable, Equatable, Sendable, Identifiable {
         var id: String
@@ -307,16 +355,22 @@ struct MetaRun: Decodable, Equatable, Sendable {
         var base: String
         /// The whole file after the patch: what Apply writes (config_write).
         var content: String?
+        /// The file before (empty: a new file) and the new file's sha256:
+        /// Undo is config_write(path, base: after, content: old) (A5).
+        var old: String?
+        var after: String?
     }
 
     var takenDate: Date { Date(timeIntervalSince1970: taken) }
 
     init(from decoder: any Decoder) throws {
-        enum Keys: String, CodingKey { case id, taken, findings }
+        enum Keys: String, CodingKey { case id, taken, findings, followup, drift }
         let c = try decoder.container(keyedBy: Keys.self)
         id = try c.decodeIfPresent(String.self, forKey: .id) ?? ""
         taken = try c.decodeIfPresent(Double.self, forKey: .taken) ?? 0
         findings = try c.decodeIfPresent([Finding].self, forKey: .findings) ?? []
+        followup = try c.decodeIfPresent([Followup].self, forKey: .followup) ?? []
+        drift = try c.decodeIfPresent([Drift].self, forKey: .drift) ?? []
     }
 
     static func decode(_ json: String) throws -> MetaRun {
@@ -328,4 +382,37 @@ struct MetaRun: Decodable, Equatable, Sendable {
 struct LogbookTurnRef: Equatable, Sendable {
     var key: LogbookKey
     var turn: String
+}
+
+/// One allow-listed agent file on a machine (A3's AgentConfig).
+struct AgentFile: Decodable, Equatable, Sendable {
+    /// The same file on every machine ("<home>" for the home folder's project).
+    var id: String
+    /// From the home directory: "~/.claude/CLAUDE.md".
+    var path: String
+    var kind: String
+    var sha256: String
+    /// In a git repository: only an agent changes it (D8).
+    var git: Bool
+    /// A Home Manager link: never written; its source is in nixos-config.
+    var link: String?
+    /// nil when too big.
+    var content: String?
+
+    init(from decoder: any Decoder) throws {
+        enum Keys: String, CodingKey { case id, path, kind, sha256, git, link, content }
+        let c = try decoder.container(keyedBy: Keys.self)
+        id = try c.decode(String.self, forKey: .id)
+        path = try c.decodeIfPresent(String.self, forKey: .path) ?? id
+        kind = try c.decodeIfPresent(String.self, forKey: .kind) ?? ""
+        sha256 = try c.decodeIfPresent(String.self, forKey: .sha256) ?? ""
+        git = try c.decodeIfPresent(Bool.self, forKey: .git) ?? false
+        link = try c.decodeIfPresent(String.self, forKey: .link)
+        content = try c.decodeIfPresent(String.self, forKey: .content)
+    }
+
+    static func decode(_ json: String) throws -> [AgentFile] {
+        struct Snapshot: Decodable { var files: [AgentFile]? }
+        return try JSONDecoder().decode(Snapshot.self, from: Data(json.utf8)).files ?? []
+    }
 }

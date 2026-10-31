@@ -19,6 +19,10 @@ final class LogbookFindings {
     private(set) var rejected: Set<String> = []
     /// Per target ("proposal|machine|path"): writing, applied or failed.
     private(set) var writes: [String: WriteState] = [:]
+    /// Undo per follow-up row (its id), and "Make the same" per drift
+    /// file id: writing, applied or failed (B7).
+    private(set) var undos: [String: WriteState] = [:]
+    private(set) var syncs: [String: WriteState] = [:]
 
     enum WriteState: Equatable {
         case writing
@@ -34,8 +38,8 @@ final class LogbookFindings {
     @ObservationIgnored private let log: @MainActor (String) -> Void
     @ObservationIgnored private let notify: @MainActor (String) -> Void
     @ObservationIgnored private var task: Task<Void, Never>?
-    /// "run|proposal" applied from this device, so a reload or a restart
-    /// does not write them again.
+    /// "run|finding/proposal|bases" applied from this device, so a reload
+    /// or a restart does not write them again.
     @ObservationIgnored private var done: Set<String> {
         get { Set(UserDefaults.standard.stringArray(forKey: "logbook.metaApplied") ?? []) }
         set { UserDefaults.standard.set(Array(newValue.suffix(500)), forKey: "logbook.metaApplied") }
@@ -117,8 +121,10 @@ final class LogbookFindings {
         guard let run else { return }
         for finding in run.findings {
             for proposal in finding.proposals where proposal.route == "write" {
-                let id = run.id + "|" + proposal.key
-                guard !done.contains(id), !proposal.targets.allSatisfy({ proposal.applied.contains($0.machine) }) else { continue }
+                // With the bases: targets read again from changed files (A4-fix) are new.
+                let id = run.id + "|" + proposal.key + "|" + proposal.targets.map { $0.machine + ":" + $0.base.prefix(12) }.joined(separator: ",")
+                let applied = Set(proposal.applied).union(appliedOn(finding: finding.id, proposal: proposal.id))
+                guard !done.contains(id), !proposal.targets.allSatisfy({ applied.contains($0.machine) }) else { continue }
                 done.insert(id)
                 apply(proposal, in: finding)
             }
@@ -135,8 +141,9 @@ final class LogbookFindings {
     /// Writes each target's new content on its machine (only where it is
     /// not applied yet), then tells the archive what was applied.
     func apply(_ proposal: MetaRun.Proposal, in finding: MetaRun.Finding) {
+        let appliedHere = appliedOn(finding: finding.id, proposal: proposal.id)
         let targets = proposal.targets.filter {
-            if proposal.applied.contains($0.machine) { return false }
+            if proposal.applied.contains($0.machine) || appliedHere.contains($0.machine) { return false }
             if case .applied = writes[Self.targetKey(proposal, $0)] { return false }
             return true
         }
@@ -188,6 +195,127 @@ final class LogbookFindings {
         }
     }
 
+    // MARK: - Undo (B7, A5)
+
+    /// Machines the follow-up rows say a proposal is applied on (and not
+    /// undone); all of the proposal's machines for a row without machines.
+    func appliedOn(finding: String, proposal: String) -> Set<String> {
+        var machines = Set<String>()
+        for row in run?.followup ?? [] where row.finding == finding && row.proposal == proposal && !row.undone {
+            if row.machines.isEmpty {
+                let targets = run?.findings.first { $0.id == finding }?.proposals.first { $0.id == proposal }?.targets ?? []
+                machines.formUnion(targets.map(\.machine))
+            } else {
+                machines.formUnion(row.machines)
+            }
+        }
+        return machines
+    }
+
+    /// The applied proposal's targets in the current run, if it is there:
+    /// Undo needs each file's old content and the new sha256.
+    func undoTargets(_ row: MetaRun.Followup) -> [MetaRun.Target] {
+        guard let finding = run?.findings.first(where: { $0.id == row.finding }),
+              let proposal = finding.proposals.first(where: { $0.id == (row.proposal ?? "") }) else { return [] }
+        return proposal.targets.filter { ($0.after ?? "").isEmpty == false && (row.machines.isEmpty || row.machines.contains($0.machine)) }
+    }
+
+    /// Writes each machine's old file back, if the file is still the one
+    /// the proposal wrote; then tells the archive.
+    func undo(_ row: MetaRun.Followup) {
+        let targets = undoTargets(row)
+        guard !targets.isEmpty else { return }
+        undos[row.id] = .writing
+        log("Findings: undo \(row.id) on \(targets.map(\.machine).joined(separator: ", "))")
+        Task {
+            var undone: [String] = []
+            var errors: [String] = []
+            for target in targets {
+                guard let host = hosts()[target.machine] else {
+                    errors.append("\(target.machine): offline")
+                    continue
+                }
+                do {
+                    _ = try await host.configWrite(path: target.path, base: target.after ?? "", content: target.old ?? "")
+                    undone.append(target.machine)
+                } catch {
+                    errors.append("\(target.machine): \(Logbook.describe(error))")
+                }
+            }
+            undos[row.id] = errors.isEmpty ? .applied(backup: "") : .failed(errors.joined(separator: "; "))
+            guard !undone.isEmpty else { return }
+            var decision: [String: Any] = ["decision": "undo", "finding": row.finding, "machines": undone]
+            if let proposal = row.proposal { decision["proposal"] = proposal }
+            decide(decision)
+            notify("Undone on \(undone.joined(separator: ", "))")
+        }
+    }
+
+    // MARK: - Make the same (B7, A3)
+
+    /// Copies `source`'s version of the file to every other machine that
+    /// answered and has another version or none. Files in git and Nix
+    /// links are left to an agent (D8).
+    func makeSame(_ drift: MetaRun.Drift, as source: String) {
+        syncs[drift.id] = .writing
+        log("Findings: make \(drift.id) the same as on \(source)")
+        Task {
+            let hosts = hosts()
+            do {
+                guard let sourceHost = hosts[source] else { throw SyncError(text: "\(source) is offline") }
+                guard let file = try await sourceHost.agentConfig().first(where: { $0.id == drift.id }) else {
+                    throw SyncError(text: "\(source) does not have it any more")
+                }
+                guard !file.git, file.link == nil else { throw SyncError(text: "in git or made by Nix: change it through an agent") }
+                guard let content = file.content else { throw SyncError(text: "too big to copy") }
+                var errors: [String] = []
+                for machine in drift.machines.keys.sorted() where machine != source {
+                    guard let host = hosts[machine] else {
+                        errors.append("\(machine): offline")
+                        continue
+                    }
+                    do {
+                        let files = try await host.agentConfig()
+                        let existing = files.first { $0.id == drift.id }
+                        if existing?.sha256 == file.sha256 { continue }
+                        if existing?.git == true || existing?.link != nil {
+                            errors.append("\(machine): in git or made by Nix")
+                            continue
+                        }
+                        guard let path = existing?.path ?? Self.path(of: drift.id, on: files) else {
+                            errors.append("\(machine): its home folder is not known")
+                            continue
+                        }
+                        _ = try await host.configWrite(path: path, base: existing?.sha256 ?? "", content: content)
+                    } catch {
+                        errors.append("\(machine): \(Logbook.describe(error))")
+                    }
+                }
+                syncs[drift.id] = errors.isEmpty ? .applied(backup: "") : .failed(errors.joined(separator: "; "))
+            } catch {
+                syncs[drift.id] = .failed((error as? SyncError)?.text ?? Logbook.describe(error))
+            }
+        }
+    }
+
+    private struct SyncError: Error {
+        var text: String
+    }
+
+    /// A file id's path on a machine that does not have the file: "<home>"
+    /// is that machine's folder, as another of its files shows it.
+    nonisolated static func path(of id: String, on files: [AgentFile]) -> String? {
+        guard let marker = id.range(of: "<home>") else { return id }
+        for file in files {
+            guard let at = file.id.range(of: "<home>") else { continue }
+            let prefix = file.id[..<at.lowerBound], rest = file.id[at.upperBound...]
+            guard file.path.hasPrefix(prefix), file.path.hasSuffix(rest), file.path.count >= prefix.count + rest.count else { continue }
+            let home = file.path.dropFirst(prefix.count).dropLast(rest.count)
+            return id.replacingCharacters(in: marker, with: home)
+        }
+        return nil
+    }
+
     private func decide(_ decision: [String: Any]) {
         guard let run, let host = archive() else { return }
         var decision = decision
@@ -235,6 +363,12 @@ struct LogbookFindingsView: View {
                         sending = LogbookSendTarget(selection: .finding(runId: findings.run?.id ?? "", findingId: finding.id),
                                                     title: "the finding “\(finding.title)”")
                     }
+                }
+                if let run = findings.run, !run.followup.isEmpty {
+                    LogbookAppliedSection(rows: run.followup, findings: findings)
+                }
+                if let run = findings.run, !run.drift.isEmpty {
+                    LogbookDriftSection(drift: run.drift, findings: findings)
                 }
             }
             .padding(14)
@@ -360,6 +494,7 @@ struct FindingCard: View {
 
     private func isApplied(_ target: MetaRun.Target, _ proposal: MetaRun.Proposal) -> Bool {
         if proposal.applied.contains(target.machine) { return true }
+        if findings.appliedOn(finding: finding.id, proposal: proposal.id).contains(target.machine) { return true }
         if case .applied = findings.writes[LogbookFindings.targetKey(proposal, target)] { return true }
         return false
     }
@@ -381,6 +516,131 @@ struct FindingCard: View {
         }
         .buttonStyle(.plain)
         .help("Open the transcript at this turn")
+    }
+}
+
+/// Applied changes (B7): what changed, where, the friction before and
+/// after, and Undo.
+struct LogbookAppliedSection: View {
+    let rows: [MetaRun.Followup]
+    let findings: LogbookFindings
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Applied").font(.headline).padding(.top, 6)
+            ForEach(rows.sorted { $0.applied > $1.applied }) { row in
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(row.title).font(.callout.weight(.medium)).strikethrough(row.undone).lineLimit(2)
+                        Spacer()
+                        undoButton(row)
+                    }
+                    Text(whereText(row)).font(.caption).foregroundStyle(.secondary)
+                    if !row.undone { Text(effect(row)).font(.caption).foregroundStyle(row.after < row.before ? Color.green : Color.secondary) }
+                    if case .failed(let error) = findings.undos[row.id] {
+                        Text("Undo failed: \(error)").font(.caption).foregroundStyle(.red).lineLimit(3)
+                    }
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
+            }
+        }
+    }
+
+    @ViewBuilder private func undoButton(_ row: MetaRun.Followup) -> some View {
+        if row.undone || findings.undos[row.id] == .applied(backup: "") {
+            Text("Undone").font(.caption).foregroundStyle(.secondary)
+        } else if findings.undos[row.id] == .writing {
+            ProgressView().controlSize(.mini)
+        } else if !findings.undoTargets(row).isEmpty {
+            Button("Undo") { findings.undo(row) }.controlSize(.small)
+                .help("Put the files back as they were before this change")
+        }
+    }
+
+    private func whereText(_ row: MetaRun.Followup) -> String {
+        let machines = row.machines.isEmpty ? "all machines" : row.machines.joined(separator: ", ")
+        return "\(row.appliedDate.formatted(.relative(presentation: .named))) on \(machines)"
+    }
+
+    /// "Interrupted, Tool denied: 6 → 1 in the 7 days before and after".
+    private func effect(_ row: MetaRun.Followup) -> String {
+        let kinds = row.kinds.map { LogbookSignalKind($0).name }.joined(separator: ", ")
+        let days = max(1, Int((row.span / 86400).rounded()))
+        let window = days == 1 ? "the day" : "the \(days) days"
+        return "\(kinds.isEmpty ? "Friction" : kinds): \(row.before) → \(row.after) in \(window) before and after"
+    }
+}
+
+/// Agent files that differ between machines (B7): folded, by kind; a file
+/// can be made the same as on one machine.
+struct LogbookDriftSection: View {
+    let drift: [MetaRun.Drift]
+    let findings: LogbookFindings
+    @State private var open = false
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $open) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Each machine has its own instruction and memory files. Pick a file to copy one machine's version to the others.")
+                    .font(.caption).foregroundStyle(.secondary)
+                let byKind = Dictionary(grouping: drift, by: \.kind).sorted { $0.key < $1.key }
+                ForEach(byKind, id: \.key) { kind, files in
+                    DisclosureGroup {
+                        ForEach(files.sorted { $0.id < $1.id }) { file in row(file) }
+                    } label: {
+                        Text("\(kind.capitalized) · \(files.count)").font(.callout)
+                    }
+                }
+            }
+            .padding(.top, 4)
+        } label: {
+            Text("\(drift.count) agent file\(drift.count == 1 ? "" : "s") differ between machines").font(.headline)
+        }
+        .padding(.top, 6)
+    }
+
+    private func row(_ file: MetaRun.Drift) -> some View {
+        let groups = versions(file)
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(file.id.replacingOccurrences(of: "~/.claude/", with: "")).font(.caption.monospaced()).lineLimit(1).truncationMode(.middle)
+                Spacer()
+                switch findings.syncs[file.id] {
+                case .writing: ProgressView().controlSize(.mini)
+                case .applied: Text("Same now").font(.caption).foregroundStyle(.green)
+                default:
+                    Menu("Make the same as…") {
+                        ForEach(file.machines.keys.sorted().filter { file.machines[$0] != nil }, id: \.self) { machine in
+                            Button(machine) { findings.makeSame(file, as: machine) }
+                        }
+                    }
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .font(.caption)
+                }
+            }
+            Text(groups).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+            if case .failed(let error) = findings.syncs[file.id] {
+                Text(error).font(.caption2).foregroundStyle(.red).lineLimit(3)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    /// "trigkey, gmktec same · MacBook other · mac-mini missing".
+    private func versions(_ file: MetaRun.Drift) -> String {
+        var bySha: [String: [String]] = [:]
+        var missing: [String] = []
+        for (machine, sha) in file.machines {
+            if let sha { bySha[sha, default: []].append(machine) } else { missing.append(machine) }
+        }
+        var parts = bySha.values.map { $0.sorted() }.sorted { $0.count > $1.count }.enumerated().map { i, machines in
+            machines.joined(separator: ", ") + (i == 0 ? (machines.count > 1 ? " same" : "") : " other")
+        }
+        if !missing.isEmpty { parts.append(missing.sorted().joined(separator: ", ") + " missing") }
+        return parts.joined(separator: " · ")
     }
 }
 
