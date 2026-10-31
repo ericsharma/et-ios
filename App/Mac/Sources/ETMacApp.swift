@@ -72,6 +72,15 @@ struct ETMacApp: App {
         }
         .windowResizability(.contentSize)
 
+        // PLAN-logbook-v2 D2: beside the terminals, not in place of them.
+        Window("Logbook", id: "logbook") {
+            LogbookWindow()
+                .environment(fleet)
+                .environment(logbook)
+        }
+        .defaultSize(width: 1200, height: 760)
+        .keyboardShortcut("l", modifiers: [.command, .shift])
+
         Window("Debug Log", id: "log") {
             LogView()
                 .environment(fleet)

@@ -39,8 +39,8 @@ struct MainWindow: View {
             ToolbarItemGroup(placement: .navigation) {
                 Button { selection = nil; logbookPage = .agents } label: { Label("Agents", systemImage: "person.2.wave.2") }
                     .help("Agents: every Claude, its login and usage limits")
-                Button { selection = nil; logbookPage = .report } label: { Label("Logbook", systemImage: "book.pages") }
-                    .help("Logbook: the report and every Claude transcript")
+                Button { openWindow(id: "logbook") } label: { Label("Logbook", systemImage: "book.pages") }
+                    .help("Logbook: every agent session, by project (⌘⇧L)")
             }
             ToolbarItem(placement: .primaryAction) {
                 Button { showingNewSession = true } label: { Label("New Session", systemImage: "plus") }
@@ -239,7 +239,7 @@ struct Sidebar: View {
             }
             filesSection
             AgentsSection(selection: $selection, page: $logbookPage)
-            LogbookSection(selection: $selection, page: $logbookPage)
+            LogbookRow()
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) { StatusLine() }
