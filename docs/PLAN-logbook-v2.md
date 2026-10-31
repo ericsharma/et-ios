@@ -1,6 +1,6 @@
 # Plan: Logbook v2 — a Logbook window, then a meta agent that improves the agents
 
-Status: 2026-10-31. D1–D10 ACCEPTED (owner). W0: DONE etd 82921c5, released 0.0.13, nixos-config 22568a4 (§8). A1: DONE etd da0bb5e, released 0.0.14, nixos-config ba48457 (§8). B3 can start. A2: DONE etd 8ef00bd, released 0.0.15, nixos-config 8d6a7fd (§8). A3: IN PROGRESS (trigkey). B1: DONE 3e49e03. B2: DONE 5a2a99b (stub; §8). B4: DONE 2c5f33f, TestFlight 202610311550. B5: DONE 0fe4c99 (stub), TestFlight 202610311600; signals JSON for A2 in §8. B3: DONE b758064 (etd 0.0.14), TestFlight 202610311617. B6: IN PROGRESS (mac-mini, stub until A4).
+Status: 2026-10-31. D1–D10 ACCEPTED (owner). W0: DONE etd 82921c5, released 0.0.13, nixos-config 22568a4 (§8). A1: DONE etd da0bb5e, released 0.0.14, nixos-config ba48457 (§8). B3 can start. A2: DONE etd 8ef00bd, released 0.0.15, nixos-config 8d6a7fd (§8). A3: IN PROGRESS (trigkey). B1: DONE 3e49e03. B2: DONE 5a2a99b (stub; §8). B4: DONE 2c5f33f, TestFlight 202610311550. B5: DONE 0fe4c99 (stub), TestFlight 202610311600; signals JSON for A2 in §8. B3: DONE b758064 (etd 0.0.14), TestFlight 202610311617. B6: DONE 1603e8b (sample until A4), TestFlight 202610311642; Findings JSON additions for A4 in §8.
 
 Follows [PLAN-logbook.md](PLAN-logbook.md) (L1–L5 built: capture, archive, read API, watcher report, Send to session, iOS) and [PLAN-multi-agent.md](PLAN-multi-agent.md) (M0–M5, in progress: profiles, one Rust parser per agent, live state with **needs you**).
 
@@ -280,6 +280,13 @@ Notes for A1, from the stub on real data: (1) skip prompts that are not the owne
 - `friction` in the overview = the counts of these signals by `kind`.
 
 **B3 (2026-10-31, mac-mini):** et-ios b758064, `Vendor/etd` e3bc2ca (0.0.14), TestFlight 202610311617. The Logbook window on mac-mini shows trigkey, gmktec and mac-mini sessions (22) with etd's headlines (checked headless; "<task-notification>" headlines are gone). `LogbookV2Stub.swift` keeps only the device-side signal finder: `IrohHost.logbookSignals` uses it while etd answers "not built yet", and cards count friction from the signals while the overview's `friction` is empty. After A2: delete the file and the fallback in `Iroh.swift`.
+
+**B6 (2026-10-31, mac-mini):** et-ios 1603e8b, TestFlight 202610311642. Findings place in `App/LogbookUI/LogbookFindings.swift`: Run with progress, finding cards (kind, count, sessions), evidence links that open the transcript beside the findings and scroll to the turn (loading earlier parts until it has it), proposals by route with the diff, Apply on All Machines / Edit… / Send to Agent… / Reject. Until A4, `meta` answers "not built yet" and the place shows a sample made from the real signals (A2 is live: 57 tool errors in 13 sessions on the archive). Checked headless: the evidence link jumps to its turn; Apply on the sample was refused on all 6 machines, each with its reason and Retry. **mac-mini and the MacBook Air run etd 0.0.12**: ConfigWrite there needs a darwin-rebuild (owner) before test 4 of §7.
+**Additions for A4** (the app reads these; all optional except `id`):
+- Each target carries `"content"`: the whole file after the patch, as etd checked it against `base`. Apply sends `config_write(path, base, content)`; the app does not apply diffs itself. Edit… lets the owner change `content` per machine before Apply.
+- `MetaDecision` JSON from the app: `{"run": "<run id>", "finding": "<id>", "proposal": "<id>", "decision": "accept | edit | reject", "applied": ["trigkey", "gmktec"], "content": {"trigkey": "<edited file>"}}`. `proposal` is missing when a whole finding is rejected; `applied` lists the machines whose `config_write` succeeded (Apply sends it once, after the writes); `content` only for `edit`.
+- `meta(refresh: false)` with no run yet: `{"id": null}` (as the report does).
+- Evidence `turn` is a prompt uuid, as in the signals JSON (B5).
 
 ## 9. Risks
 
