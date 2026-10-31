@@ -29,6 +29,7 @@
 		39EA59E5D48AE69A7807B9A0 /* SelectMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FE7D921D5CAA4506B3FD10C /* SelectMode.swift */; };
 		3A3285F4C8B435AFADFA4F39 /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3251CE9C9BA08235AF09F96 /* Push.swift */; };
 		3CD4F4B374AC427F2F7CC671 /* Nicknames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BAEF5D9D9F6E2D1930C94BD /* Nicknames.swift */; };
+		429E741F37D406354F433B8B /* LogbookWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 403E6B4ADAD93FB4B62620DE /* LogbookWindow.swift */; };
 		44546852A16838D9010F6492 /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = 3EC677F4C4423E9C7AF25E72 /* ETCore */; };
 		45D6BA62083244C784927078 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC2C774B86C691F339F5290 /* Views.swift */; };
 		47F9FA3B055E526E99C3DF25 /* SharedFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 897E5EE0F90FB3B7D643E059 /* SharedFiles.swift */; };
@@ -47,6 +48,7 @@
 		67C604DB4A8A22B61AB66066 /* LogbookTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DCA81B266760544B175CB11 /* LogbookTypes.swift */; };
 		68664758EC86B0B913F56E2E /* Logbook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD3B63BE81D334271055BEF /* Logbook.swift */; };
 		6A226C0A622AFF40D7590C07 /* LogbookViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 747ECEA05C1D9344EE1626D8 /* LogbookViews.swift */; };
+		6B128CFD4ED9E0EF0E133C37 /* LogbookWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 403E6B4ADAD93FB4B62620DE /* LogbookWindow.swift */; };
 		6BF6D002CAD9907E777E8EED /* ETSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 11602F37CD401485C3D66840 /* ETSSH */; };
 		6F005C5539A7B64474934977 /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = ACB31B6DE076A6AEE0E31967 /* ETCore */; };
 		7019904934883F3AD44F1675 /* Speaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD862AA08B0790FEA8C32121 /* Speaker.swift */; };
@@ -144,6 +146,7 @@
 		3A02635506A8CBB96DC1C6C9 /* ET-mac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ET-mac.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3FBF0491C3AEC4AE125F75D8 /* ShareStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareStore.swift; sourceTree = "<group>"; };
 		3FDD228A576819287E908B47 /* SwiftTerm */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SwiftTerm; path = ../Vendor/SwiftTerm; sourceTree = SOURCE_ROOT; };
+		403E6B4ADAD93FB4B62620DE /* LogbookWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogbookWindow.swift; sourceTree = "<group>"; };
 		44366E16603D79FB4DCAF6D2 /* SessionTerminal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTerminal.swift; sourceTree = "<group>"; };
 		4880DD1374C363AFA5C69F37 /* Iroh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Iroh.swift; sourceTree = "<group>"; };
 		4BE76CB262FB7EA0605C99EB /* Manymux.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Manymux.swift; sourceTree = "<group>"; };
@@ -272,6 +275,7 @@
 				EDB766205ACA88AFE4503F86 /* LogbookReportViews.swift */,
 				54E5B96C3B3539B1C7B53F03 /* LogbookSendViews.swift */,
 				747ECEA05C1D9344EE1626D8 /* LogbookViews.swift */,
+				403E6B4ADAD93FB4B62620DE /* LogbookWindow.swift */,
 			);
 			path = LogbookUI;
 			sourceTree = "<group>";
@@ -584,6 +588,7 @@
 				0CD25A29164D993D0A882B28 /* LogbookSidebar.swift in Sources */,
 				67C604DB4A8A22B61AB66066 /* LogbookTypes.swift in Sources */,
 				6A226C0A622AFF40D7590C07 /* LogbookViews.swift in Sources */,
+				6B128CFD4ED9E0EF0E133C37 /* LogbookWindow.swift in Sources */,
 				8401EF3426B8C649284DC663 /* MainWindow.swift in Sources */,
 				DCC53456F454E5F2E4EB4A14 /* Manymux.swift in Sources */,
 				E82A4932EA0D6AFA8F92AF9E /* Nicknames.swift in Sources */,
@@ -619,6 +624,7 @@
 				117B4457888342904D45BA28 /* LogbookSendViews.swift in Sources */,
 				E8DCE9C2F73F714AE6BBCAA6 /* LogbookTypes.swift in Sources */,
 				06C75A0855A9879B1E1BBF0B /* LogbookViews.swift in Sources */,
+				429E741F37D406354F433B8B /* LogbookWindow.swift in Sources */,
 				893A4346740B9772C37B287C /* MachinesView.swift in Sources */,
 				7ABFAB899E15B83CE5845EA0 /* Manymux.swift in Sources */,
 				0A0D3637C837954773B6B363 /* NetworkView.swift in Sources */,
