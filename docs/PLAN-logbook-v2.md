@@ -1,6 +1,6 @@
 # Plan: Logbook v2 — a Logbook window, then a meta agent that improves the agents
 
-Status: 2026-10-31. D1–D10 ACCEPTED (owner). W0: DONE etd 82921c5, released 0.0.13, nixos-config 22568a4 (§8). A1: IN PROGRESS (trigkey). A2, A3: free to claim. B1: DONE 3e49e03. B2: DONE 5a2a99b (stub; §8). B4: IN PROGRESS (mac-mini). Next for B: B5 (on the stub), B3 after A1.
+Status: 2026-10-31. D1–D10 ACCEPTED (owner). W0: DONE etd 82921c5, released 0.0.13, nixos-config 22568a4 (§8). A1: IN PROGRESS (trigkey). A2, A3: free to claim. B1: DONE 3e49e03. B2: DONE 5a2a99b (stub; §8). B4: DONE 2c5f33f, TestFlight 202610311550. Next for B: B5 (on the stub), B3 after A1.
 
 Follows [PLAN-logbook.md](PLAN-logbook.md) (L1–L5 built: capture, archive, read API, watcher report, Send to session, iOS) and [PLAN-multi-agent.md](PLAN-multi-agent.md) (M0–M5, in progress: profiles, one Rust parser per agent, live state with **needs you**).
 
@@ -262,6 +262,8 @@ Wave 4                  A5                      B7
 
 **B2 (2026-10-31, mac-mini):** et-ios 5a2a99b, not yet on TestFlight / a Mac release. 3 columns in `App/LogbookUI/LogbookWindow.swift` (shared with iOS; `LogbookPlaces.swift` has the place logic): Now, Findings (empty until A4), Suggestions, the report's projects (goal, progress, Next over the cards), Unsorted, Archive (search). Cards per D4, filters per D5, inspector ⌘I. The main window shows only Agents in place of the terminal (D2). `App/Shared/LogbookV2Stub.swift` has W0's exact Swift names: `logbookOverview` is built on the device from the real archive (session list + the last 256 KB, 1 MB or 4 MB of each changed transcript, until one has a prompt), the other five throw "not built yet". Checked headless on mac-mini on the real archive (22 sessions; Now 3, Unsorted 6 after the trivial filter). iOS target builds; the iPad/iPhone screens are B4.
 Notes for A1, from the stub on real data: (1) skip prompts that are not the owner's (`<task-notification>`, `<command-…>`, "This session is being continued from a previous conversation…") for both `headline` and `asked`; one session got the headline "<task-notification>". (2) A long session's last 256 KB is often only tool output; the prompt can be MBs back, so `asked` needs the last *prompt*, not the last N bytes. (3) Several gmktec sessions parse to 0 turns (`dd523b22`, 71 lines from 0): worth a fixture.
+
+**B4 (2026-10-31, mac-mini):** et-ios 2c5f33f, TestFlight 202610311550 (owner test pending). ⋯ → Logbook is `LogbookWindow` in a full-screen cover: 3 columns on iPad, a stack on iPhone (starts at places). Show Terminal opens the session's page. The v1 list views (`LogbookReportView`, `ProjectCard`, `LogbookSessionRow`, `Logbook.groups`) are deleted.
 
 ## 9. Risks
 
