@@ -320,6 +320,9 @@ final class Logbook {
 final class LogbookTranscript {
     let key: LogbookKey
     private(set) var turns: [Transcript.Turn] = []
+    /// A /compact summary's uuid → the turn it is folded into. etd's
+    /// signals name the summary as their turn (Transcript.parse does).
+    private(set) var aliases: [String: String] = [:]
     private(set) var loading = true
     private(set) var error: String?
     /// The loaded part starts here; earlier turns load on request, 3 MB at a time.
@@ -403,8 +406,7 @@ final class LogbookTranscript {
                     if lines.isEmpty, chunk.lines.first != nil, chunk.offset >= startOffset {
                         startOffset = chunk.offset - UInt64(chunk.lines.reduce(0) { $0 + $1.utf8.count + 1 })
                     }
-                    // Claude's summary after /compact is not a prompt the owner typed.
-                    lines += chunk.lines.filter { !$0.contains(#""isCompactSummary":true"#) }
+                    lines += chunk.lines
                     if chunk.live { caughtUp = true }
                     if !chunk.lines.isEmpty || chunk.live { reparse() }
                 }
@@ -418,6 +420,32 @@ final class LogbookTranscript {
         }
     }
 
+    /// Claude's summary after /compact is not a prompt the owner typed: its
+    /// turn goes into the one before (or is dropped at the start).
+    nonisolated static func foldCompactSummaries(_ turns: [Transcript.Turn], lines: [String]) -> ([Transcript.Turn], [String: String]) {
+        var summaries = Set<String>()
+        for line in lines where line.contains(#""isCompactSummary":true"#) {
+            if let range = line.range(of: #""uuid":"[^"]+""#, options: .regularExpression) {
+                summaries.insert(String(line[range].dropFirst(8).dropLast()))
+            }
+        }
+        guard !summaries.isEmpty else { return (turns, [:]) }
+        var folded: [Transcript.Turn] = []
+        var aliases: [String: String] = [:]
+        for turn in turns {
+            guard summaries.contains(turn.id) else {
+                folded.append(turn)
+                continue
+            }
+            guard var last = folded.popLast() else { continue }
+            aliases[turn.id] = last.id
+            last.tools += turn.tools
+            if !turn.reply.isEmpty { last.reply += (last.reply.isEmpty ? "" : "\n\n") + turn.reply }
+            folded.append(last)
+        }
+        return (folded, aliases)
+    }
+
     /// Parses off the main actor; chunks that come while it runs are
     /// parsed together after it.
     private func reparse() {
@@ -429,7 +457,9 @@ final class LogbookTranscript {
         let snapshot = lines
         let leading = startOffset > 0
         Task {
-            let parsed = await Task.detached(priority: .userInitiated) { Transcript.parse(lines: snapshot, leading: leading) }.value
+            let (parsed, aliases) = await Task.detached(priority: .userInitiated) {
+                Self.foldCompactSummaries(Transcript.parse(lines: snapshot, leading: leading), lines: snapshot)
+            }.value
             parsing = false
             if dirty {
                 dirty = false
@@ -447,6 +477,7 @@ final class LogbookTranscript {
             }
             if loading || loadingEarlier { log("Logbook: \(key.id): \(snapshot.count) lines, \(parsed.count) turns from \(startOffset)") }
             turns = parsed
+            self.aliases = aliases
             loading = false
             loadingEarlier = false
         }

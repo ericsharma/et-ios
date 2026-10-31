@@ -388,12 +388,7 @@ final class IrohHost: HostConnection, @unchecked Sendable {
     /// Friction signals (PLAN-logbook-v2 §4.3) of each transcript changed
     /// at or after `since`: all of that transcript's, not only the new ones.
     func logbookSignals(since: UInt64) async throws -> [LogbookSignal] {
-        do {
-            return try LogbookSignal.decode(try await mapped { try await host.logbookSignals(since: since) })
-        } catch HostError.other(let text) where text.contains("not built yet") {
-            // STUB until A2: found on this device (LogbookV2Stub.swift).
-            return try LogbookSignal.decode(try await mapped { try await LogbookV2Stub.signals(since: since, host: host) })
-        }
+        try LogbookSignal.decode(try await mapped { try await host.logbookSignals(since: since) })
     }
 
     /// The owner accepts or edits a grouping (one §4.4 proposal, as JSON).

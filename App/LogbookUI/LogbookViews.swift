@@ -43,7 +43,16 @@ struct LogbookTranscriptView: View {
     @State private var flashed: String?
 
     private var session: LogbookSession? { logbook.session(key) }
-    private var signals: [LogbookSignal] { logbook.signals[key.id] ?? [] }
+    /// This transcript's signals, with /compact summary turns mapped to the
+    /// turn they are folded into.
+    private var signals: [LogbookSignal] {
+        let aliases = transcript?.aliases ?? [:]
+        return (logbook.signals[key.id] ?? []).map { signal in
+            var signal = signal
+            if let turn = aliases[signal.turn] { signal.turn = turn }
+            return signal
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -94,9 +103,10 @@ struct LogbookTranscriptView: View {
     private func followPending() {
         guard let pending = logbook.pendingTurn, pending.key == key, let transcript,
               !transcript.loading, !transcript.loadingEarlier else { return }
-        if transcript.turns.contains(where: { $0.id == pending.turn }) {
+        let turn = transcript.aliases[pending.turn] ?? pending.turn
+        if transcript.turns.contains(where: { $0.id == turn }) {
             logbook.pendingTurn = nil
-            jump = pending.turn
+            jump = turn
         } else if transcript.isPartial {
             transcript.loadEarlier()
         } else {
