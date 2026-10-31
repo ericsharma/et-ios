@@ -1,6 +1,6 @@
 # Plan: Logbook v2 — a Logbook window, then a meta agent that improves the agents
 
-Status: 2026-10-31. D1–D10 ACCEPTED (owner). W0: DONE etd 82921c5, released 0.0.13, nixos-config 22568a4 (§8). A1: IN PROGRESS (trigkey). A2, A3: free to claim. B1: DONE 3e49e03. B2: DONE 5a2a99b (stub; §8). B4: DONE 2c5f33f, TestFlight 202610311550. B5: IN PROGRESS (mac-mini). Next for B: B3 (A1 is released).
+Status: 2026-10-31. D1–D10 ACCEPTED (owner). W0: DONE etd 82921c5, released 0.0.13, nixos-config 22568a4 (§8). A1: IN PROGRESS (trigkey). A2, A3: free to claim. B1: DONE 3e49e03. B2: DONE 5a2a99b (stub; §8). B4: DONE 2c5f33f, TestFlight 202610311550. B5: DONE 0fe4c99 (stub), TestFlight 202610311600; signals JSON for A2 in §8. Next for B: B3 (A1 is released).
 
 Follows [PLAN-logbook.md](PLAN-logbook.md) (L1–L5 built: capture, archive, read API, watcher report, Send to session, iOS) and [PLAN-multi-agent.md](PLAN-multi-agent.md) (M0–M5, in progress: profiles, one Rust parser per agent, live state with **needs you**).
 
@@ -264,6 +264,16 @@ Wave 4                  A5                      B7
 Notes for A1, from the stub on real data: (1) skip prompts that are not the owner's (`<task-notification>`, `<command-…>`, "This session is being continued from a previous conversation…") for both `headline` and `asked`; one session got the headline "<task-notification>". (2) A long session's last 256 KB is often only tool output; the prompt can be MBs back, so `asked` needs the last *prompt*, not the last N bytes. (3) Several gmktec sessions parse to 0 turns (`dd523b22`, 71 lines from 0): worth a fixture.
 
 **B4 (2026-10-31, mac-mini):** et-ios 2c5f33f, TestFlight 202610311550 (owner test pending). ⋯ → Logbook is `LogbookWindow` in a full-screen cover: 3 columns on iPad, a stack on iPhone (starts at places). Show Terminal opens the session's page. The v1 list views (`LogbookReportView`, `ProjectCard`, `LogbookSessionRow`, `Logbook.groups`) are deleted.
+
+**B5 (2026-10-31, mac-mini):** et-ios 0fe4c99, TestFlight 202610311600. Cards show a symbol + count per kind from the overview's `friction`. The transcript shows marks per turn, a strip of ticks beside the scroll bar (click → scroll to the turn, outlined 1.5 s), and a header menu listing every signal. The app polls `logbook_signals(since)` with the overview. Until A2, the stub finds interrupt / denied / tool-error / compact in the overview's tails (real data: 9 signals in 7 transcripts, mostly tool errors).
+**Signals JSON, B's proposal for A2** (the app decodes this; fields read with `decodeIfPresent` except `kind` and `key`):
+```json
+{ "signals": [ { "kind": "interrupt", "key": "trigkey/3427a93a-…", "turn": "<uuid of the prompt that starts the turn>",
+                 "uuid": "<uuid of the line with the signal>", "time": 1793277192, "excerpt": "[Request interrupted by user]" } ] }
+```
+- `turn` must be the uuid that `Transcript.parse` uses as the turn id: the last owner prompt before the signal (`type: user`, text content, not `isMeta`, not `isCompactSummary`, not `<command-`, `<local-command`, `[Request interrupted`). Before the first prompt: `"leading"`. The app jumps by this id.
+- `since`: **all** signals of each transcript that changed at or after `since` (the app replaces that transcript's list), as the overview does.
+- `friction` in the overview = the counts of these signals by `kind`.
 
 ## 9. Risks
 
