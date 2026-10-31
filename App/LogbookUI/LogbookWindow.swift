@@ -296,7 +296,7 @@ struct LogbookProjectHeader: View {
     let edit: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 Text(project.status)
                     .font(.caption.weight(.semibold))
@@ -317,20 +317,23 @@ struct LogbookProjectHeader: View {
                 .menuStyle(.borderlessButton)
                 .fixedSize()
             }
-            Text(project.goal).font(.callout)
-            if !project.progress.isEmpty {
-                Text(project.progress).font(.callout).foregroundStyle(.secondary)
+            if !project.goal.isEmpty {
+                section("Goal") { Text(project.goal) }
+            }
+            if !project.done.isEmpty {
+                section("Done") { bullets(project.done, numbered: false) }
+            }
+            // Before the watcher writes `now`: its 2–3 sentence progress.
+            if !(project.now.isEmpty ? project.progress : project.now).isEmpty {
+                section("Where we are") { Text(project.now.isEmpty ? project.progress : project.now) }
             }
             if !project.next.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Next").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    ForEach(Array(project.next.enumerated()), id: \.offset) { i, step in
-                        Text("\(i + 1). \(step)").font(.callout).fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+                section("Next") { bullets(project.next, numbered: true) }
             }
+            Text("The sessions below have the details: tap one for its transcript.")
+                .font(.caption).foregroundStyle(.secondary)
         }
-        .padding(10)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
         .padding(.bottom, 4)
@@ -341,6 +344,24 @@ struct LogbookProjectHeader: View {
         case "blocked": .red
         case "done": .secondary
         default: .green
+        }
+    }
+
+    private func section(_ title: String, @ViewBuilder _ content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(.subheadline.weight(.semibold))
+            content().font(.callout).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func bullets(_ items: [String], numbered: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(Array(items.enumerated()), id: \.offset) { i, item in
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(numbered ? "\(i + 1)." : "•").foregroundStyle(.secondary)
+                    Text(item)
+                }
+            }
         }
     }
 }

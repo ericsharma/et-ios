@@ -88,12 +88,31 @@ struct LogbookReport: Codable, Equatable, Sendable {
     struct Project: Codable, Equatable, Sendable, Identifiable {
         var id: String
         var name: String
+        /// What the project is for, in plain words.
         var goal: String
         /// "active", "blocked" or "done".
         var status: String
         var sessions: [Member]
+        /// 2 or 3 sentences (before `done` and `now`).
         var progress: String
+        /// What works now, a plain bullet each (owner, 2026-10-31).
+        var done: [String]
+        /// Where things stand, 1 or 2 plain sentences.
+        var now: String
         var next: [String]
+
+        init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(String.self, forKey: .id)
+            name = try c.decodeIfPresent(String.self, forKey: .name) ?? id
+            goal = try c.decodeIfPresent(String.self, forKey: .goal) ?? ""
+            status = try c.decodeIfPresent(String.self, forKey: .status) ?? "active"
+            sessions = try c.decodeIfPresent([Member].self, forKey: .sessions) ?? []
+            progress = try c.decodeIfPresent(String.self, forKey: .progress) ?? ""
+            done = try c.decodeIfPresent([String].self, forKey: .done) ?? []
+            now = try c.decodeIfPresent(String.self, forKey: .now) ?? ""
+            next = try c.decodeIfPresent([String].self, forKey: .next) ?? []
+        }
     }
 
     struct Member: Codable, Equatable, Sendable {

@@ -1,6 +1,6 @@
 # Plan: Logbook v2 — a Logbook window, then a meta agent that improves the agents
 
-Status: 2026-10-31. D1–D10 ACCEPTED (owner). W0: DONE etd 82921c5, released 0.0.13, nixos-config 22568a4 (§8). A1: DONE etd da0bb5e, released 0.0.14, nixos-config ba48457 (§8). B3 can start. A2: DONE etd 8ef00bd, released 0.0.15, nixos-config 8d6a7fd (§8). A3: DONE etd 89adf12 + 41fbcdb, released 0.0.17, nixos-config ab090ce (§8). A4: IN PROGRESS (trigkey; built, deploying 0.0.19). A5: IN PROGRESS (trigkey). B1: DONE 3e49e03. B2: DONE 5a2a99b (stub; §8). B4: DONE 2c5f33f, TestFlight 202610311550. B5: DONE 0fe4c99 (stub), TestFlight 202610311600; signals JSON for A2 in §8. B3: DONE b758064 (etd 0.0.14), TestFlight 202610311617. B6: DONE 1603e8b (sample until A4), TestFlight 202610311642; Findings JSON additions for A4 in §8.
+Status: 2026-10-31. D1–D10 ACCEPTED (owner). W0: DONE etd 82921c5, released 0.0.13, nixos-config 22568a4 (§8). A1: DONE etd da0bb5e, released 0.0.14, nixos-config ba48457 (§8). B3 can start. A2: DONE etd 8ef00bd, released 0.0.15, nixos-config 8d6a7fd (§8). A3: DONE etd 89adf12 + 41fbcdb, released 0.0.17, nixos-config ab090ce (§8). A4: IN PROGRESS (trigkey; built, deploying 0.0.19). A5: IN PROGRESS (trigkey). B1: DONE 3e49e03. B2: DONE 5a2a99b (stub; §8). B4: DONE 2c5f33f, TestFlight 202610311550. B5: DONE 0fe4c99 (stub), TestFlight 202610311600; signals JSON for A2 in §8. B3: DONE b758064 (etd 0.0.14), TestFlight 202610311617. A6: free to claim (owner request, §5). B8: DONE (app side of A6). B6: DONE 1603e8b (sample until A4), TestFlight 202610311642; Findings JSON additions for A4 in §8.
 
 Follows [PLAN-logbook.md](PLAN-logbook.md) (L1–L5 built: capture, archive, read API, watcher report, Send to session, iOS) and [PLAN-multi-agent.md](PLAN-multi-agent.md) (M0–M5, in progress: profiles, one Rust parser per agent, live state with **needs you**).
 
@@ -235,6 +235,17 @@ Wave 2   A1 ─┐   A2 ─┐   A3 ─┐ (3 machines)    B3 (needs A1)  B4  B5
 Wave 3        └──────┴─ A4 ──┘                  B6 (stub first, real after A4)
 Wave 4                  A5                      B7
 ```
+
+### Owner request — plain project summaries (2026-10-31)
+
+The owner wants each project to open with a plain, short explanation, and the transcripts only one tap further. The watcher writes it (it is "the agent in charge of the logbook"); the app shows it.
+
+| Pkg | Track | Starts when | Work | Time |
+|---|---|---|---|---|
+| **A6** | A (any machine) | now | Watcher report prompt (`logbook/watcher.rs`, the project JSON): add `"done": ["…"]` (what works now, 2–5 bullets) and `"now": "…"` (where things stand, 1–2 sentences) per project; keep `goal`, `status`, `next`, `progress`. Rules in the prompt for `goal`, `done`, `now`, `next`: plain words a non-programmer reads, short sentences, no file paths, session ids, commit hashes, version numbers or jargon unless the owner used it; at most 5 bullets; `next` names who does it when it is the owner. Fixture test: the new fields parse; a report without them still loads. Release, deploy trigkey. ✅ Refresh Report: each project shows Goal / Done / Where we are / Next in plain words. | ~2 h |
+| **B8** | B | now (done: et-ios, this commit) | Project header = 4 sections (Goal, Done, Where we are, Next) above the session cards; `done` / `now` read with `decodeIfPresent`; before A6, "Where we are" shows `progress`. | done |
+
+Open question for the owner (not built): the report is made only on Refresh (D6: no automatic model runs), so the summary can be days old. A nightly report, like D7's optional nightly meta run, would keep it current.
 
 ## 6. Rules for agents that work at the same time
 
