@@ -288,6 +288,8 @@ Notes for A1, from the stub on real data: (1) skip prompts that are not the owne
 - `meta(refresh: false)` with no run yet: `{"id": null}` (as the report does).
 - Evidence `turn` is a prompt uuid, as in the signals JSON (B5).
 
+**After A2 + A3 (2026-10-31, mac-mini):** et-ios 43df487, `Vendor/etd` bda7f67 (0.0.16), TestFlight 202610311652, Mac zip E.T.-0.1-202610311656 (notarized, not yet published). `LogbookV2Stub.swift` is deleted: signals and friction come from etd. The transcript view folds a `/compact` summary's turn into the turn before and maps its uuid (`LogbookTranscript.aliases`), so A2's `turn` for a signal after a compaction lands on a shown turn.
+
 ## 9. Risks
 
 | Risk | Effect | Mitigation |
