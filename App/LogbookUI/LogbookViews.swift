@@ -23,41 +23,6 @@ struct LogbookStatusDot: View {
     }
 }
 
-/// machine/mm session, a dot, and when it last wrote.
-struct LogbookSessionRow: View {
-    let session: LogbookSession
-    var role: String?
-
-    var body: some View {
-        HStack(spacing: 8) {
-            LogbookStatusDot(status: session.status)
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 4) {
-                    if let title = session.title {
-                        Text(title).font(.callout).lineLimit(1)
-                    } else {
-                        Text(session.label).font(.callout.monospaced()).lineLimit(1)
-                    }
-                    if session.paused {
-                        Image(systemName: "pause.circle.fill").foregroundStyle(.orange).font(.caption)
-                            .help("Do not record")
-                    }
-                }
-                if session.title != nil {
-                    Text(session.label).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
-                }
-                Text(role ?? caption).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-            }
-        }
-        .padding(.vertical, 1)
-    }
-
-    private var caption: String {
-        let when = session.isLive ? session.status : session.last.formatted(.relative(presentation: .named))
-        return [session.branch, when].compactMap { $0 }.joined(separator: " · ")
-    }
-}
-
 // MARK: - Transcript
 
 /// A session's live transcript: turns with folded tool calls; select turns

@@ -415,7 +415,8 @@ struct SessionView: View {
                 }
             }
         }
-        .sheet(isPresented: $showLogbook) {
+        // Full screen: an iPad needs the width for 3 columns.
+        .fullScreenCover(isPresented: $showLogbook) {
             LogbookScreen(session: session) { showLogbook = false }
         }
         .sheet(isPresented: $showAgents) {

@@ -8,34 +8,50 @@ struct LogbookWindow: View {
     let machines: [MmMachine]
     /// Shows a live session's terminal; nil hides Show Terminal.
     var showTerminal: ((LogbookSession) -> Void)?
+    /// iOS: closes the Logbook (a Done button over the places).
+    var done: (() -> Void)?
     @State private var search = ""
+    /// The places list shows its selection. An iPhone's stack clears it on
+    /// Back, so that a tap on the same place opens it again.
+    @State private var placeChosen = true
+    /// An iPhone starts at the places (D3: places → cards → transcript).
+    @State private var compactColumn = NavigationSplitViewColumn.sidebar
     @State private var editing: LogbookEdit?
     @State private var sending: LogbookSendTarget?
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(preferredCompactColumn: $compactColumn) {
             places
                 .navigationSplitViewColumnWidth(min: 180, ideal: 210, max: 280)
+                .toolbar {
+                    if let done {
+                        ToolbarItem(placement: .cancellationAction) { Button("Done", action: done) }
+                    }
+                }
         } content: {
             cards
                 .navigationSplitViewColumnWidth(min: 300, ideal: 380, max: 520)
+                .toolbar {
+                    ToolbarItemGroup(placement: .primaryAction) {
+                        if let run = logbook.run {
+                            ProgressView(value: run.fraction ?? 0).frame(width: 80)
+                                .help(run.total > 0 ? "\(run.stage) \(run.done)/\(run.total)" : run.stage)
+                        }
+                        Button { logbook.refreshReport() } label: { Label("Refresh Report", systemImage: "arrow.clockwise") }
+                            .disabled(logbook.run != nil)
+                            .help("Read every session again and group them by project (1–3 min)")
+                    }
+                }
         } detail: {
             detail
-        }
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                if let run = logbook.run {
-                    ProgressView(value: run.fraction ?? 0).frame(width: 80)
-                        .help(run.total > 0 ? "\(run.stage) \(run.done)/\(run.total)" : run.stage)
+                #if os(macOS)
+                .toolbar {
+                    Button { logbook.inspector.toggle() } label: { Label("Inspector", systemImage: "info.circle") }
+                        .keyboardShortcut("i", modifiers: .command)
+                        .disabled(logbook.selected == nil)
+                        .help("Machine, folder, ids (⌘I)")
                 }
-                Button { logbook.refreshReport() } label: { Label("Refresh Report", systemImage: "arrow.clockwise") }
-                    .disabled(logbook.run != nil)
-                    .help("Read every session again and group them by project (1–3 min)")
-                Button { logbook.inspector.toggle() } label: { Label("Inspector", systemImage: "info.circle") }
-                    .keyboardShortcut("i", modifiers: .command)
-                    .disabled(logbook.selected == nil)
-                    .help("Machine, folder, ids (⌘I)")
-            }
+                #endif
         }
         .sheet(item: $editing) { LogbookEditSheet(edit: $0, logbook: logbook) }
         .sheet(item: $sending) { LogbookSendSheet(target: $0, machines: machines, logbook: logbook) }
@@ -44,7 +60,10 @@ struct LogbookWindow: View {
     // MARK: - Places
 
     private var places: some View {
-        List(selection: Binding(get: { logbook.place }, set: { if let place = $0 { logbook.place = place } })) {
+        List(selection: Binding(get: { placeChosen ? logbook.place : nil }, set: { place in
+            placeChosen = place != nil
+            if let place { logbook.place = place }
+        })) {
             placeRow(.now, "Now", systemImage: "circle.fill", tint: .green)
             placeRow(.findings, "Findings", systemImage: "flag", tint: .orange)
             if logbook.count(.suggestions) > 0 {
@@ -75,6 +94,10 @@ struct LogbookWindow: View {
         }
         .listStyle(.sidebar)
         .navigationTitle("Logbook")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        .refreshable { await logbook.reload() }
+        #endif
     }
 
     private func placeRow(_ place: LogbookPlace, _ title: String, systemImage: String, tint: Color) -> some View {
@@ -132,6 +155,13 @@ struct LogbookWindow: View {
             }
         }
         .navigationTitle(title)
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        .refreshable {
+            await logbook.reload()
+            await logbook.reloadOverview()
+        }
+        #endif
         .modifier(ArchiveSearch(on: logbook.place == .archive, text: $search))
     }
 
@@ -177,6 +207,10 @@ struct LogbookWindow: View {
         if let key = logbook.selected {
             LogbookTranscriptView(key: key, logbook: logbook, machines: machines)
                 .id(key)
+                #if os(iOS)
+                .navigationTitle(logbook.session(key).map(logbook.headline) ?? "Transcript")
+                .navigationBarTitleDisplayMode(.inline)
+                #endif
                 .inspector(isPresented: $logbook.inspector) {
                     if let session = logbook.session(key) {
                         LogbookInspector(session: session, entry: logbook.entry(session))

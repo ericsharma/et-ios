@@ -113,39 +113,6 @@ final class Logbook {
         sessions.first { $0.id == id }
     }
 
-    /// Sessions to show: live ones, and the ones of the last 7 days.
-    var recent: [LogbookSession] {
-        let week = Date().addingTimeInterval(-7 * 86400)
-        return sessions.filter { $0.isLive || $0.last > week }
-    }
-
-    /// The sidebar's groups: the report's projects once there is a report,
-    /// else the git repo.
-    var groups: [LogbookGroup] {
-        let shown = recent
-        guard let report else {
-            let byRepo = Dictionary(grouping: shown, by: \.repoName)
-            return byRepo.map { LogbookGroup(id: "repo:" + $0.key, name: $0.key, sessions: $0.value.sorted(by: Self.liveFirst), project: nil) }
-                .sorted { ($0.busy, $0.last) > ($1.busy, $1.last) }
-        }
-        var placed = Set<String>()
-        var groups: [LogbookGroup] = report.projects.map { project in
-            let members = project.sessions.compactMap { session(id: $0.key) }
-            placed.formUnion(members.map(\.id))
-            return LogbookGroup(id: "project:" + project.id, name: project.name, sessions: members.sorted(by: Self.liveFirst), project: project)
-        }
-        let rest = shown.filter { !placed.contains($0.id) }
-        if !rest.isEmpty {
-            groups.append(LogbookGroup(id: "unassigned", name: "Not in a project", sessions: rest.sorted(by: Self.liveFirst), project: nil))
-        }
-        return groups
-    }
-
-    private static func liveFirst(_ a: LogbookSession, _ b: LogbookSession) -> Bool {
-        if a.isLive != b.isLive { return a.isLive }
-        return a.last > b.last
-    }
-
     // MARK: - Do not record
 
     func setPaused(_ session: LogbookSession, _ paused: Bool) {
@@ -311,18 +278,6 @@ final class Logbook {
         case .unreachable(let text), .closed(let text), .other(let text): text
         }
     }
-}
-
-/// A group in the sidebar: a report project, or a repo before the first report.
-struct LogbookGroup: Identifiable {
-    var id: String
-    var name: String
-    var sessions: [LogbookSession]
-    var project: LogbookReport.Project?
-
-    var busy: Int { sessions.filter { $0.status == "busy" }.count }
-    var live: Int { sessions.filter(\.isLive).count }
-    var last: Date { sessions.map(\.last).max() ?? .distantPast }
 }
 
 /// One transcript, followed live: lines from the archive, parsed into turns.
