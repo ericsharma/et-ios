@@ -401,12 +401,30 @@ final class IrohHost: HostConnection, @unchecked Sendable {
         try await mapped { try await host.grouping(changeJson: changeJSON) }
     }
 
+    /// The meta agent's findings JSON (PLAN-logbook-v2 §4.3). `refresh`: a
+    /// new run, with progress (stage, done, total).
+    func meta(refresh: Bool, progress: @escaping @Sendable (String, Int, Int) -> Void) async throws -> String {
+        try await mapped { try await host.meta(refresh: refresh, progress: ReportRelay(progress)) }
+    }
+
+    /// The owner's decision on a finding or proposal (JSON, plan §8 B6).
+    func metaDecision(_ json: String) async throws {
+        try await mapped { try await host.metaDecision(decisionJson: json) }
+    }
+
+    /// Writes an allow-listed agent file on this machine if its sha256 is
+    /// still `base`; returns the backup's path (empty: no old file).
+    func configWrite(path: String, base: String, content: String) async throws -> String {
+        try await mapped { try await host.configWrite(path: path, base: base, content: content) }
+    }
+
     /// Writes the selection as Markdown on the archive, sends it to
     /// `machine` and types its path into `session`.
     func logbookSend(_ selection: LogbookSelection, to machine: String, session: String) async throws -> SentFiles {
         let selection: LogSelection = switch selection {
         case .turns(let key, let ids): .turns(key: key.link, turnIds: ids)
         case .reportSection(let report, let project): .reportSection(reportId: report, projectId: project)
+        case .finding(let run, let finding): .finding(runId: run, findingId: finding)
         }
         let delivered = try await mapped {
             try await host.logbookSend(selection: selection, to: machine, session: session, progress: ProgressRelay { _, _ in })

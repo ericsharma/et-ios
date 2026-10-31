@@ -10,7 +10,7 @@ struct LogbookScreen: View {
     init(session: SessionController, done: @escaping () -> Void) {
         self.session = session
         self.done = done
-        _logbook = State(initialValue: Logbook(archive: { session.archiveHost() }, log: { session.log.add($0) }))
+        _logbook = State(initialValue: Logbook(archive: { session.archiveHost() }, hosts: { session.directHosts() }, log: { session.log.add($0) }))
     }
 
     var body: some View {

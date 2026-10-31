@@ -84,6 +84,25 @@ struct LogbookTranscriptView: View {
             transcript = t
         }
         .onDisappear { transcript?.stop() }
+        .onChange(of: transcript?.turns.count) { _, _ in followPending() }
+        .onChange(of: transcript?.loadingEarlier) { _, _ in followPending() }
+        .onChange(of: logbook.pendingTurn) { _, _ in followPending() }
+    }
+
+    /// An evidence link's turn: jump once it is loaded; load earlier parts
+    /// until it is, or the start is reached.
+    private func followPending() {
+        guard let pending = logbook.pendingTurn, pending.key == key, let transcript,
+              !transcript.loading, !transcript.loadingEarlier else { return }
+        if transcript.turns.contains(where: { $0.id == pending.turn }) {
+            logbook.pendingTurn = nil
+            jump = pending.turn
+        } else if transcript.isPartial {
+            transcript.loadEarlier()
+        } else {
+            logbook.pendingTurn = nil
+            logbook.notice = "That turn is not in the transcript any more"
+        }
     }
 
     /// Headline, state, project (PLAN-logbook-v2 §4.1); ids are in the inspector.

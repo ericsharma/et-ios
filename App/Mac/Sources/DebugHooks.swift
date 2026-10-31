@@ -18,6 +18,10 @@ import SwiftUI
 ///                             "report" (Refresh the report) or "last" (the
 ///                             last report, no Refresh)
 ///   --inspector               with --logbook <id>: open the inspector
+///   --evidence                with --logbook findings: open the first
+///                             finding's first evidence link
+///   --apply                   with --logbook findings: Apply the first
+///                             finding's write proposal, log each machine
 ///   --logbook-grouping        with --logbook last: reject a proposal, rename
 ///                             project 1, move a session of the last project
 ///                             to none; then log the report
@@ -64,6 +68,27 @@ enum DebugHooks {
                 let places: [String: LogbookPlace] = ["now": .now, "findings": .findings, "unsorted": .unsorted, "archive": .archive]
                 if let place = places[page] {
                     logbook?.place = place
+                    // --evidence: open the first finding's first evidence link.
+                    if place == .findings, args.contains("--apply"), let logbook {
+                        // The sample's base matches no file: every machine must refuse.
+                        while logbook.findings.shown.first == nil { try? await Task.sleep(for: .milliseconds(300)) }
+                        let finding = logbook.findings.shown[0]
+                        guard let proposal = finding.proposals.first(where: { $0.route == "write" }) else { return }
+                        logbook.findings.apply(proposal, in: finding)
+                        try? await Task.sleep(for: .seconds(8))
+                        for t in proposal.targets {
+                            fleet.log.add("Debug: apply \(t.machine): \(String(describing: logbook.findings.writes[LogbookFindings.targetKey(proposal, t)]))")
+                        }
+                        return
+                    }
+                    guard place == .findings, args.contains("--evidence"), let logbook else { return }
+                    while logbook.findings.shown.first?.evidence.first == nil { try? await Task.sleep(for: .milliseconds(300)) }
+                    let item = logbook.findings.shown[0].evidence[0]
+                    fleet.log.add("Debug: evidence \(item.key) turn \(item.turn)")
+                    if let key = LogbookKey(id: item.key) {
+                        logbook.pendingTurn = LogbookTurnRef(key: key, turn: item.turn)
+                        logbook.selected = key
+                    }
                     return
                 }
                 if page.hasPrefix("project:"), let logbook {

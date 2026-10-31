@@ -32,6 +32,7 @@
 		39EA59E5D48AE69A7807B9A0 /* SelectMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FE7D921D5CAA4506B3FD10C /* SelectMode.swift */; };
 		3A3285F4C8B435AFADFA4F39 /* Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3251CE9C9BA08235AF09F96 /* Push.swift */; };
 		3CD4F4B374AC427F2F7CC671 /* Nicknames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BAEF5D9D9F6E2D1930C94BD /* Nicknames.swift */; };
+		41906B9B868087AC217A958A /* LogbookFindings.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8E51E9392C1F3B7DA1189B4 /* LogbookFindings.swift */; };
 		429E741F37D406354F433B8B /* LogbookWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 403E6B4ADAD93FB4B62620DE /* LogbookWindow.swift */; };
 		44546852A16838D9010F6492 /* ETCore in Frameworks */ = {isa = PBXBuildFile; productRef = 3EC677F4C4423E9C7AF25E72 /* ETCore */; };
 		45D6BA62083244C784927078 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC2C774B86C691F339F5290 /* Views.swift */; };
@@ -79,6 +80,7 @@
 		A1E2E857AFDCDADAE26AEBF0 /* Agents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB084C598E7F12E8BD77447 /* Agents.swift */; };
 		A6CF789B277F4329F0C57693 /* SessionTerminal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44366E16603D79FB4DCAF6D2 /* SessionTerminal.swift */; };
 		A773868D83637C7ACBA83714 /* VocabMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 591C2444EF4A2214A0249778 /* VocabMatcher.swift */; };
+		AFBD6ED3CA178EF307E0ACC3 /* LogbookFindings.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8E51E9392C1F3B7DA1189B4 /* LogbookFindings.swift */; };
 		B3B645CBAE52AC315F4D26D1 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 78E36ABFF9A6F111E6BC39DD /* SwiftTerm */; };
 		B49C06222B399FE2F004842A /* Setup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63189CD29B6FB5728F823465 /* Setup.swift */; };
 		B7B2B9BE3BD4B283F11398E5 /* VocabMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 591C2444EF4A2214A0249778 /* VocabMatcher.swift */; };
@@ -192,6 +194,7 @@
 		CB2856B21C534EA0CAE1C159 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CF2F817C4FB3FE99495AF097 /* ETShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = ETShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D3251CE9C9BA08235AF09F96 /* Push.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Push.swift; sourceTree = "<group>"; };
+		D8E51E9392C1F3B7DA1189B4 /* LogbookFindings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogbookFindings.swift; sourceTree = "<group>"; };
 		DAF38856E7DA96D98C428743 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		DD862AA08B0790FEA8C32121 /* Speaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Speaker.swift; sourceTree = "<group>"; };
 		DE5E31C39DDE31580DBCAB4E /* Vocabulary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vocabulary.swift; sourceTree = "<group>"; };
@@ -282,6 +285,7 @@
 			isa = PBXGroup;
 			children = (
 				9BD3B63BE81D334271055BEF /* Logbook.swift */,
+				D8E51E9392C1F3B7DA1189B4 /* LogbookFindings.swift */,
 				389A9BBF5EFCF6530DE86D47 /* LogbookFriction.swift */,
 				AB4E99913D5A2D61FFCA4718 /* LogbookPlaces.swift */,
 				EDB766205ACA88AFE4503F86 /* LogbookReportViews.swift */,
@@ -596,6 +600,7 @@
 				791E79EFC8C8971FEE5123D4 /* Fleet.swift in Sources */,
 				0AEEC656192348D8F9AC0E89 /* Iroh.swift in Sources */,
 				193D09374FBDD4C0B00B413C /* Logbook.swift in Sources */,
+				41906B9B868087AC217A958A /* LogbookFindings.swift in Sources */,
 				CC6DD9AADF5AD28D448B6473 /* LogbookFriction.swift in Sources */,
 				9B3281F7CC7C23E7CE5C9E30 /* LogbookPlaces.swift in Sources */,
 				E9E11AA1FFD106C37C885F01 /* LogbookReportViews.swift in Sources */,
@@ -635,6 +640,7 @@
 				58F3229B35D71250C678BC3D /* Iroh.swift in Sources */,
 				176CEB6F04458465BE3439DA /* KeyRow.swift in Sources */,
 				68664758EC86B0B913F56E2E /* Logbook.swift in Sources */,
+				AFBD6ED3CA178EF307E0ACC3 /* LogbookFindings.swift in Sources */,
 				5879F3DF4645B5CC2C3D2FD8 /* LogbookFriction.swift in Sources */,
 				252A1E5D85955B080B62A2A5 /* LogbookPlaces.swift in Sources */,
 				DD266A0ED5126B581EA61465 /* LogbookReportViews.swift in Sources */,

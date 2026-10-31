@@ -53,6 +53,8 @@ struct LogbookWindow: View {
                 }
                 #endif
         }
+        // An evidence link from Findings: show the transcript (an iPhone pushes it).
+        .onChange(of: logbook.selected) { _, key in if key != nil { compactColumn = .detail } }
         .sheet(item: $editing) { LogbookEditSheet(edit: $0, logbook: logbook) }
         .sheet(item: $sending) { LogbookSendSheet(target: $0, machines: machines, logbook: logbook) }
     }
@@ -115,8 +117,7 @@ struct LogbookWindow: View {
     @ViewBuilder private var cards: some View {
         switch logbook.place {
         case .findings:
-            ContentUnavailableView("No findings yet", systemImage: "flag",
-                                   description: Text("The meta agent reads every transcript and proposes changes to the agents' instructions. It is not built yet (PLAN-logbook-v2 A4)."))
+            LogbookFindingsView(logbook: logbook, machines: machines)
         case .suggestions:
             ScrollView {
                 if let report = logbook.report {

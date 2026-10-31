@@ -72,6 +72,8 @@ enum LogbookSelection: Sendable, Equatable {
     /// Turns of one transcript, by prompt uuid.
     case turns(LogbookKey, [String])
     case reportSection(reportId: String, projectId: String)
+    /// A meta finding and its proposals, for an agent to carry out (D8).
+    case finding(runId: String, findingId: String)
 }
 
 /// The watcher's report (PLAN-logbook §4.4).
@@ -199,4 +201,104 @@ struct LogbookSignal: Decodable, Equatable, Hashable, Sendable {
         struct Signals: Decodable { var signals: [LogbookSignal]? }
         return try JSONDecoder().decode(Signals.self, from: Data(json.utf8)).signals ?? []
     }
+}
+
+/// The meta agent's answer (PLAN-logbook-v2 §4.3): findings with evidence
+/// and proposed changes to the agents' instruction files.
+struct MetaRun: Decodable, Equatable, Sendable {
+    var id: String
+    /// Unix seconds.
+    var taken: Double
+    var findings: [Finding]
+
+    struct Finding: Decodable, Equatable, Sendable, Identifiable {
+        var id: String
+        var title: String
+        /// A §4.3 signal kind, or "drift".
+        var kind: String
+        var count: Int
+        var sessions: Int
+        var evidence: [Evidence]
+        var proposals: [Proposal]
+
+        init(from decoder: any Decoder) throws {
+            enum Keys: String, CodingKey { case id, title, kind, count, sessions, evidence, proposals }
+            let c = try decoder.container(keyedBy: Keys.self)
+            id = try c.decode(String.self, forKey: .id)
+            title = try c.decodeIfPresent(String.self, forKey: .title) ?? id
+            kind = try c.decodeIfPresent(String.self, forKey: .kind) ?? ""
+            count = try c.decodeIfPresent(Int.self, forKey: .count) ?? 0
+            sessions = try c.decodeIfPresent(Int.self, forKey: .sessions) ?? 0
+            evidence = try c.decodeIfPresent([Evidence].self, forKey: .evidence) ?? []
+            proposals = try c.decodeIfPresent([Proposal].self, forKey: .proposals) ?? []
+        }
+    }
+
+    struct Evidence: Decodable, Equatable, Hashable, Sendable {
+        /// "machine/sessionId".
+        var key: String
+        /// The turn's prompt uuid (as LogbookSignal.turn).
+        var turn: String
+        var excerpt: String
+
+        init(from decoder: any Decoder) throws {
+            enum Keys: String, CodingKey { case key, turn, excerpt }
+            let c = try decoder.container(keyedBy: Keys.self)
+            key = try c.decode(String.self, forKey: .key)
+            turn = try c.decodeIfPresent(String.self, forKey: .turn) ?? ""
+            excerpt = try c.decodeIfPresent(String.self, forKey: .excerpt) ?? ""
+        }
+    }
+
+    struct Proposal: Decodable, Equatable, Sendable, Identifiable {
+        var id: String
+        /// "write" (Apply on all machines), "agent" (Send to agent…) or
+        /// "note" (text only: settings, hooks; D9).
+        var route: String
+        var targets: [Target]
+        /// Unified diff, for the owner to read.
+        var patch: String
+        var why: String
+        var expect: String
+
+        init(from decoder: any Decoder) throws {
+            enum Keys: String, CodingKey { case id, route, targets, patch, why, expect }
+            let c = try decoder.container(keyedBy: Keys.self)
+            id = try c.decode(String.self, forKey: .id)
+            route = try c.decodeIfPresent(String.self, forKey: .route) ?? "note"
+            targets = try c.decodeIfPresent([Target].self, forKey: .targets) ?? []
+            patch = try c.decodeIfPresent(String.self, forKey: .patch) ?? ""
+            why = try c.decodeIfPresent(String.self, forKey: .why) ?? ""
+            expect = try c.decodeIfPresent(String.self, forKey: .expect) ?? ""
+        }
+    }
+
+    struct Target: Decodable, Equatable, Hashable, Sendable {
+        var machine: String
+        var path: String
+        /// sha256 of the file the patch applies to ("" = a new file).
+        var base: String
+        /// The whole file after the patch: what Apply writes (config_write).
+        var content: String?
+    }
+
+    var takenDate: Date { Date(timeIntervalSince1970: taken) }
+
+    init(from decoder: any Decoder) throws {
+        enum Keys: String, CodingKey { case id, taken, findings }
+        let c = try decoder.container(keyedBy: Keys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? ""
+        taken = try c.decodeIfPresent(Double.self, forKey: .taken) ?? 0
+        findings = try c.decodeIfPresent([Finding].self, forKey: .findings) ?? []
+    }
+
+    static func decode(_ json: String) throws -> MetaRun {
+        try JSONDecoder().decode(MetaRun.self, from: Data(json.utf8))
+    }
+}
+
+/// A turn of a transcript, by its prompt uuid.
+struct LogbookTurnRef: Equatable, Sendable {
+    var key: LogbookKey
+    var turn: String
 }

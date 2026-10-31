@@ -17,7 +17,7 @@ struct ETMacApp: App {
         _setup = State(initialValue: Setup(fleet: fleet))
         let files = SharedFiles(hosts: { fleet.directHosts() }, log: { fleet.log.add($0) })
         _files = State(initialValue: files)
-        let logbook = Logbook(archive: { fleet.archiveHost() }, log: { fleet.log.add($0) })
+        let logbook = Logbook(archive: { fleet.archiveHost() }, hosts: { fleet.directHosts() }, log: { fleet.log.add($0) })
         _logbook = State(initialValue: logbook)
         let agents = Agents(hosts: { fleet.directHosts() }, log: { fleet.log.add($0) })
         _agents = State(initialValue: agents)

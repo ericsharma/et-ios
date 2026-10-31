@@ -101,7 +101,7 @@ extension Logbook {
 
     func count(_ place: LogbookPlace) -> Int {
         switch place {
-        case .findings: 0
+        case .findings: findings.shown.count
         case .suggestions: report?.proposals.count ?? 0
         case .archive: sessions.count
         default: cards(place).count

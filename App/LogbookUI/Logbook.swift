@@ -29,6 +29,10 @@ final class Logbook {
     var selected: LogbookKey?
     /// ⌘I: machine, folder, ids of the open transcript.
     var inspector = false
+    /// A turn the open transcript scrolls to once it has it (evidence links).
+    var pendingTurn: LogbookTurnRef?
+    /// The meta agent's findings (B6).
+    @ObservationIgnored private(set) var findings: LogbookFindings!
 
     struct ReportRun: Equatable {
         var stage = "starting"
@@ -47,9 +51,14 @@ final class Logbook {
     @ObservationIgnored private var watching = false
     @ObservationIgnored private var reportTask: Task<Void, Never>?
 
-    init(archive: @escaping @MainActor () -> IrohHost?, log: @escaping @MainActor (String) -> Void) {
+    /// `hosts`: every machine connected directly (Apply writes on each).
+    init(archive: @escaping @MainActor () -> IrohHost?, hosts: @escaping @MainActor () -> [String: IrohHost],
+         log: @escaping @MainActor (String) -> Void) {
         self.archive = archive
         self.log = log
+        findings = LogbookFindings(archive: archive, hosts: hosts, log: log,
+                                   notify: { [weak self] in self?.notice = $0 },
+                                   signals: { [weak self] in self?.signals.values.flatMap { $0 } ?? [] })
     }
 
     // MARK: - Sessions
@@ -66,6 +75,8 @@ final class Logbook {
             await reload()
             await reloadOverview()
             await reloadSignals()
+            // After the signals: before A4 the sample is made from them.
+            if !findings.loaded { await findings.load() }
             try? await Task.sleep(for: .seconds(5))
         }
     }
