@@ -1,6 +1,6 @@
 # Plan: Logbook v2 — a Logbook window, then a meta agent that improves the agents
 
-Status: 2026-10-31. D1–D10 ACCEPTED (owner). W0: DONE etd 82921c5, released 0.0.13, nixos-config 22568a4 (§8). A1: DONE etd da0bb5e, released 0.0.14, nixos-config ba48457 (§8). B3 can start. A2, A3: IN PROGRESS (trigkey). B1: DONE 3e49e03. B2: DONE 5a2a99b (stub; §8). B4: DONE 2c5f33f, TestFlight 202610311550. B5: DONE 0fe4c99 (stub), TestFlight 202610311600; signals JSON for A2 in §8. B3: DONE b758064 (etd 0.0.14), TestFlight 202610311617. B track waits for A2 (real signals) and A4 (B6).
+Status: 2026-10-31. D1–D10 ACCEPTED (owner). W0: DONE etd 82921c5, released 0.0.13, nixos-config 22568a4 (§8). A1: DONE etd da0bb5e, released 0.0.14, nixos-config ba48457 (§8). B3 can start. A2, A3: IN PROGRESS (trigkey). B1: DONE 3e49e03. B2: DONE 5a2a99b (stub; §8). B4: DONE 2c5f33f, TestFlight 202610311550. B5: DONE 0fe4c99 (stub), TestFlight 202610311600; signals JSON for A2 in §8. B3: DONE b758064 (etd 0.0.14), TestFlight 202610311617. B6: IN PROGRESS (mac-mini, stub until A4).
 
 Follows [PLAN-logbook.md](PLAN-logbook.md) (L1–L5 built: capture, archive, read API, watcher report, Send to session, iOS) and [PLAN-multi-agent.md](PLAN-multi-agent.md) (M0–M5, in progress: profiles, one Rust parser per agent, live state with **needs you**).
 
