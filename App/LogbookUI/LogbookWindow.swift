@@ -272,7 +272,7 @@ struct LogbookCard: View {
                 }
                 HStack(spacing: 8) {
                     Text(stateText(state)).foregroundStyle(state == "needs-you" ? .orange : .secondary)
-                    LogbookFrictionMarks(friction: entry?.friction ?? [:])
+                    LogbookFrictionMarks(friction: logbook.friction(session))
                     Spacer()
                     Text(session.last, format: .relative(presentation: .named)).foregroundStyle(.secondary)
                 }

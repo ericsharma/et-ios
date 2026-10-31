@@ -32,6 +32,13 @@ extension Logbook {
         entry(session)?.state == "needs-you" && session.isLive ? "needs-you" : session.status
     }
 
+    /// Signal counts by kind: the overview's, else counted from the signals
+    /// (an etd before A2 sends `friction` empty).
+    func friction(_ session: LogbookSession) -> [String: Int] {
+        if let friction = entry(session)?.friction, !friction.isEmpty { return friction }
+        return Dictionary(grouping: signals[session.id] ?? [], by: \.kind).mapValues(\.count)
+    }
+
     func isTrivial(_ session: LogbookSession) -> Bool {
         entry(session)?.trivial ?? false
     }
