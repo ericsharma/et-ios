@@ -40,10 +40,30 @@ final class IrohLink: @unchecked Sendable {
         }
     }
 
+    /// What `relays()` said last, for the next start; empty: n0's. iOS keeps
+    /// it in the App Group: the share extension starts its own link.
+    private static let relaysKey = "etLinkRelays"
+    private static var relayDefaults: UserDefaults {
+        #if os(iOS)
+        UserDefaults(suiteName: "group.xyz.ericsharma.et") ?? .standard
+        #else
+        .standard
+        #endif
+    }
+    private static var savedRelays: [String] {
+        relayDefaults.stringArray(forKey: relaysKey) ?? []
+    }
+
+    /// Saves the relays the link uses now. They follow the paired network.
+    func saveRelays() async {
+        guard let link = try? await started() else { return }
+        Self.relayDefaults.set(await link.relays(), forKey: Self.relaysKey)
+    }
+
     private func startIfNeeded() -> Task<Link, any Error> {
         lock.withLock {
             if let startTask { return startTask }
-            let task = Task { try await Link.start(secretKey: try DeviceKey.loadOrCreate()) }
+            let task = Task { try await Link.start(secretKey: try DeviceKey.loadOrCreate(), relays: Self.savedRelays) }
             startTask = task
             return task
         }
@@ -76,6 +96,7 @@ final class IrohLink: @unchecked Sendable {
         let link = try await started()
         do {
             let paired = try await link.pair(url: url, deviceName: deviceName)
+            await saveRelays()
             return PairingTicket(hostName: paired.hostName, endpointId: paired.endpointId, relayURL: paired.relayUrl)
         } catch {
             throw Self.map(error)
@@ -335,8 +356,9 @@ final class IrohHost: HostConnection, @unchecked Sendable {
     /// Every machine and device; the network key's signature is checked in EtLink.
     func network() async throws -> NetInfo {
         let info = try await mapped { try await host.network() }
+        await IrohLink.shared.saveRelays()
         return NetInfo(name: info.name, key: info.key, members: info.members.map {
-            NetMember(endpointId: $0.endpointId, name: $0.name, isMachine: $0.isMachine)
+            NetMember(endpointId: $0.endpointId, name: $0.name, isMachine: $0.isMachine, relayUrls: $0.relayUrls)
         }, archive: info.archive)
     }
 
@@ -467,6 +489,8 @@ struct NetMember: Sendable, Equatable, Identifiable {
     var name: String
     /// A machine runs etd and has sessions; otherwise a phone or tablet.
     var isMachine: Bool
+    /// The machine's own relays; empty on n0's.
+    var relayUrls: [String]
     var id: String { endpointId }
 }
 

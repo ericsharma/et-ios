@@ -137,7 +137,7 @@ func run() async throws {
     check(afterJoin.machineName == "test-mac", "this machine's name: \(afterJoin.machineName ?? "?")")
 
     print("6. Pair the app (step 4)")
-    let link = try await Link.start(secretKey: generateSecretKey())
+    let link = try await Link.start(secretKey: generateSecretKey(), relays: [])
     let deviceLink = try mac.cli.invite(machine: false)
     let deviceName = Onboarding.deviceName(machine: afterJoin.machineName ?? "test-mac")
     let paired = try await link.pair(url: deviceLink, deviceName: deviceName)

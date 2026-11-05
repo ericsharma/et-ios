@@ -400,7 +400,7 @@ final class Fleet {
             Task {
                 defer { self.mmConnecting.remove(name) }
                 do {
-                    let host = try await IrohLink.shared.connect(endpointId: member.endpointId, relayURL: nil)
+                    let host = try await IrohLink.shared.connect(endpointId: member.endpointId, relayURL: member.relayUrls.first)
                     let hostName = try await host.hostName()
                     guard self.hubHost === hub, self.networkMachines.contains(member) else {
                         await host.close()
