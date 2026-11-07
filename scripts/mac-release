@@ -34,7 +34,8 @@ publish() {
   local got
   got=$(etd-ssh trigkey -- "sha256sum $remote" | cut -d' ' -f1)
   [ "$got" = "$sum" ] || { echo "Copy to trigkey is damaged ($got)." >&2; exit 1; }
-  etd-ssh trigkey -- "gh release create $tag $remote --repo ericsharma/et-ios --target $commit --title 'E.T. for Mac ${tag#mac-}' --notes 'Developer ID signed, notarized (commit ${commit:0:7}). Unzip, move E.T.app to Applications, open. sha256 $sum'; rm -rf /tmp/et-release-$tag"
+  etd-ssh trigkey -- "gh release create $tag $remote --repo ericsharma/et-ios --target $commit --title 'E.T. for Mac ${tag#mac-}' --notes 'Developer ID signed, notarized (commit ${commit:0:7}). Unzip, move E.T.app to Applications, open. sha256 $sum'; s=\$?; rm -rf /tmp/et-release-$tag; exit \$s" \
+    || { echo "gh release create failed; nothing published." >&2; exit 1; }
   echo "Published: https://github.com/ericsharma/et-ios/releases/tag/$tag"
 }
 if [ "${1:-}" = "--publish-only" ]; then
