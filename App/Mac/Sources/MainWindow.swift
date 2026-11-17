@@ -79,12 +79,6 @@ struct MainWindow: View {
             }
         }
         .animation(.default, value: fleet.notice)
-        // A drop on the Dock icon: pick a machine for it.
-        .onOpenURL { url in
-            guard url.isFileURL else { return }
-            fleet.queueSend([url])
-            openWindow(id: "send")
-        }
         .onChange(of: fleet.requestedLogbook) { _, page in
             guard let page else { return }
             selection = nil

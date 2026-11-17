@@ -145,12 +145,35 @@ targets:
         LSApplicationCategoryType: public.app-category.developer-tools
         NSMicrophoneUsageDescription: E.T. uses the microphone when you click Dictate to speak text into the terminal.
         NSSpeechRecognitionUsageDescription: E.T. turns your dictation into text on this Mac. Audio never leaves the Mac.
-        # Any file or folder dropped on the Dock icon: File → Send File….
+        # Dock icon or Finder Open With: File → Send File…. Alternate
+        # lists E.T. under Open With but never makes it the default app.
+        # Open With skips wildcard claims (public.item, public.data,
+        # public.content, com.apple.package; TextEdit's public.data too), so
+        # it gets the broad kinds; public.folder only counts in its own claim.
+        # Files of unknown kinds: Dock drop or File → Send File….
         CFBundleDocumentTypes:
           - CFBundleTypeName: Any file
             CFBundleTypeRole: Viewer
             LSHandlerRank: None
             LSItemContentTypes: [public.item]
+          - CFBundleTypeName: File
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.text
+              - public.image
+              - public.audiovisual-content
+              - public.archive
+              - public.composite-content
+              - public.spreadsheet
+              - public.presentation
+              - public.executable
+              - public.disk-image
+              - public.font
+          - CFBundleTypeName: Folder
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.folder]
         # et://pair?t=… from `etd invite`.
         CFBundleURLTypes:
           - CFBundleURLName: xyz.ericsharma.et.mac.pair

@@ -14,7 +14,11 @@ struct ETMacApp: App {
     init() {
         let fleet = Fleet()
         _fleet = State(initialValue: fleet)
-        _setup = State(initialValue: Setup(fleet: fleet))
+        let setup = Setup(fleet: fleet)
+        _setup = State(initialValue: setup)
+        // Before application(_:open:) on a launch by Open With.
+        AppDelegate.fleet = fleet
+        AppDelegate.setup = setup
         let files = SharedFiles(hosts: { fleet.directHosts() }, log: { fleet.log.add($0) })
         _files = State(initialValue: files)
         let logbook = Logbook(archive: { fleet.archiveHost() }, hosts: { fleet.directHosts() }, log: { fleet.log.add($0) })
@@ -26,7 +30,6 @@ struct ETMacApp: App {
         #endif
         #if DEBUG
         if CommandLine.arguments.contains("--offscreen") {
-            let setup = _setup.wrappedValue
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                 DebugHooks.offscreen(MainWindow(initial: nil).environment(fleet).environment(setup).environment(files).environment(logbook).environment(agents), fleet: fleet, setup: setup)
             }
@@ -44,20 +47,16 @@ struct ETMacApp: App {
                 .environment(logbook)
                 .environment(agents)
                 .onAppear {
-                    AppDelegate.fleet = fleet
-                    if !AppDelegate.setupStarted {
-                        AppDelegate.setupStarted = true
-                        setup.start()
-                    }
+                    started()
                     #if DEBUG
                     DebugHooks.run(fleet)
                     #endif
                 }
-                .onOpenURL { url in
-                    if url.scheme == "et" { setup.receive(link: url.absoluteString) }
-                }
         }
         .defaultSize(width: 1100, height: 700)
+        // AppDelegate.application(_:open:) takes the URLs; each scene only
+        // names the ones it opens for, or SwiftUI opens a window here per file.
+        .handlesExternalEvents(matching: ["et:"])
         .commands { ETCommands(fleet: fleet) }
 
         Settings {
@@ -66,11 +65,15 @@ struct ETMacApp: App {
                 .environment(setup)
         }
 
+        // Files dropped on the Dock icon or opened with E.T. in Finder (all of
+        // them in this one window); a cold launch may show only this window.
         Window("Send Files", id: "send") {
             SendFilesWindow()
                 .environment(fleet)
+                .onAppear { started() }
         }
         .windowResizability(.contentSize)
+        .handlesExternalEvents(matching: ["file:"])
 
         // PLAN-logbook-v2 D2: beside the terminals, not in place of them.
         Window("Logbook", id: "logbook") {
@@ -80,18 +83,41 @@ struct ETMacApp: App {
         }
         .defaultSize(width: 1200, height: 760)
         .keyboardShortcut("l", modifiers: [.command, .shift])
+        .handlesExternalEvents(matching: [])
 
         Window("Debug Log", id: "log") {
             LogView()
                 .environment(fleet)
         }
         .defaultSize(width: 800, height: 500)
+        .handlesExternalEvents(matching: [])
+    }
+
+    private func started() {
+        AppDelegate.fleet = fleet
+        if !AppDelegate.setupStarted {
+            AppDelegate.setupStarted = true
+            setup.start()
+        }
     }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     @MainActor static weak var fleet: Fleet?
     @MainActor static var setupStarted = false
+    @MainActor static weak var setup: Setup?
+
+    /// Dock drops, Finder Open With and et:// links. Several files come in
+    /// one call (onOpenURL would see only the first).
+    func application(_ application: NSApplication, open urls: [URL]) {
+        MainActor.assumeIsolated {
+            for url in urls where url.scheme == "et" { AppDelegate.setup?.receive(link: url.absoluteString) }
+            let files = urls.filter(\.isFileURL)
+            guard let fleet = AppDelegate.fleet, !files.isEmpty else { return }
+            fleet.log.add("Opened \(files.count) file(s) to send")
+            fleet.queueSend(files)
+        }
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let center = UNUserNotificationCenter.current()
